@@ -77,6 +77,20 @@ Entrega **at-least-once**: todo consumidor debe deduplicar por `event_id` (viaja
 como header y dentro del payload). Salud del relay: `outbox` con `published_at IS NULL`
 creciendo de forma sostenida = bus o relay caídos.
 
+## Adaptadores (Go)
+
+```bash
+cd core && cargo run --bin aibank-core-server   # el core debe estar arriba
+cd adapters && go test ./...                    # se saltan solos si el core no responde
+```
+
+`go.work` liga los módulos locales (`adapters`, `clients/go`) sin publicarlos.
+
+El riel simulado (`adapters/rails/sim`) reproduce de forma determinista lo que un
+riel real hace a diario: timeouts, rechazos, notificaciones duplicadas y entregas
+fuera de orden. No es andamiaje temporal — se queda como herramienta de pruebas,
+porque esos escenarios casi no se pueden provocar contra el sandbox de un proveedor.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
