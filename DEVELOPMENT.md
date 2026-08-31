@@ -141,6 +141,17 @@ Modelarlo así es lo que hace que el saldo disponible del cliente sea correcto.
 cd adapters && go test ./cards/...
 ```
 
+## Conciliación
+
+Es la contrapartida de haber construido un ledger propio: sin registro propio no
+hay nada contra qué comparar. Cubre tres frentes — el ledger contra sí mismo, el
+ledger contra el extracto del proveedor (cruzando por clave de idempotencia) y el
+dinero detenido en cuentas de tránsito o retención.
+
+```bash
+cd core && SQLX_OFFLINE=true cargo test --test reconciliation
+```
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

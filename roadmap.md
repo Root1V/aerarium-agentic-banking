@@ -28,14 +28,17 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
 | Tarjetas: autorización, retención, cobro y reversa (14 tests) | Go | feat/cards-sim | ✅ |
-| Motor de reconciliación v1 | Rust | feat/reconciliation | ⬜ |
-| Backoffice v0 + observabilidad (trazas E2E) | TypeScript | feat/backoffice | ⬜ |
+| Conciliación: interna, contra proveedor y limbo (11 tests) | Rust | feat/reconciliation | ✅ |
+| Backoffice v0: cola de conciliación con roles y auditoría | TypeScript | feat/backoffice | ⬜ |
+| Observabilidad: trazas E2E entre Rust y Go (OpenTelemetry) | Rust/Go | feat/observability | ⬜ |
 
 ## Deuda técnica anotada
 
 - El pool de PostgreSQL del core espera hasta 10 s por una conexión bajo carga en
   vez de fallar rápido: es un precipicio de latencia para el canal móvil. Revisar
   al hacer pruebas de carga.
+- La deriva de saldo se detecta recorriendo todos los asientos. Sirve al volumen
+  actual; al crecer habrá que conciliar por ventanas con saldos de corte.
 
 ## Backlog (post-sprint 6)
 

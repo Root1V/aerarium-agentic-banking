@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO reconciliation_findings\n                    (run_id, kind, account_id, reference, expected_minor, actual_minor, currency, detail)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "finding_kind",
+            "kind": {
+              "Enum": [
+                "BALANCE_DRIFT",
+                "MISSING_IN_LEDGER",
+                "MISSING_AT_PROVIDER",
+                "AMOUNT_MISMATCH",
+                "STALE_SUSPENSE"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Bpchar",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d09b173495df70f5b09a595eaff1eb0a703ff69f99b0bd2ce4cbb4e976fc955a"
+}
