@@ -30,7 +30,14 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Tarjetas: autorización, retención, cobro y reversa (14 tests) | Go | feat/cards-sim | ✅ |
 | Conciliación: interna, contra proveedor y limbo (11 tests) | Rust | feat/reconciliation | ✅ |
 | Backoffice v0: cola de conciliación con roles y auditoría (18 tests) | TypeScript | feat/backoffice | ✅ |
-| Observabilidad: trazas E2E entre Rust y Go (OpenTelemetry) | Rust/Go | feat/observability | ⬜ |
+| Observabilidad: trazas E2E entre Rust y Go, incluido el salto asíncrono (17 tests) | Rust/Go | feat/observability | ✅ |
+
+## Fase 2: crédito (el motor de ingresos del plan)
+
+| Feature | Lenguaje | Rama | Estado |
+|---|---|---|---|
+| Scoring crediticio con datos transaccionales, explicable y auditable | Python | feat/credit-scoring | ⬜ |
+| Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
 
 ## Deuda técnica anotada
 

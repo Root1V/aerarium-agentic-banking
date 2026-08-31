@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload\n            FROM outbox\n            WHERE published_at IS NULL\n            ORDER BY id\n            LIMIT $1\n            FOR UPDATE SKIP LOCKED\n            ",
+  "query": "\n            SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload, trace_context\n            FROM outbox\n            WHERE published_at IS NULL\n            ORDER BY id\n            LIMIT $1\n            FOR UPDATE SKIP LOCKED\n            ",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "ordinal": 5,
         "name": "payload",
         "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "trace_context",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -45,8 +50,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "277b6e95137febf1f0e9c6fa2cb3919aaab87be1cc43d1e1c0b1637f126d2c8e"
+  "hash": "58b047719e542f5b68691ea24d7c2e3e30b7e5d905e9688481d18c0ddc08d9e0"
 }

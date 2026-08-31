@@ -23,6 +23,9 @@ pub struct OutboxMessage {
     /// Clave de partición en el bus: garantiza orden por agregado.
     pub aggregate_id: Uuid,
     pub payload: Vec<u8>,
+    /// Contexto de traza de la transacción que originó el evento. Permite que la
+    /// publicación, que ocurre después y en otro proceso, se enlace con su origen.
+    pub trace_context: Option<String>,
 }
 
 /// Encola un evento dentro de una transacción en curso.
@@ -36,17 +39,19 @@ pub(crate) async fn write(
     aggregate_type: &str,
     aggregate_id: Uuid,
     payload: &impl Message,
+    trace_context: Option<String>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
-        INSERT INTO outbox (event_id, event_type, aggregate_type, aggregate_id, payload)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO outbox (event_id, event_type, aggregate_type, aggregate_id, payload, trace_context)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         event_id,
         event_type,
         aggregate_type,
         aggregate_id,
         payload.encode_to_vec(),
+        trace_context,
     )
     .execute(&mut **tx)
     .await?;
@@ -116,7 +121,7 @@ impl Relay {
 
         let rows = sqlx::query!(
             r#"
-            SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload
+            SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload, trace_context
             FROM outbox
             WHERE published_at IS NULL
             ORDER BY id
@@ -142,7 +147,20 @@ impl Relay {
                 aggregate_type: row.aggregate_type,
                 aggregate_id: row.aggregate_id,
                 payload: row.payload,
+                trace_context: row.trace_context,
             };
+
+            // La publicación se registra bajo la traza de la operación que generó
+            // el evento, no bajo una traza suelta del relay: así el pago se sigue
+            // de extremo a extremo pese al salto asíncrono.
+            if let Some(traceparent) = &message.trace_context {
+                let origin = crate::telemetry::deserialize_context(traceparent);
+                tracing::debug!(
+                    trace_id = crate::telemetry::trace_id_of(&origin).unwrap_or_default(),
+                    event_id = %message.event_id,
+                    "publicando evento bajo la traza de origen"
+                );
+            }
 
             match self.publisher.publish(&message).await {
                 Ok(()) => published.push(message.id),
