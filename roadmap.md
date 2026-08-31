@@ -12,7 +12,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Core ledger: doble partida + motor de posting + invariantes (10 tests) | Rust | feat/core-ledger | ✅ |
 | Cuentas + catálogo de productos, sin sobregiro y topes regulatorios (8 tests) | Rust | feat/core-accounts | ✅ |
 | Contratos gRPC core↔adaptadores + servidor Rust + cliente Go (9 tests) | proto/Rust/Go | feat/contracts | ✅ |
-| Bus de eventos (Kafka + esquema de eventos del ledger) | Rust | feat/events | ⬜ |
+| Bus de eventos: outbox transaccional + relay + Kafka (6 tests) | Rust | feat/events | 👀 |
 | Simuladores: ProveedorCuentas (BaaS) + RielPagos | Go | feat/sim-baas-rails | ⬜ |
 
 ## Sprint 3–4: Onboarding y canal

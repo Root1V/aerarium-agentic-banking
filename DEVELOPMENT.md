@@ -55,6 +55,28 @@ cd clients/go && go test ./...              # tests de integración contra el co
 
 Los tests de Go se saltan solos si el core no está escuchando.
 
+## Eventos (outbox → Kafka)
+
+El core NO publica directamente: escribe el evento en la tabla `outbox` dentro de la
+misma transacción que los asientos, y el relay lo publica después. Así es imposible
+que exista un asiento sin evento o un evento de una transacción revertida.
+
+```bash
+docker compose -f platform/docker-compose.yml up -d          # Postgres + Redpanda
+docker exec aibank-redpanda rpk topic create aibank.ledger.v1 -p 3
+
+cd core && DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
+  KAFKA_BROKERS=localhost:9092 cargo run --bin aibank-outbox-relay
+
+docker exec aibank-redpanda rpk topic consume aibank.ledger.v1 --offset start
+```
+
+Sin `KAFKA_BROKERS` el relay publica al log (modo desarrollo, sin bus).
+
+Entrega **at-least-once**: todo consumidor debe deduplicar por `event_id` (viaja
+como header y dentro del payload). Salud del relay: `outbox` con `published_at IS NULL`
+creciendo de forma sostenida = bus o relay caídos.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

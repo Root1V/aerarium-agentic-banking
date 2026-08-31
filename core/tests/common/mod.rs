@@ -19,6 +19,17 @@ pub struct Ctx {
     pub posting: PostingService,
 }
 
+/// Construye el contexto sobre un pool ya existente (para `#[sqlx::test]`,
+/// que entrega una base aislada por test).
+pub fn from_pool(pool: PgPool) -> Ctx {
+    Ctx {
+        accounts: AccountRepository::new(pool.clone()),
+        products: ProductRepository::new(pool.clone()),
+        posting: PostingService::new(pool.clone()),
+        pool,
+    }
+}
+
 pub async fn setup() -> Ctx {
     let url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://aibank:aibank_dev@localhost:5434/aibank".to_string());

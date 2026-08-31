@@ -1,0 +1,46 @@
+// Eventos de dominio del core bancario.
+//
+// Se emiten mediante el patrón OUTBOX TRANSACCIONAL: el evento se escribe en la
+// MISMA transacción de base de datos que los asientos contables. Nunca hay doble
+// escritura, así que es imposible que exista un asiento sin su evento o un evento
+// de una transacción que se revirtió.
+//
+// Garantía de entrega: AT-LEAST-ONCE. El relay puede republicar si falla entre
+// publicar y marcar. Todo consumidor DEBE deduplicar por `event_id`.
+//
+// Orden: garantizado por `aggregate_id` (clave de partición en Kafka). No hay
+// orden global entre agregados distintos, y no hace falta.
+
+syntax = "proto3";
+
+package aibank.events.v1;
+
+import "google/protobuf/timestamp.proto";
+import "aibank/core/v1/core.proto";
+
+option go_package = "github.com/aibank/aibank/clients/go/eventsv1;eventsv1";
+
+// Asiento tal como quedó registrado, con el saldo resultante de la cuenta.
+//
+// `balance_after_minor` se incluye deliberadamente: permite que un consumidor
+// notifique "recibiste $X, tu saldo es $Y" sin volver a consultar el core, y
+// evita que dos eventos concurrentes lean saldos en desorden.
+message PostedEntry {
+  string account_id = 1;
+  aibank.core.v1.Direction direction = 2;
+  aibank.core.v1.Money amount = 3;
+  int64 balance_after_minor = 4;
+}
+
+// Una transacción contable quedó asentada en el ledger.
+message LedgerTransactionPosted {
+  // Identidad del evento. Clave de deduplicación para los consumidores.
+  string event_id = 1;
+  string transaction_id = 2;
+  // Clave de idempotencia de la operación que originó el asiento.
+  string idempotency_key = 3;
+  // "deposit", "withdrawal", "p2p_transfer", ...
+  string kind = 4;
+  repeated PostedEntry entries = 5;
+  google.protobuf.Timestamp posted_at = 6;
+}

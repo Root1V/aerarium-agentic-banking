@@ -18,5 +18,26 @@ services:
       timeout: 3s
       retries: 10
 
+  # Redpanda: compatible con la API de Kafka en un solo binario, sin ZooKeeper.
+  # Para desarrollo local pesa mucho menos que un clúster Kafka completo.
+  redpanda:
+    image: redpandadata/redpanda:v24.3.1
+    container_name: aibank-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --check=false
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   aibank_pgdata:
