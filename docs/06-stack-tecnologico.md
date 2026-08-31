@@ -31,10 +31,24 @@
 
 ## 2. Stack recomendado
 
-### Backend
-- **Lenguaje**: **Kotlin/JVM** (o Java 21+). Es la norma en fintech LatAm (talento abundante, ecosistema maduro de librerías financieras); Nubank usa Clojure (también JVM) y Stori Java sobre AWS ([GoGloby](https://gogloby.com/insights/fintech-talent-latam-unicorns/)). **Go** para adaptadores de rieles y servicios de alto rendimiento si el equipo lo domina.
-- **Estructura**: monolito modular (módulos = dominios del doc 05) desplegado como un servicio; extracción a microservicios solo cuando un dominio lo exija (equipo o volumen).
-- **Framework**: Spring Boot (madurez, seguridad, contrataciones) o Ktor si el equipo es Kotlin-first.
+### Backend — políglota por tarea
+
+**Criterio de selección**: el mejor lenguaje para cada carga de trabajo, evaluado por adecuación técnica. La disponibilidad de talento NO es criterio de diseño: el desarrollo se asiste con agentes de IA, y el lenguaje se elige por las garantías que da, no por cuántas personas lo escriben de memoria.
+
+| Componente | Lenguaje | Por qué es el mejor para esa tarea |
+|---|---|---|
+| **Core: ledger, cuentas, catálogo, posting** | **Rust** | Correctitud crítica: tipos suma con exhaustividad obligatoria (ningún estado sin manejar), sin `null`, sin data races por construcción, sin pausas de GC (latencia predecible en ventanas de autorización). Decisivo: **`sqlx` valida cada consulta SQL contra el esquema real en tiempo de compilación** — el código no compila si el SQL no concuerda con la base |
+| **Adaptadores (rieles, BaaS, tarjetas, KYC) y BFF** | **Go** | Trabajo I/O-bound con miles de conexiones y webhooks concurrentes: goroutines, arranque en milisegundos, binario único, huella de memoria mínima. Para *glue* de red es más simple que Rust sin perder nada relevante |
+| **Riesgo: scoring, antifraude, modelos** | **Python** | Todo el ecosistema de ML vive aquí (scikit-learn, XGBoost, feature stores, notebooks para el equipo de riesgo). No hay competencia real |
+| **Plataforma de datos** | **SQL + Python** | dbt, orquestación, transformaciones analíticas |
+| **Backoffice web** | **TypeScript + React** | Es una aplicación web; tipado estático de extremo a extremo |
+| **App móvil** | **Dart / Flutter** | Un solo código para iOS+Android con UI pixel-perfect (elección de Nubank tras evaluar React Native y Kotlin nativo) |
+
+**Contratos entre lenguajes**: las fronteras se definen en **Protobuf/OpenAPI** con tipos generados para cada lenguaje. Un cambio de contrato rompe la compilación en ambos lados, no en producción. Esto es lo que hace viable el políglota: las fronteras son verificadas por máquina, no por convención.
+
+**Costo asumido conscientemente**: 4 runtimes significan 4 superficies de parcheo y 4 ecosistemas de dependencias que auditar para PCI/ISO 27001. Se acota con la regla de **no añadir un quinto lenguaje sin una justificación técnica escrita**, imágenes base comunes y una sola plataforma de observabilidad (OpenTelemetry en los cuatro).
+
+- **Estructura**: el core es un monolito modular (módulos = dominios del doc 05); los adaptadores son servicios pequeños e independientes por proveedor/riel.
 
 ### Datos y eventos
 - **PostgreSQL** como base transaccional (una por país); esquema de ledger append-only con constraints de doble partida.
@@ -68,7 +82,9 @@
 | Decisión | Elegido | Descartado | Por qué |
 |---|---|---|---|
 | Mobile | Flutter | React Native | Validación de los neobancos más grandes de la región; un solo equipo; RN cerró brecha de rendimiento pero fragmenta la experiencia financiera pixel-perfect |
-| Backend | Kotlin/JVM | Clojure (Nubank), Elixir | Talento contratable en LatAm; Clojure funciona para Nubank pero achica el pool de contratación |
+| **Core ledger** | **Rust** | Kotlin/JVM, Go, Python | JVM: buena, pero GC y exhaustividad más débil. Go: sin tipos suma ni decimal nativo, `error` sin exhaustividad. Python: el GIL complica la concurrencia transaccional y el tipado dinámico es inaceptable donde un error mueve dinero. **Evidencia real: al portar el core, el compilador atrapó que `SUM()` en Postgres devuelve `NUMERIC` y no `bigint` — en JDBC eso pasaba silenciosamente por coerción implícita** |
+| Adaptadores y BFF | Go | Rust | Rust también sirve, pero para *glue* I/O la ergonomía async añade fricción sin ganancia; Go compila y despliega más simple |
+| Riesgo/ML | Python | Rust, JVM | El ecosistema de ML no tiene sustituto |
 | Ledger Fase 1 | PostgreSQL append-only propio | TigerBeetle desde el día 1 | A <1M cuentas, PostgreSQL bien diseñado sobra; TigerBeetle (100K–500K TPS) entra cuando el volumen lo pida sin cambiar el modelo contable |
 | Core Fase 2 | SaaS (Pismo/Mambu) | Core custom | Custom = USD 15–25M y 24–36 meses; solo se justifica con millones de clientes |
 | Monolito modular | Sí | Microservicios día 1 | Un equipo de 12–20 personas no amortiza la complejidad operativa de microservicios |

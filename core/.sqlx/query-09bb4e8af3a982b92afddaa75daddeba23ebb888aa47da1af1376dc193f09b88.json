@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ledger_entries (transaction_id, account_id, direction, amount_minor, currency)\n            VALUES ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "entry_direction",
+            "kind": {
+              "Enum": [
+                "DEBIT",
+                "CREDIT"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Bpchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09bb4e8af3a982b92afddaa75daddeba23ebb888aa47da1af1376dc193f09b88"
+}
