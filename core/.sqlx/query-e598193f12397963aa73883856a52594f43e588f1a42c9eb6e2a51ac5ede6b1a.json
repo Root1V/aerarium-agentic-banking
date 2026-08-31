@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, code, name,\n                   type   as \"account_type: AccountType\",\n                   owner  as \"owner: AccountOwner\",\n                   owner_id, currency,\n                   status as \"status: AccountStatus\",\n                   created_at\n            FROM accounts WHERE code = $1\n            ",
+  "query": "\n            INSERT INTO accounts (code, name, type, owner, owner_id, product_id,\n                                  currency, allows_overdraft)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            RETURNING id, code, name,\n                      type   as \"account_type: AccountType\",\n                      owner  as \"owner: AccountOwner\",\n                      owner_id, product_id, currency,\n                      status as \"status: AccountStatus\",\n                      allows_overdraft, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -58,11 +58,16 @@
       },
       {
         "ordinal": 6,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "currency",
         "type_info": "Bpchar"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "status: AccountStatus",
         "type_info": {
           "Custom": {
@@ -78,14 +83,49 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
+        "name": "allows_overdraft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "account_type",
+            "kind": {
+              "Enum": [
+                "ASSET",
+                "LIABILITY",
+                "EQUITY",
+                "INCOME",
+                "EXPENSE"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "account_owner",
+            "kind": {
+              "Enum": [
+                "CUSTOMER",
+                "INTERNAL"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Uuid",
+        "Bpchar",
+        "Bool"
       ]
     },
     "nullable": [
@@ -95,10 +135,12 @@
       false,
       false,
       true,
+      true,
+      false,
       false,
       false,
       false
     ]
   },
-  "hash": "91b15d6917d6f5e3355d91a96cefb729c264cbf0d43b03b42ed5b3859faebdab"
+  "hash": "e598193f12397963aa73883856a52594f43e588f1a42c9eb6e2a51ac5ede6b1a"
 }

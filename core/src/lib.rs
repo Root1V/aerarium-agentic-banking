@@ -7,7 +7,9 @@ pub mod accounts;
 pub mod db;
 pub mod model;
 pub mod posting;
+pub mod products;
 
 pub use accounts::AccountRepository;
 pub use model::*;
 pub use posting::PostingService;
+pub use products::ProductRepository;
