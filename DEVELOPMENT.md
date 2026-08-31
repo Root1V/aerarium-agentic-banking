@@ -130,6 +130,17 @@ Dos reglas del cliente: el dinero nunca es `double` (entero en centavos, se form
 solo para mostrar) y un reintento de envío CONSERVA la clave de idempotencia — si
 generara una nueva, un timeout que el servidor sí procesó cobraría dos veces.
 
+## Tarjetas
+
+Una compra con tarjeta son DOS momentos, no uno: la autorización retiene el dinero
+(sale del saldo disponible pero sigue en el banco) y el cobro posterior lo saca de
+verdad — por un monto que puede diferir del autorizado (propinas, combustible).
+Modelarlo así es lo que hace que el saldo disponible del cliente sea correcto.
+
+```bash
+cd adapters && go test ./cards/...
+```
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

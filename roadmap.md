@@ -27,7 +27,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Adaptador tarjetas (simulado) + webhooks de autorización | Go | feat/cards-sim | ⬜ |
+| Tarjetas: autorización, retención, cobro y reversa (14 tests) | Go | feat/cards-sim | 👀 |
 | Motor de reconciliación v1 | Rust | feat/reconciliation | ⬜ |
 | Backoffice v0 + observabilidad (trazas E2E) | TypeScript | feat/backoffice | ⬜ |
 
