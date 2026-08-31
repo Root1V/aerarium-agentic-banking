@@ -21,7 +21,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 |---|---|---|---|
 | Onboarding: máquina de estados reanudable + KYC/AML simulados (9 tests) | Go | feat/onboarding | ✅ |
 | BFF: API del canal móvil con autorización por titular (16 tests) | Go | feat/bff | ✅ |
-| App v0 (alta, saldo, movimientos, transferir) | Flutter | feat/app-v0 | ⬜ |
+| App v0: saldo, movimientos y transferencia (28 tests) | Flutter | feat/app-v0 | 👀 |
 
 ## Sprint 5–6: Tarjetas, reconciliación, operación
 
