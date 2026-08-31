@@ -33,8 +33,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LedgerService_Post_FullMethodName       = "/aibank.core.v1.LedgerService/Post"
-	LedgerService_GetBalance_FullMethodName = "/aibank.core.v1.LedgerService/GetBalance"
+	LedgerService_Post_FullMethodName        = "/aibank.core.v1.LedgerService/Post"
+	LedgerService_GetBalance_FullMethodName  = "/aibank.core.v1.LedgerService/GetBalance"
+	LedgerService_ListEntries_FullMethodName = "/aibank.core.v1.LedgerService/ListEntries"
 )
 
 // LedgerServiceClient is the client API for LedgerService service.
@@ -44,6 +45,8 @@ type LedgerServiceClient interface {
 	// Única vía de escritura al ledger. Idempotente por `idempotency_key`.
 	Post(ctx context.Context, in *PostRequest, opts ...grpc.CallOption) (*PostResponse, error)
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
+	// Extracto de una cuenta, del movimiento más reciente al más antiguo.
+	ListEntries(ctx context.Context, in *ListEntriesRequest, opts ...grpc.CallOption) (*ListEntriesResponse, error)
 }
 
 type ledgerServiceClient struct {
@@ -74,6 +77,16 @@ func (c *ledgerServiceClient) GetBalance(ctx context.Context, in *GetBalanceRequ
 	return out, nil
 }
 
+func (c *ledgerServiceClient) ListEntries(ctx context.Context, in *ListEntriesRequest, opts ...grpc.CallOption) (*ListEntriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEntriesResponse)
+	err := c.cc.Invoke(ctx, LedgerService_ListEntries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LedgerServiceServer is the server API for LedgerService service.
 // All implementations must embed UnimplementedLedgerServiceServer
 // for forward compatibility.
@@ -81,6 +94,8 @@ type LedgerServiceServer interface {
 	// Única vía de escritura al ledger. Idempotente por `idempotency_key`.
 	Post(context.Context, *PostRequest) (*PostResponse, error)
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
+	// Extracto de una cuenta, del movimiento más reciente al más antiguo.
+	ListEntries(context.Context, *ListEntriesRequest) (*ListEntriesResponse, error)
 	mustEmbedUnimplementedLedgerServiceServer()
 }
 
@@ -96,6 +111,9 @@ func (UnimplementedLedgerServiceServer) Post(context.Context, *PostRequest) (*Po
 }
 func (UnimplementedLedgerServiceServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBalance not implemented")
+}
+func (UnimplementedLedgerServiceServer) ListEntries(context.Context, *ListEntriesRequest) (*ListEntriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEntries not implemented")
 }
 func (UnimplementedLedgerServiceServer) mustEmbedUnimplementedLedgerServiceServer() {}
 func (UnimplementedLedgerServiceServer) testEmbeddedByValue()                       {}
@@ -154,6 +172,24 @@ func _LedgerService_GetBalance_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LedgerService_ListEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEntriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).ListEntries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_ListEntries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).ListEntries(ctx, req.(*ListEntriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LedgerService_ServiceDesc is the grpc.ServiceDesc for LedgerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -169,6 +205,10 @@ var LedgerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetBalance",
 			Handler:    _LedgerService_GetBalance_Handler,
 		},
+		{
+			MethodName: "ListEntries",
+			Handler:    _LedgerService_ListEntries_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "aibank/core/v1/core.proto",
@@ -178,6 +218,7 @@ const (
 	AccountService_OpenCustomerAccount_FullMethodName   = "/aibank.core.v1.AccountService/OpenCustomerAccount"
 	AccountService_CreateInternalAccount_FullMethodName = "/aibank.core.v1.AccountService/CreateInternalAccount"
 	AccountService_GetAccount_FullMethodName            = "/aibank.core.v1.AccountService/GetAccount"
+	AccountService_GetAccountById_FullMethodName        = "/aibank.core.v1.AccountService/GetAccountById"
 )
 
 // AccountServiceClient is the client API for AccountService service.
@@ -187,6 +228,7 @@ type AccountServiceClient interface {
 	OpenCustomerAccount(ctx context.Context, in *OpenCustomerAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	CreateInternalAccount(ctx context.Context, in *CreateInternalAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*Account, error)
+	GetAccountById(ctx context.Context, in *GetAccountByIdRequest, opts ...grpc.CallOption) (*Account, error)
 }
 
 type accountServiceClient struct {
@@ -227,6 +269,16 @@ func (c *accountServiceClient) GetAccount(ctx context.Context, in *GetAccountReq
 	return out, nil
 }
 
+func (c *accountServiceClient) GetAccountById(ctx context.Context, in *GetAccountByIdRequest, opts ...grpc.CallOption) (*Account, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Account)
+	err := c.cc.Invoke(ctx, AccountService_GetAccountById_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AccountServiceServer is the server API for AccountService service.
 // All implementations must embed UnimplementedAccountServiceServer
 // for forward compatibility.
@@ -234,6 +286,7 @@ type AccountServiceServer interface {
 	OpenCustomerAccount(context.Context, *OpenCustomerAccountRequest) (*Account, error)
 	CreateInternalAccount(context.Context, *CreateInternalAccountRequest) (*Account, error)
 	GetAccount(context.Context, *GetAccountRequest) (*Account, error)
+	GetAccountById(context.Context, *GetAccountByIdRequest) (*Account, error)
 	mustEmbedUnimplementedAccountServiceServer()
 }
 
@@ -252,6 +305,9 @@ func (UnimplementedAccountServiceServer) CreateInternalAccount(context.Context, 
 }
 func (UnimplementedAccountServiceServer) GetAccount(context.Context, *GetAccountRequest) (*Account, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAccount not implemented")
+}
+func (UnimplementedAccountServiceServer) GetAccountById(context.Context, *GetAccountByIdRequest) (*Account, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAccountById not implemented")
 }
 func (UnimplementedAccountServiceServer) mustEmbedUnimplementedAccountServiceServer() {}
 func (UnimplementedAccountServiceServer) testEmbeddedByValue()                        {}
@@ -328,6 +384,24 @@ func _AccountService_GetAccount_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccountService_GetAccountById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAccountByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountServiceServer).GetAccountById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccountService_GetAccountById_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountServiceServer).GetAccountById(ctx, req.(*GetAccountByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AccountService_ServiceDesc is the grpc.ServiceDesc for AccountService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -346,6 +420,10 @@ var AccountService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAccount",
 			Handler:    _AccountService_GetAccount_Handler,
+		},
+		{
+			MethodName: "GetAccountById",
+			Handler:    _AccountService_GetAccountById_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,11 @@ func databaseURL() string {
 	return "postgres://aibank:aibank_dev@localhost:5434/aibank?sslmode=disable"
 }
 
+var (
+	migrateOnce sync.Once
+	migrateErr  error
+)
+
 func coreAddr() string {
 	if addr := os.Getenv("CORE_ADDR"); addr != "" {
 		return addr
@@ -60,10 +66,14 @@ func setup(t *testing.T) *fixture {
 		t.Skipf("PostgreSQL no disponible: %v", err)
 	}
 
+	// Las migraciones son DDL y toman locks: ejecutarlas en cada test serializa la
+	// suite contra cualquier otro paquete que use la misma base.
 	store := onboarding.NewStore(db)
-	if err := store.Migrate(ctx); err != nil {
-		t.Fatalf("migrar: %v", err)
+	migrateOnce.Do(func() { migrateErr = store.Migrate(ctx) })
+	if migrateErr != nil {
+		t.Fatalf("migrar: %v", migrateErr)
 	}
+	db.SetMaxOpenConns(4)
 
 	core, err := coreclient.Dial(ctx, coreAddr())
 	if err != nil {

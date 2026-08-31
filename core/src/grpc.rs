@@ -183,6 +183,73 @@ impl LedgerService for LedgerApi {
         }))
     }
 
+    async fn list_entries(
+        &self,
+        request: Request<pb::ListEntriesRequest>,
+    ) -> Result<Response<pb::ListEntriesResponse>, Status> {
+        const DEFAULT_LIMIT: i32 = 25;
+        const MAX_LIMIT: i32 = 100;
+
+        let req = request.into_inner();
+        let account_id = parse_uuid(&req.account_id, "account_id")?;
+
+        // El límite se acota en el servidor: un cliente no decide cuánto trabajo
+        // pedirle a la base.
+        let limit = match req.limit {
+            0 => DEFAULT_LIMIT,
+            n if n < 0 => return Err(Status::invalid_argument("limit must not be negative")),
+            n => n.min(MAX_LIMIT),
+        };
+
+        let before = if req.cursor.is_empty() {
+            None
+        } else {
+            Some(
+                req.cursor
+                    .parse::<i64>()
+                    .map_err(|_| Status::invalid_argument("cursor is not valid"))?,
+            )
+        };
+
+        // Se pide uno de más para saber si hay página siguiente sin contar el total.
+        let mut entries = self
+            .accounts
+            .list_entries(account_id, limit as i64 + 1, before)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?;
+
+        let has_more = entries.len() > limit as usize;
+        entries.truncate(limit as usize);
+
+        let next_cursor = if has_more {
+            entries.last().map(|e| e.id.to_string()).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        Ok(Response::new(pb::ListEntriesResponse {
+            entries: entries
+                .into_iter()
+                .map(|e| pb::AccountEntry {
+                    cursor: e.id.to_string(),
+                    transaction_id: e.transaction_id.to_string(),
+                    direction: match e.direction {
+                        Direction::Debit => pb::Direction::Debit,
+                        Direction::Credit => pb::Direction::Credit,
+                    } as i32,
+                    amount: Some(pb::Money {
+                        amount_minor: e.amount_minor,
+                        currency: e.currency,
+                    }),
+                    kind: e.kind,
+                    description: e.description.unwrap_or_default(),
+                    posted_at: Some(to_timestamp(e.posted_at)),
+                })
+                .collect(),
+            next_cursor,
+        }))
+    }
+
     async fn get_balance(
         &self,
         request: Request<pb::GetBalanceRequest>,
@@ -269,6 +336,21 @@ impl AccountService for AccountApi {
             .create_internal(&req.code, &req.name, account_type, &req.currency)
             .await
             .map_err(to_status)?;
+
+        Ok(Response::new(account_to_pb(account)))
+    }
+
+    async fn get_account_by_id(
+        &self,
+        request: Request<pb::GetAccountByIdRequest>,
+    ) -> Result<Response<pb::Account>, Status> {
+        let id = parse_uuid(&request.into_inner().id, "id")?;
+        let account = self
+            .accounts
+            .find_by_id(id)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?
+            .ok_or_else(|| Status::not_found("account not found"))?;
 
         Ok(Response::new(account_to_pb(account)))
     }

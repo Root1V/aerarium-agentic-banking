@@ -109,6 +109,20 @@ pub struct Account {
     pub created_at: DateTime<Utc>,
 }
 
+/// Movimiento de una cuenta tal como aparece en un extracto.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountEntry {
+    /// Id del asiento: sirve de cursor de paginación.
+    pub id: i64,
+    pub transaction_id: Uuid,
+    pub direction: Direction,
+    pub amount_minor: i64,
+    pub currency: String,
+    pub kind: String,
+    pub description: Option<String>,
+    pub posted_at: DateTime<Utc>,
+}
+
 /// Saldo materializado y su contador de asientos, para auditarlo contra la proyección.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Balance {

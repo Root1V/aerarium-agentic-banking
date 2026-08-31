@@ -20,7 +20,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
 | Onboarding: máquina de estados reanudable + KYC/AML simulados (9 tests) | Go | feat/onboarding | ✅ |
-| BFF v1 (API para la app) | Go | feat/bff | ⬜ |
+| BFF: API del canal móvil con autorización por titular (16 tests) | Go | feat/bff | 👀 |
 | App v0 (alta, saldo, movimientos, transferir) | Flutter | feat/app-v0 | ⬜ |
 
 ## Sprint 5–6: Tarjetas, reconciliación, operación
@@ -30,6 +30,12 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Adaptador tarjetas (simulado) + webhooks de autorización | Go | feat/cards-sim | ⬜ |
 | Motor de reconciliación v1 | Rust | feat/reconciliation | ⬜ |
 | Backoffice v0 + observabilidad (trazas E2E) | TypeScript | feat/backoffice | ⬜ |
+
+## Deuda técnica anotada
+
+- El pool de PostgreSQL del core espera hasta 10 s por una conexión bajo carga en
+  vez de fallar rápido: es un precipicio de latencia para el canal móvil. Revisar
+  al hacer pruebas de carga.
 
 ## Backlog (post-sprint 6)
 

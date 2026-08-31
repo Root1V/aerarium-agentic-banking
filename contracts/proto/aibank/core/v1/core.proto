@@ -111,10 +111,40 @@ message GetBalanceResponse {
   Money projected_balance = 3;
 }
 
+// Movimiento tal como se muestra en un extracto.
+message AccountEntry {
+  // Identidad estable para paginar. Opaca para el cliente.
+  string cursor = 1;
+  string transaction_id = 2;
+  Direction direction = 3;
+  Money amount = 4;
+  // "deposit", "p2p_transfer", "rail_inbound_credit", ...
+  string kind = 5;
+  string description = 6;
+  google.protobuf.Timestamp posted_at = 7;
+}
+
+message ListEntriesRequest {
+  string account_id = 1;
+  // Máximo de movimientos a devolver. 0 = valor por defecto del servidor.
+  int32 limit = 2;
+  // Cursor de la página anterior; vacío para empezar por el movimiento más reciente.
+  string cursor = 3;
+}
+
+message ListEntriesResponse {
+  // Del más reciente al más antiguo.
+  repeated AccountEntry entries = 1;
+  // Vacío cuando no hay más páginas.
+  string next_cursor = 2;
+}
+
 service LedgerService {
   // Única vía de escritura al ledger. Idempotente por `idempotency_key`.
   rpc Post(PostRequest) returns (PostResponse);
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+  // Extracto de una cuenta, del movimiento más reciente al más antiguo.
+  rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
 }
 
 // ---------------------------------------------------------------- cuentas
@@ -152,10 +182,15 @@ message GetAccountRequest {
   string code = 1;
 }
 
+message GetAccountByIdRequest {
+  string id = 1;
+}
+
 service AccountService {
   rpc OpenCustomerAccount(OpenCustomerAccountRequest) returns (Account);
   rpc CreateInternalAccount(CreateInternalAccountRequest) returns (Account);
   rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc GetAccountById(GetAccountByIdRequest) returns (Account);
 }
 
 // ---------------------------------------------------------------- productos

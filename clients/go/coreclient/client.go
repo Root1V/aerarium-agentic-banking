@@ -134,6 +134,52 @@ func (c *Client) GetBalance(ctx context.Context, accountID string) (*Balance, er
 	}, nil
 }
 
+// Movement es un movimiento del extracto.
+type Movement struct {
+	Cursor        string
+	TransactionID string
+	// Direction indica si el movimiento suma o resta en la cuenta consultada.
+	Direction   corev1.Direction
+	AmountMinor int64
+	Currency    string
+	Kind        string
+	Description string
+	PostedAt    time.Time
+}
+
+// Statement es una página del extracto.
+type Statement struct {
+	Movements []Movement
+	// NextCursor vacío significa que no hay más páginas.
+	NextCursor string
+}
+
+// ListMovements devuelve el extracto de una cuenta, del más reciente al más antiguo.
+func (c *Client) ListMovements(ctx context.Context, accountID string, limit int32, cursor string) (*Statement, error) {
+	var trailer metadata.MD
+	resp, err := c.ledger.ListEntries(ctx, &corev1.ListEntriesRequest{
+		AccountId: accountID, Limit: limit, Cursor: cursor,
+	}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+
+	movements := make([]Movement, 0, len(resp.Entries))
+	for _, e := range resp.Entries {
+		movements = append(movements, Movement{
+			Cursor:        e.Cursor,
+			TransactionID: e.TransactionId,
+			Direction:     e.Direction,
+			AmountMinor:   e.Amount.AmountMinor,
+			Currency:      e.Amount.Currency,
+			Kind:          e.Kind,
+			Description:   e.Description,
+			PostedAt:      e.PostedAt.AsTime(),
+		})
+	}
+	return &Statement{Movements: movements, NextCursor: resp.NextCursor}, nil
+}
+
 // ---------------------------------------------------------------- cuentas
 
 func (c *Client) OpenCustomerAccount(ctx context.Context, code, name, customerID, productCode string) (*corev1.Account, error) {
@@ -162,6 +208,17 @@ func (c *Client) GetAccount(ctx context.Context, code string) (*corev1.Account, 
 	var trailer metadata.MD
 	account, err := c.accounts.GetAccount(ctx,
 		&corev1.GetAccountRequest{Code: code}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return account, nil
+}
+
+// GetAccountByID busca una cuenta por su identificador interno.
+func (c *Client) GetAccountByID(ctx context.Context, id string) (*corev1.Account, error) {
+	var trailer metadata.MD
+	account, err := c.accounts.GetAccountById(ctx,
+		&corev1.GetAccountByIdRequest{Id: id}, grpc.Trailer(&trailer))
 	if err != nil {
 		return nil, translate(err, trailer)
 	}
