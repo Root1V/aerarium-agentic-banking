@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT kind as \"kind: FindingKind\", account_id, reference,\n                   expected_minor, actual_minor, currency, detail\n            FROM reconciliation_findings\n            WHERE resolved_at IS NULL\n            ORDER BY id DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind: FindingKind",
+        "type_info": {
+          "Custom": {
+            "name": "finding_kind",
+            "kind": {
+              "Enum": [
+                "BALANCE_DRIFT",
+                "MISSING_IN_LEDGER",
+                "MISSING_AT_PROVIDER",
+                "AMOUNT_MISMATCH",
+                "STALE_SUSPENSE"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "expected_minor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "actual_minor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "detail",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5926554c3110914c24f9daf06db4d0a09bee15122ed0ea47c3f85d5949c04ff9"
+}

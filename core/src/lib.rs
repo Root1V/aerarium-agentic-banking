@@ -10,9 +10,11 @@ pub mod kafka;
 pub mod model;
 pub mod outbox;
 pub mod posting;
+pub mod reconciliation;
 pub mod products;
 
 pub use accounts::AccountRepository;
 pub use model::*;
 pub use posting::PostingService;
+pub use reconciliation::{Finding, FindingKind, Reconciler};
 pub use products::ProductRepository;

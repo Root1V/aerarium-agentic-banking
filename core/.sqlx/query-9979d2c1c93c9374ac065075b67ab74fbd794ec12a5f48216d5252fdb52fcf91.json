@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT b.account_id,\n                   b.balance_minor as \"materialized!\",\n                   p.projected_minor as \"projected!\",\n                   b.entry_count as \"counted!\",\n                   p.projected_entries as \"projected_entries!\",\n                   a.currency\n            FROM account_balances b\n            JOIN account_balance_projection p ON p.account_id = b.account_id\n            JOIN accounts a ON a.id = b.account_id\n            WHERE b.balance_minor <> p.projected_minor\n               OR b.entry_count <> p.projected_entries\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "materialized!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "projected!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "counted!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "projected_entries!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "currency",
+        "type_info": "Bpchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "9979d2c1c93c9374ac065075b67ab74fbd794ec12a5f48216d5252fdb52fcf91"
+}

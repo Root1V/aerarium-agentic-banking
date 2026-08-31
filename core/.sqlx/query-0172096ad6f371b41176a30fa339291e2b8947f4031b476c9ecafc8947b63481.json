@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE reconciliation_runs\n            SET status = 'COMPLETED', finished_at = now(), summary = $2\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0172096ad6f371b41176a30fa339291e2b8947f4031b476c9ecafc8947b63481"
+}
