@@ -19,7 +19,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Orquestador de onboarding + simulador KYC | Go | feat/onboarding | ⬜ |
+| Onboarding: máquina de estados reanudable + KYC/AML simulados (9 tests) | Go | feat/onboarding | 👀 |
 | BFF v1 (API para la app) | Go | feat/bff | ⬜ |
 | App v0 (alta, saldo, movimientos, transferir) | Flutter | feat/app-v0 | ⬜ |
 

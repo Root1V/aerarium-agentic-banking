@@ -196,6 +196,11 @@ pub enum PostingError {
     #[error("transaction cap exceeded: {0}")]
     TransactionCapExceeded(String),
 
+    /// Ya existe un registro con esa clave única (SQLSTATE 23505). Es un conflicto
+    /// del llamador, no un fallo de infraestructura: reintentar no lo resuelve.
+    #[error("already exists: {0}")]
+    Conflict(String),
+
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 }
@@ -212,6 +217,7 @@ impl PostingError {
             Some("AB001") => PostingError::InsufficientFunds(message),
             Some("AB002") => PostingError::BalanceCapExceeded(message),
             Some("AB003") => PostingError::TransactionCapExceeded(message),
+            Some("23505") => PostingError::Conflict(message),
             _ => PostingError::Database(err),
         }
     }
