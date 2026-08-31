@@ -152,6 +152,24 @@ dinero detenido en cuentas de tránsito o retención.
 cd core && SQLX_OFFLINE=true cargo test --test reconciliation
 ```
 
+## Backoffice (TypeScript)
+
+```bash
+cd backoffice && npm install
+node --test test/*.test.ts && npx tsc --noEmit
+
+ALLOW_DEV_AUTH=true npm start   # consola en :8090
+```
+
+Node ejecuta los `.ts` eliminando tipos, sin empaquetador ni paso de compilación.
+Eso descarta sintaxis que genere código: nada de *parameter properties*, enums ni
+decoradores.
+
+Regla del módulo: ninguna acción ocurre sin quedar atribuida a una persona, y los
+intentos DENEGADOS se registran igual que los permitidos — un intento rechazado es
+justo lo que interesa detectar. El rastro de auditoría es de solo inserción, como
+el ledger.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

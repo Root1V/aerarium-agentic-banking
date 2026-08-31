@@ -18,9 +18,11 @@ pub mod pb {
     tonic::include_proto!("aibank.core.v1");
 }
 
+use crate::reconciliation::{FindingKind, Reconciler};
 use pb::{
     account_service_server::AccountService, ledger_service_server::LedgerService,
     product_service_server::ProductService,
+    reconciliation_service_server::ReconciliationService,
 };
 
 /// Clave de metadata donde viaja el motivo del rechazo.
@@ -419,5 +421,107 @@ impl ProductService for ProductApi {
             .ok_or_else(|| Status::not_found(format!("product '{code}' not found")))?;
 
         Ok(Response::new(product_to_pb(product)))
+    }
+}
+
+// ---------------------------------------------------------------- conciliación
+
+pub struct ReconciliationApi {
+    reconciler: Reconciler,
+}
+
+impl ReconciliationApi {
+    pub fn new(reconciler: Reconciler) -> Self {
+        Self { reconciler }
+    }
+}
+
+fn finding_kind_to_pb(kind: FindingKind) -> pb::FindingKind {
+    match kind {
+        FindingKind::BalanceDrift => pb::FindingKind::BalanceDrift,
+        FindingKind::MissingInLedger => pb::FindingKind::MissingInLedger,
+        FindingKind::MissingAtProvider => pb::FindingKind::MissingAtProvider,
+        FindingKind::AmountMismatch => pb::FindingKind::AmountMismatch,
+        FindingKind::StaleSuspense => pb::FindingKind::StaleSuspense,
+    }
+}
+
+#[tonic::async_trait]
+impl ReconciliationService for ReconciliationApi {
+    async fn list_open_findings(
+        &self,
+        request: Request<pb::ListOpenFindingsRequest>,
+    ) -> Result<Response<pb::ListOpenFindingsResponse>, Status> {
+        const DEFAULT_LIMIT: i32 = 50;
+        const MAX_LIMIT: i32 = 200;
+
+        let limit = match request.into_inner().limit {
+            0 => DEFAULT_LIMIT,
+            n if n < 0 => return Err(Status::invalid_argument("limit must not be negative")),
+            n => n.min(MAX_LIMIT),
+        };
+
+        let findings = self
+            .reconciler
+            .open_findings(limit as i64)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?;
+
+        Ok(Response::new(pb::ListOpenFindingsResponse {
+            findings: findings
+                .into_iter()
+                .map(|f| pb::Finding {
+                    id: f.id,
+                    run_id: f.run_id.map(|id| id.to_string()).unwrap_or_default(),
+                    kind: finding_kind_to_pb(f.kind) as i32,
+                    account_id: f.account_id.map(|id| id.to_string()).unwrap_or_default(),
+                    reference: f.reference.unwrap_or_default(),
+                    expected_minor: f.expected_minor.unwrap_or_default(),
+                    actual_minor: f.actual_minor.unwrap_or_default(),
+                    currency: f.currency.unwrap_or_default(),
+                    detail: f.detail,
+                    created_at: f.created_at.map(to_timestamp),
+                })
+                .collect(),
+        }))
+    }
+
+    async fn resolve_finding(
+        &self,
+        request: Request<pb::ResolveFindingRequest>,
+    ) -> Result<Response<pb::ResolveFindingResponse>, Status> {
+        let req = request.into_inner();
+        if req.resolution.trim().is_empty() {
+            // Cerrar una diferencia sin explicar cómo la deja invisible para la
+            // siguiente auditoría.
+            return Err(Status::invalid_argument("resolution is required"));
+        }
+
+        let resolved = self
+            .reconciler
+            .resolve_finding(req.finding_id, &req.resolution)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?;
+
+        if !resolved {
+            return Err(Status::not_found("finding not found or already resolved"));
+        }
+        Ok(Response::new(pb::ResolveFindingResponse { resolved }))
+    }
+
+    async fn run_internal_check(
+        &self,
+        _request: Request<pb::RunInternalCheckRequest>,
+    ) -> Result<Response<pb::RunInternalCheckResponse>, Status> {
+        let run = self
+            .reconciler
+            .check_internal()
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?;
+
+        Ok(Response::new(pb::RunInternalCheckResponse {
+            run_id: run.id.to_string(),
+            findings_count: run.findings.len() as i32,
+        }))
     }
 }

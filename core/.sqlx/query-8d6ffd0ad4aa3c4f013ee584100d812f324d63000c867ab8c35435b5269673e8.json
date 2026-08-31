@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE reconciliation_findings\n            SET resolved_at = now(), resolution = $2\n            WHERE id = $1 AND resolved_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d6ffd0ad4aa3c4f013ee584100d812f324d63000c867ab8c35435b5269673e8"
+}

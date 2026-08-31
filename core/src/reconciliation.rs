@@ -33,6 +33,9 @@ pub enum FindingKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
+    /// Identidad del hallazgo. 0 mientras no se ha persistido.
+    pub id: i64,
+    pub run_id: Option<Uuid>,
     pub kind: FindingKind,
     pub account_id: Option<Uuid>,
     pub reference: Option<String>,
@@ -40,6 +43,7 @@ pub struct Finding {
     pub actual_minor: Option<i64>,
     pub currency: Option<String>,
     pub detail: String,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 /// Movimiento tal como lo reporta un proveedor en su extracto.
@@ -137,6 +141,8 @@ impl Reconciler {
                 .find(|row| row.idempotency_key == movement.idempotency_key)
             {
                 None => findings.push(Finding {
+                    id: 0,
+                    run_id: None,
                     kind: FindingKind::MissingInLedger,
                     account_id: Some(account_id),
                     reference: Some(movement.reference.clone()),
@@ -147,8 +153,11 @@ impl Reconciler {
                         "el proveedor reporta {} y no hay asiento: posible notificación perdida",
                         movement.reference
                     ),
+                    created_at: None,
                 }),
                 Some(row) if row.amount_minor != movement.amount_minor => findings.push(Finding {
+                    id: 0,
+                    run_id: None,
                     kind: FindingKind::AmountMismatch,
                     account_id: Some(account_id),
                     reference: Some(movement.reference.clone()),
@@ -156,6 +165,7 @@ impl Reconciler {
                     actual_minor: Some(row.amount_minor),
                     currency: Some(movement.currency.clone()),
                     detail: format!("importes distintos para {}", movement.reference),
+                    created_at: None,
                 }),
                 Some(_) => {}
             }
@@ -164,6 +174,8 @@ impl Reconciler {
         for row in &ledger {
             if !seen_keys.contains(&row.idempotency_key) {
                 findings.push(Finding {
+                    id: 0,
+                    run_id: None,
                     kind: FindingKind::MissingAtProvider,
                     account_id: Some(account_id),
                     reference: Some(row.idempotency_key.clone()),
@@ -174,6 +186,7 @@ impl Reconciler {
                         "hay asiento para {} y el proveedor no lo reporta: posible acreditación sin respaldo",
                         row.idempotency_key
                     ),
+                    created_at: None,
                 });
             }
         }
@@ -225,6 +238,8 @@ impl Reconciler {
         if balance != 0 && !rows.is_empty() {
             let oldest = rows.first().unwrap();
             findings.push(Finding {
+                id: 0,
+                run_id: None,
                 kind: FindingKind::StaleSuspense,
                 account_id: Some(suspense_account_id),
                 reference: Some(oldest.idempotency_key.clone()),
@@ -235,6 +250,7 @@ impl Reconciler {
                     "hay {} en la cuenta desde {}: requiere resolución manual",
                     balance, oldest.posted_at
                 ),
+                created_at: None,
             });
         }
 
@@ -243,15 +259,17 @@ impl Reconciler {
     }
 
     /// Diferencias abiertas, para la cola de operaciones.
-    pub async fn open_findings(&self) -> Result<Vec<Finding>, sqlx::Error> {
+    pub async fn open_findings(&self, limit: i64) -> Result<Vec<Finding>, sqlx::Error> {
         let rows = sqlx::query!(
             r#"
-            SELECT kind as "kind: FindingKind", account_id, reference,
-                   expected_minor, actual_minor, currency, detail
+            SELECT id, run_id, kind as "kind: FindingKind", account_id, reference,
+                   expected_minor, actual_minor, currency, detail, created_at
             FROM reconciliation_findings
             WHERE resolved_at IS NULL
             ORDER BY id DESC
-            "#
+            LIMIT $1
+            "#,
+            limit,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -259,6 +277,8 @@ impl Reconciler {
         Ok(rows
             .into_iter()
             .map(|r| Finding {
+                id: r.id,
+                run_id: Some(r.run_id),
                 kind: r.kind,
                 account_id: r.account_id,
                 reference: r.reference,
@@ -266,11 +286,28 @@ impl Reconciler {
                 actual_minor: r.actual_minor,
                 currency: r.currency,
                 detail: r.detail,
+                created_at: Some(r.created_at),
             })
             .collect())
     }
 
-    /// Cierra una diferencia dejando constancia de cómo se resolvió.
+    /// Cierra un hallazgo concreto dejando constancia de cómo se resolvió.
+    pub async fn resolve_finding(&self, finding_id: i64, resolution: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE reconciliation_findings
+            SET resolved_at = now(), resolution = $2
+            WHERE id = $1 AND resolved_at IS NULL
+            "#,
+            finding_id,
+            resolution,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    /// Cierra todas las diferencias de una corrida.
     pub async fn resolve(&self, run_id: Uuid, resolution: &str) -> Result<u64, sqlx::Error> {
         let result = sqlx::query!(
             r#"
@@ -313,6 +350,8 @@ impl Reconciler {
         Ok(rows
             .into_iter()
             .map(|r| Finding {
+                id: 0,
+                run_id: None,
                 kind: FindingKind::BalanceDrift,
                 account_id: Some(r.account_id),
                 reference: None,
@@ -323,6 +362,7 @@ impl Reconciler {
                     "saldo materializado {} contra {} de los asientos ({} vs {} movimientos)",
                     r.materialized, r.projected, r.counted, r.projected_entries
                 ),
+                created_at: None,
             })
             .collect())
     }

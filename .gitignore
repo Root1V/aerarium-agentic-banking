@@ -25,3 +25,6 @@ clients/go/**/*.test
 app/.dart_tool/
 app/build/
 app/.flutter-plugins*
+
+# Node
+backoffice/node_modules/
