@@ -7,8 +7,8 @@ Flujo: cada feature en rama `feat/<nombre>` → revisión → commit/merge a `ma
 
 | Feature | Rama | Estado |
 |---|---|---|
-| Monorepo + entorno local (Gradle, docker-compose Postgres) | feat/core-ledger | ⬜ |
-| Core ledger: esquema doble partida + motor de posting + invariantes (tests) | feat/core-ledger | ⬜ |
+| Monorepo + entorno local (Gradle, docker-compose Postgres) | feat/core-ledger | 👀 |
+| Core ledger: esquema doble partida + motor de posting + invariantes (tests) | feat/core-ledger | 👀 |
 | Cuentas + catálogo de productos v1 (producto "cuenta simple") | feat/core-accounts | ⬜ |
 | Bus de eventos (Kafka + esquema de eventos del ledger) | feat/events | ⬜ |
 | Simuladores: ProveedorCuentas (BaaS) + RielPagos | feat/sim-baas-rails | ⬜ |

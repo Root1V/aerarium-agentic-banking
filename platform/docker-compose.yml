@@ -1,0 +1,22 @@
+# Entorno local de desarrollo AIBank
+# Uso: docker compose -f platform/docker-compose.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aibank-postgres
+    environment:
+      POSTGRES_USER: aibank
+      POSTGRES_PASSWORD: aibank_dev
+      POSTGRES_DB: aibank
+    ports:
+      - "5433:5432"   # 5433 en el host para no chocar con un Postgres local
+    volumes:
+      - aibank_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aibank"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  aibank_pgdata:
