@@ -664,6 +664,217 @@ func (x *GetBalanceResponse) GetProjectedBalance() *Money {
 	return nil
 }
 
+// Movimiento tal como se muestra en un extracto.
+type AccountEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Identidad estable para paginar. Opaca para el cliente.
+	Cursor        string    `protobuf:"bytes,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	TransactionId string    `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Direction     Direction `protobuf:"varint,3,opt,name=direction,proto3,enum=aibank.core.v1.Direction" json:"direction,omitempty"`
+	Amount        *Money    `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	// "deposit", "p2p_transfer", "rail_inbound_credit", ...
+	Kind          string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
+	Description   string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	PostedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=posted_at,json=postedAt,proto3" json:"posted_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountEntry) Reset() {
+	*x = AccountEntry{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountEntry) ProtoMessage() {}
+
+func (x *AccountEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountEntry.ProtoReflect.Descriptor instead.
+func (*AccountEntry) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *AccountEntry) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *AccountEntry) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *AccountEntry) GetDirection() Direction {
+	if x != nil {
+		return x.Direction
+	}
+	return Direction_DIRECTION_UNSPECIFIED
+}
+
+func (x *AccountEntry) GetAmount() *Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *AccountEntry) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *AccountEntry) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *AccountEntry) GetPostedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PostedAt
+	}
+	return nil
+}
+
+type ListEntriesRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AccountId string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	// Máximo de movimientos a devolver. 0 = valor por defecto del servidor.
+	Limit int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Cursor de la página anterior; vacío para empezar por el movimiento más reciente.
+	Cursor        string `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEntriesRequest) Reset() {
+	*x = ListEntriesRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEntriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEntriesRequest) ProtoMessage() {}
+
+func (x *ListEntriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEntriesRequest.ProtoReflect.Descriptor instead.
+func (*ListEntriesRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListEntriesRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *ListEntriesRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEntriesRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type ListEntriesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Del más reciente al más antiguo.
+	Entries []*AccountEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	// Vacío cuando no hay más páginas.
+	NextCursor    string `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEntriesResponse) Reset() {
+	*x = ListEntriesResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEntriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEntriesResponse) ProtoMessage() {}
+
+func (x *ListEntriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEntriesResponse.ProtoReflect.Descriptor instead.
+func (*ListEntriesResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListEntriesResponse) GetEntries() []*AccountEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *ListEntriesResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
 type Account struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -683,7 +894,7 @@ type Account struct {
 
 func (x *Account) Reset() {
 	*x = Account{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[6]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -695,7 +906,7 @@ func (x *Account) String() string {
 func (*Account) ProtoMessage() {}
 
 func (x *Account) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[6]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -708,7 +919,7 @@ func (x *Account) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Account.ProtoReflect.Descriptor instead.
 func (*Account) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{6}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Account) GetId() string {
@@ -801,7 +1012,7 @@ type OpenCustomerAccountRequest struct {
 
 func (x *OpenCustomerAccountRequest) Reset() {
 	*x = OpenCustomerAccountRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[7]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -813,7 +1024,7 @@ func (x *OpenCustomerAccountRequest) String() string {
 func (*OpenCustomerAccountRequest) ProtoMessage() {}
 
 func (x *OpenCustomerAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[7]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -826,7 +1037,7 @@ func (x *OpenCustomerAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenCustomerAccountRequest.ProtoReflect.Descriptor instead.
 func (*OpenCustomerAccountRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{7}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *OpenCustomerAccountRequest) GetCode() string {
@@ -869,7 +1080,7 @@ type CreateInternalAccountRequest struct {
 
 func (x *CreateInternalAccountRequest) Reset() {
 	*x = CreateInternalAccountRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[8]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -881,7 +1092,7 @@ func (x *CreateInternalAccountRequest) String() string {
 func (*CreateInternalAccountRequest) ProtoMessage() {}
 
 func (x *CreateInternalAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[8]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -894,7 +1105,7 @@ func (x *CreateInternalAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInternalAccountRequest.ProtoReflect.Descriptor instead.
 func (*CreateInternalAccountRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{8}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateInternalAccountRequest) GetCode() string {
@@ -934,7 +1145,7 @@ type GetAccountRequest struct {
 
 func (x *GetAccountRequest) Reset() {
 	*x = GetAccountRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[9]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -946,7 +1157,7 @@ func (x *GetAccountRequest) String() string {
 func (*GetAccountRequest) ProtoMessage() {}
 
 func (x *GetAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[9]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -959,12 +1170,56 @@ func (x *GetAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAccountRequest.ProtoReflect.Descriptor instead.
 func (*GetAccountRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{9}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetAccountRequest) GetCode() string {
 	if x != nil {
 		return x.Code
+	}
+	return ""
+}
+
+type GetAccountByIdRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccountByIdRequest) Reset() {
+	*x = GetAccountByIdRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountByIdRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountByIdRequest) ProtoMessage() {}
+
+func (x *GetAccountByIdRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountByIdRequest.ProtoReflect.Descriptor instead.
+func (*GetAccountByIdRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetAccountByIdRequest) GetId() string {
+	if x != nil {
+		return x.Id
 	}
 	return ""
 }
@@ -986,7 +1241,7 @@ type Product struct {
 
 func (x *Product) Reset() {
 	*x = Product{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[10]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -998,7 +1253,7 @@ func (x *Product) String() string {
 func (*Product) ProtoMessage() {}
 
 func (x *Product) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[10]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1011,7 +1266,7 @@ func (x *Product) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Product.ProtoReflect.Descriptor instead.
 func (*Product) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{10}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Product) GetId() string {
@@ -1084,7 +1339,7 @@ type CreateProductRequest struct {
 
 func (x *CreateProductRequest) Reset() {
 	*x = CreateProductRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[11]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1096,7 +1351,7 @@ func (x *CreateProductRequest) String() string {
 func (*CreateProductRequest) ProtoMessage() {}
 
 func (x *CreateProductRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[11]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1109,7 +1364,7 @@ func (x *CreateProductRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProductRequest.ProtoReflect.Descriptor instead.
 func (*CreateProductRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{11}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CreateProductRequest) GetCode() string {
@@ -1163,7 +1418,7 @@ type GetProductRequest struct {
 
 func (x *GetProductRequest) Reset() {
 	*x = GetProductRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[12]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1430,7 @@ func (x *GetProductRequest) String() string {
 func (*GetProductRequest) ProtoMessage() {}
 
 func (x *GetProductRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[12]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1443,7 @@ func (x *GetProductRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProductRequest.ProtoReflect.Descriptor instead.
 func (*GetProductRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{12}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetProductRequest) GetCode() string {
@@ -1227,7 +1482,24 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\abalance\x18\x01 \x01(\v2\x15.aibank.core.v1.MoneyR\abalance\x12\x1f\n" +
 	"\ventry_count\x18\x02 \x01(\x03R\n" +
 	"entryCount\x12B\n" +
-	"\x11projected_balance\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x10projectedBalance\"\x99\x03\n" +
+	"\x11projected_balance\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x10projectedBalance\"\xa4\x02\n" +
+	"\fAccountEntry\x12\x16\n" +
+	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x127\n" +
+	"\tdirection\x18\x03 \x01(\x0e2\x19.aibank.core.v1.DirectionR\tdirection\x12-\n" +
+	"\x06amount\x18\x04 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\tR\x04kind\x12 \n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\x127\n" +
+	"\tposted_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\bpostedAt\"a\n" +
+	"\x12ListEntriesRequest\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"n\n" +
+	"\x13ListEntriesResponse\x126\n" +
+	"\aentries\x18\x01 \x03(\v2\x1c.aibank.core.v1.AccountEntryR\aentries\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor\"\x99\x03\n" +
 	"\aAccount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
@@ -1255,7 +1527,9 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x04type\x18\x03 \x01(\x0e2\x1b.aibank.core.v1.AccountTypeR\x04type\x12\x1a\n" +
 	"\bcurrency\x18\x04 \x01(\tR\bcurrency\"'\n" +
 	"\x11GetAccountRequest\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\tR\x04code\"\xba\x02\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\"'\n" +
+	"\x15GetAccountByIdRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xba\x02\n" +
 	"\aProduct\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
@@ -1305,16 +1579,18 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"'POSTING_ERROR_REASON_INSUFFICIENT_FUNDS\x10\x03\x12-\n" +
 	")POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED\x10\x04\x121\n" +
 	"-POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED\x10\x05\x12'\n" +
-	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x062\xa7\x01\n" +
+	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x062\xff\x01\n" +
 	"\rLedgerService\x12A\n" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +
-	"GetBalance\x12!.aibank.core.v1.GetBalanceRequest\x1a\".aibank.core.v1.GetBalanceResponse2\x96\x02\n" +
+	"GetBalance\x12!.aibank.core.v1.GetBalanceRequest\x1a\".aibank.core.v1.GetBalanceResponse\x12V\n" +
+	"\vListEntries\x12\".aibank.core.v1.ListEntriesRequest\x1a#.aibank.core.v1.ListEntriesResponse2\xe8\x02\n" +
 	"\x0eAccountService\x12Z\n" +
 	"\x13OpenCustomerAccount\x12*.aibank.core.v1.OpenCustomerAccountRequest\x1a\x17.aibank.core.v1.Account\x12^\n" +
 	"\x15CreateInternalAccount\x12,.aibank.core.v1.CreateInternalAccountRequest\x1a\x17.aibank.core.v1.Account\x12H\n" +
 	"\n" +
-	"GetAccount\x12!.aibank.core.v1.GetAccountRequest\x1a\x17.aibank.core.v1.Account2\xaa\x01\n" +
+	"GetAccount\x12!.aibank.core.v1.GetAccountRequest\x1a\x17.aibank.core.v1.Account\x12P\n" +
+	"\x0eGetAccountById\x12%.aibank.core.v1.GetAccountByIdRequest\x1a\x17.aibank.core.v1.Account2\xaa\x01\n" +
 	"\x0eProductService\x12N\n" +
 	"\rCreateProduct\x12$.aibank.core.v1.CreateProductRequest\x1a\x17.aibank.core.v1.Product\x12H\n" +
 	"\n" +
@@ -1333,7 +1609,7 @@ func file_aibank_core_v1_core_proto_rawDescGZIP() []byte {
 }
 
 var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_aibank_core_v1_core_proto_goTypes = []any{
 	(Direction)(0),                       // 0: aibank.core.v1.Direction
 	(AccountType)(0),                     // 1: aibank.core.v1.AccountType
@@ -1346,46 +1622,58 @@ var file_aibank_core_v1_core_proto_goTypes = []any{
 	(*PostResponse)(nil),                 // 8: aibank.core.v1.PostResponse
 	(*GetBalanceRequest)(nil),            // 9: aibank.core.v1.GetBalanceRequest
 	(*GetBalanceResponse)(nil),           // 10: aibank.core.v1.GetBalanceResponse
-	(*Account)(nil),                      // 11: aibank.core.v1.Account
-	(*OpenCustomerAccountRequest)(nil),   // 12: aibank.core.v1.OpenCustomerAccountRequest
-	(*CreateInternalAccountRequest)(nil), // 13: aibank.core.v1.CreateInternalAccountRequest
-	(*GetAccountRequest)(nil),            // 14: aibank.core.v1.GetAccountRequest
-	(*Product)(nil),                      // 15: aibank.core.v1.Product
-	(*CreateProductRequest)(nil),         // 16: aibank.core.v1.CreateProductRequest
-	(*GetProductRequest)(nil),            // 17: aibank.core.v1.GetProductRequest
-	(*timestamppb.Timestamp)(nil),        // 18: google.protobuf.Timestamp
+	(*AccountEntry)(nil),                 // 11: aibank.core.v1.AccountEntry
+	(*ListEntriesRequest)(nil),           // 12: aibank.core.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),          // 13: aibank.core.v1.ListEntriesResponse
+	(*Account)(nil),                      // 14: aibank.core.v1.Account
+	(*OpenCustomerAccountRequest)(nil),   // 15: aibank.core.v1.OpenCustomerAccountRequest
+	(*CreateInternalAccountRequest)(nil), // 16: aibank.core.v1.CreateInternalAccountRequest
+	(*GetAccountRequest)(nil),            // 17: aibank.core.v1.GetAccountRequest
+	(*GetAccountByIdRequest)(nil),        // 18: aibank.core.v1.GetAccountByIdRequest
+	(*Product)(nil),                      // 19: aibank.core.v1.Product
+	(*CreateProductRequest)(nil),         // 20: aibank.core.v1.CreateProductRequest
+	(*GetProductRequest)(nil),            // 21: aibank.core.v1.GetProductRequest
+	(*timestamppb.Timestamp)(nil),        // 22: google.protobuf.Timestamp
 }
 var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	0,  // 0: aibank.core.v1.Entry.direction:type_name -> aibank.core.v1.Direction
 	5,  // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
 	6,  // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
-	18, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
+	22, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
 	5,  // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
 	5,  // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
-	1,  // 6: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
-	2,  // 7: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
-	3,  // 8: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
-	18, // 9: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 10: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
-	7,  // 11: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
-	9,  // 12: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
-	12, // 13: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
-	13, // 14: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
-	14, // 15: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
-	16, // 16: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
-	17, // 17: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
-	8,  // 18: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
-	10, // 19: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
-	11, // 20: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
-	11, // 21: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
-	11, // 22: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
-	15, // 23: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
-	15, // 24: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
-	18, // [18:25] is the sub-list for method output_type
-	11, // [11:18] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	0,  // 6: aibank.core.v1.AccountEntry.direction:type_name -> aibank.core.v1.Direction
+	5,  // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
+	22, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
+	11, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
+	1,  // 10: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
+	2,  // 11: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
+	3,  // 12: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
+	22, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 14: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
+	7,  // 15: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
+	9,  // 16: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
+	12, // 17: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
+	15, // 18: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
+	16, // 19: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
+	17, // 20: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
+	18, // 21: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
+	20, // 22: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
+	21, // 23: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
+	8,  // 24: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
+	10, // 25: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
+	13, // 26: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
+	14, // 27: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
+	14, // 28: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
+	14, // 29: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
+	14, // 30: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
+	19, // 31: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
+	19, // 32: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
+	24, // [24:33] is the sub-list for method output_type
+	15, // [15:24] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_aibank_core_v1_core_proto_init() }
@@ -1393,15 +1681,15 @@ func file_aibank_core_v1_core_proto_init() {
 	if File_aibank_core_v1_core_proto != nil {
 		return
 	}
-	file_aibank_core_v1_core_proto_msgTypes[10].OneofWrappers = []any{}
-	file_aibank_core_v1_core_proto_msgTypes[11].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[14].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aibank_core_v1_core_proto_rawDesc), len(file_aibank_core_v1_core_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

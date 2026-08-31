@@ -102,6 +102,19 @@ registra al completarse, así una caída se retoma donde quedó en vez de volver
 pedir documentos al cliente y a pagar verificaciones ya hechas. Los pasos y sus
 resultados son además el rastro de auditoría que el supervisor puede exigir.
 
+## BFF (API del canal móvil)
+
+```bash
+cd services && go test ./bff/     # requiere core + Postgres arriba
+```
+
+La autenticación es un PUERTO (`bff.Authenticator`), no una implementación: banca
+se resuelve con passkeys FIDO2 vinculadas al dispositivo. El sustituto de
+desarrollo vive en `bff/sim` para que no pueda cablearse a producción por descuido.
+
+Dos reglas del canal: el dinero viaja como entero en unidades menores (nunca
+decimal en JSON) y toda operación que mueve dinero exige `Idempotency-Key`.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

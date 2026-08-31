@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT e.id, e.transaction_id,\n                   e.direction as \"direction: Direction\",\n                   e.amount_minor, e.currency,\n                   t.kind, t.description, t.posted_at\n            FROM ledger_entries e\n            JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND ($2::bigint IS NULL OR e.id < $2)\n            ORDER BY e.id DESC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "direction: Direction",
+        "type_info": {
+          "Custom": {
+            "name": "entry_direction",
+            "kind": {
+              "Enum": [
+                "DEBIT",
+                "CREDIT"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "amount_minor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "posted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "9723e83bc15154c1234ecdfc9cec404b0e595e04a31425b8ef7dd8faeb182dea"
+}

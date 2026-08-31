@@ -148,6 +148,51 @@ impl AccountRepository {
         Ok(self.balance(account_id).await?.balance_minor)
     }
 
+    /// Extracto de movimientos, del más reciente al más antiguo.
+    ///
+    /// Pagina por el id del asiento, que es monotónico: a diferencia de OFFSET,
+    /// un cursor no se descoloca cuando llegan movimientos nuevos mientras el
+    /// cliente pasa de página.
+    pub async fn list_entries(
+        &self,
+        account_id: Uuid,
+        limit: i64,
+        before: Option<i64>,
+    ) -> Result<Vec<AccountEntry>, sqlx::Error> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT e.id, e.transaction_id,
+                   e.direction as "direction: Direction",
+                   e.amount_minor, e.currency,
+                   t.kind, t.description, t.posted_at
+            FROM ledger_entries e
+            JOIN ledger_transactions t ON t.id = e.transaction_id
+            WHERE e.account_id = $1 AND ($2::bigint IS NULL OR e.id < $2)
+            ORDER BY e.id DESC
+            LIMIT $3
+            "#,
+            account_id,
+            before,
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| AccountEntry {
+                id: r.id,
+                transaction_id: r.transaction_id,
+                direction: r.direction,
+                amount_minor: r.amount_minor,
+                currency: r.currency,
+                kind: r.kind,
+                description: r.description,
+                posted_at: r.posted_at,
+            })
+            .collect())
+    }
+
     /// Saldo recalculado desde los asientos. Debe coincidir siempre con
     /// [`AccountRepository::balance`]; discrepancia = incidente contable.
     pub async fn projected_balance(&self, account_id: Uuid) -> Result<Balance, sqlx::Error> {
