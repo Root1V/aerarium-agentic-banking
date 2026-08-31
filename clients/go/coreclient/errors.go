@@ -28,6 +28,9 @@ var (
 	ErrTransactionCapExceeded = errors.New("tope por operación excedido")
 	// ErrNotFound: la cuenta o el producto no existe.
 	ErrNotFound = errors.New("no encontrado")
+	// ErrAlreadyExists: ya hay un registro con ese código. Permite tratar un
+	// reintento de alta como idempotente en vez de como fallo.
+	ErrAlreadyExists = errors.New("ya existe")
 	// ErrUnavailable: fallo de infraestructura. ESTE SÍ es reintentable.
 	ErrUnavailable = errors.New("core no disponible")
 )
@@ -76,6 +79,8 @@ func sentinelForReason(reason corev1.PostingErrorReason) error {
 		return ErrBalanceCapExceeded
 	case corev1.PostingErrorReason_POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED:
 		return ErrTransactionCapExceeded
+	case corev1.PostingErrorReason_POSTING_ERROR_REASON_ALREADY_EXISTS:
+		return ErrAlreadyExists
 	default:
 		return nil
 	}
@@ -89,6 +94,8 @@ func sentinelForCode(code codes.Code) error {
 		return ErrInvalid
 	case codes.Aborted:
 		return ErrIdempotencyConflict
+	case codes.AlreadyExists:
+		return ErrAlreadyExists
 	case codes.FailedPrecondition:
 		return ErrInvalid
 	default:

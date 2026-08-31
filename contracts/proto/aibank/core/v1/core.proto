@@ -70,6 +70,8 @@ enum PostingErrorReason {
   POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED = 4;
   // El monto supera el tope por operación del producto.
   POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED = 5;
+  // Ya existe un registro con esa clave (código de cuenta o de producto repetido).
+  POSTING_ERROR_REASON_ALREADY_EXISTS = 6;
 }
 
 // ---------------------------------------------------------------- ledger

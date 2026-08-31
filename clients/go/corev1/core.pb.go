@@ -259,6 +259,8 @@ const (
 	PostingErrorReason_POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED PostingErrorReason = 4
 	// El monto supera el tope por operación del producto.
 	PostingErrorReason_POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED PostingErrorReason = 5
+	// Ya existe un registro con esa clave (código de cuenta o de producto repetido).
+	PostingErrorReason_POSTING_ERROR_REASON_ALREADY_EXISTS PostingErrorReason = 6
 )
 
 // Enum value maps for PostingErrorReason.
@@ -270,6 +272,7 @@ var (
 		3: "POSTING_ERROR_REASON_INSUFFICIENT_FUNDS",
 		4: "POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED",
 		5: "POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED",
+		6: "POSTING_ERROR_REASON_ALREADY_EXISTS",
 	}
 	PostingErrorReason_value = map[string]int32{
 		"POSTING_ERROR_REASON_UNSPECIFIED":              0,
@@ -278,6 +281,7 @@ var (
 		"POSTING_ERROR_REASON_INSUFFICIENT_FUNDS":       3,
 		"POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED":     4,
 		"POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED": 5,
+		"POSTING_ERROR_REASON_ALREADY_EXISTS":           6,
 	}
 )
 
@@ -1293,14 +1297,15 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x1aACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15ACCOUNT_STATUS_ACTIVE\x10\x01\x12\x19\n" +
 	"\x15ACCOUNT_STATUS_FROZEN\x10\x02\x12\x19\n" +
-	"\x15ACCOUNT_STATUS_CLOSED\x10\x03*\x9a\x02\n" +
+	"\x15ACCOUNT_STATUS_CLOSED\x10\x03*\xc3\x02\n" +
 	"\x12PostingErrorReason\x12$\n" +
 	" POSTING_ERROR_REASON_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cPOSTING_ERROR_REASON_INVALID\x10\x01\x12-\n" +
 	")POSTING_ERROR_REASON_IDEMPOTENCY_CONFLICT\x10\x02\x12+\n" +
 	"'POSTING_ERROR_REASON_INSUFFICIENT_FUNDS\x10\x03\x12-\n" +
 	")POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED\x10\x04\x121\n" +
-	"-POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED\x10\x052\xa7\x01\n" +
+	"-POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED\x10\x05\x12'\n" +
+	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x062\xa7\x01\n" +
 	"\rLedgerService\x12A\n" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +

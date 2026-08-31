@@ -43,6 +43,7 @@ fn to_status(err: PostingError) -> Status {
         PostingError::TransactionCapExceeded(_) => {
             (tonic::Code::FailedPrecondition, R::TransactionCapExceeded)
         }
+        PostingError::Conflict(_) => (tonic::Code::AlreadyExists, R::AlreadyExists),
         // Fallo de infraestructura: el llamador SÍ puede reintentar.
         PostingError::Database(_) => (tonic::Code::Unavailable, R::Unspecified),
     };

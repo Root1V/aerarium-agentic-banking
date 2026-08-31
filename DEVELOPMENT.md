@@ -91,6 +91,17 @@ riel real hace a diario: timeouts, rechazos, notificaciones duplicadas y entrega
 fuera de orden. No es andamiaje temporal — se queda como herramienta de pruebas,
 porque esos escenarios casi no se pueden provocar contra el sandbox de un proveedor.
 
+## Servicios (Go)
+
+```bash
+cd services && go test ./...    # onboarding: requiere core + Postgres arriba
+```
+
+El alta de clientes es una máquina de estados persistida y reanudable: cada paso se
+registra al completarse, así una caída se retoma donde quedó en vez de volver a
+pedir documentos al cliente y a pagar verificaciones ya hechas. Los pasos y sus
+resultados son además el rastro de auditoría que el supervisor puede exigir.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
