@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod db;
+pub mod grpc;
 pub mod model;
 pub mod posting;
 pub mod products;

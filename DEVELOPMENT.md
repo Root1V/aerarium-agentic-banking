@@ -34,6 +34,27 @@ Las migraciones se aplican solas al correr los tests (`sqlx::migrate!`).
 
 Si cambias una consulta o el esquema, **regenera el caché o CI fallará** — que es exactamente el punto.
 
+## Contratos (Protobuf)
+
+`contracts/proto` es la fuente de verdad de la frontera entre el core (Rust) y los
+adaptadores (Go). Un cambio incompatible rompe la compilación de ambos lados.
+
+```bash
+make -C contracts lint       # valida los .proto
+make -C contracts generate   # regenera el cliente Go (el core Rust lo hace en cargo build)
+```
+
+## Servidor del core y cliente Go
+
+```bash
+cd core && DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
+  cargo run --bin aibank-core-server        # gRPC en 127.0.0.1:50051
+
+cd clients/go && go test ./...              # tests de integración contra el core real
+```
+
+Los tests de Go se saltan solos si el core no está escuchando.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

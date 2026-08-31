@@ -17,3 +17,6 @@ build/
 
 # Rust
 target/
+
+# Go
+clients/go/**/*.test
