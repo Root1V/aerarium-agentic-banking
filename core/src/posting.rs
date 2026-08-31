@@ -250,6 +250,10 @@ async fn emit_posted_event(
         }),
     };
 
+    // El contexto de traza vigente se guarda CON el evento: la publicación ocurre
+    // después y en otro proceso, y sin esto la traza del pago se cortaría aquí.
+    let trace_context = crate::telemetry::serialize_context(&opentelemetry::Context::current());
+
     crate::outbox::write(
         tx,
         event_id,
@@ -257,6 +261,7 @@ async fn emit_posted_event(
         "ledger_transaction",
         transaction.id,
         &event,
+        trace_context,
     )
     .await
 }

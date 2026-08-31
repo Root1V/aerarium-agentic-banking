@@ -170,6 +170,20 @@ intentos DENEGADOS se registran igual que los permitidos — un intento rechazad
 justo lo que interesa detectar. El rastro de auditoría es de solo inserción, como
 el ledger.
 
+## Observabilidad
+
+Una misma traza une app → BFF → core (Rust) → evento del outbox → relay. Dos
+propagaciones distintas hacen falta y ninguna es automática:
+
+- **Entre procesos**: contexto W3C por metadata gRPC y cabeceras HTTP.
+- **En el tiempo**: el evento del outbox guarda el `traceparent` de la transacción
+  que lo originó, porque se publica después y en otro proceso. Sin eso la traza se
+  corta en el COMMIT, justo donde hace falta para seguir un pago asíncrono.
+
+Regla dura: en una traza NUNCA entran datos personales ni secretos. Hay una guarda
+(`is_safe_attribute` / `IsSafeAttribute`) que filtra por subcadena y es
+deliberadamente estricta — las trazas salen a herramientas de terceros.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

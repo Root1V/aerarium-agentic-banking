@@ -11,6 +11,7 @@
 
 use crate::model::*;
 use crate::{AccountRepository, PostingService, ProductRepository};
+use opentelemetry::trace::FutureExt;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -143,11 +144,12 @@ impl LedgerApi {
     }
 }
 
-#[tonic::async_trait]
-impl LedgerService for LedgerApi {
-    async fn post(&self, request: Request<pb::PostRequest>) -> Result<Response<pb::PostResponse>, Status> {
-        let req = request.into_inner();
-
+impl LedgerApi {
+    /// Cuerpo del posting, ya ejecutándose bajo el contexto de traza del llamador.
+    async fn post_within_trace(
+        &self,
+        req: pb::PostRequest,
+    ) -> Result<Response<pb::PostResponse>, Status> {
         let mut entries = Vec::with_capacity(req.entries.len());
         for (i, entry) in req.entries.iter().enumerate() {
             let amount = entry
@@ -183,6 +185,21 @@ impl LedgerService for LedgerApi {
             posted_at: Some(to_timestamp(result.transaction.posted_at)),
             replayed: result.replayed,
         }))
+    }
+}
+
+#[tonic::async_trait]
+impl LedgerService for LedgerApi {
+    async fn post(&self, request: Request<pb::PostRequest>) -> Result<Response<pb::PostResponse>, Status> {
+        // El contexto de traza llega del llamador (BFF, adaptador) en la metadata.
+        // Se adopta como contexto vigente para que todo lo que ocurra debajo —
+        // incluido el evento que se encola— quede bajo la misma traza del pago.
+        let parent = crate::telemetry::context_from_metadata(request.metadata());
+        let req = request.into_inner();
+
+        // El contexto se adjunta al FUTURO, no a un guard: un guard no puede
+        // cruzar un `.await` y aquí hay trabajo asíncrono por delante.
+        self.post_within_trace(req).with_context(parent).await
     }
 
     async fn list_entries(

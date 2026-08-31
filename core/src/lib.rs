@@ -11,6 +11,7 @@ pub mod model;
 pub mod outbox;
 pub mod posting;
 pub mod reconciliation;
+pub mod telemetry;
 pub mod products;
 
 pub use accounts::AccountRepository;

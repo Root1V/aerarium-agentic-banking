@@ -12,6 +12,7 @@ import (
 	"time"
 
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -30,7 +31,13 @@ type Client struct {
 // Sin TLS: el core solo escucha en la red interna. La terminación TLS y la
 // autenticación entre servicios se resuelven en la malla, no aquí.
 func Dial(_ context.Context, target string) (*Client, error) {
-	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// El interceptor propaga el contexto de traza al core por la metadata gRPC.
+	// Sin él, la traza se corta en el borde del proceso y seguir un pago de
+	// extremo a extremo deja de ser posible.
+	conn, err := grpc.NewClient(target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("conectar al core: %w", err)
 	}

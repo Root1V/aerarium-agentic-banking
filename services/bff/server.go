@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/clients/go/telemetry"
 )
 
 // Server es la API del canal móvil.
@@ -51,7 +52,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
 
-	return mux
+	// El middleware recupera el contexto de traza entrante y abre un span por
+	// petición. Desde aquí viaja al core por la metadata gRPC y, si la operación
+	// encola un evento, sobrevive al salto asíncrono del outbox.
+	return telemetry.Middleware("bff", mux)
 }
 
 // requireAuth resuelve el token antes de ejecutar el handler.
@@ -136,7 +140,10 @@ func (s *Server) writeCoreError(w http.ResponseWriter, r *http.Request, err erro
 	default:
 		// Un fallo de infraestructura se registra completo del lado del servidor
 		// y se responde de forma genérica.
-		s.logger.ErrorContext(r.Context(), "fallo al hablar con el core", "error", err, "path", r.URL.Path)
+		// El identificador de traza va en el log: es el puente entre "algo falló"
+		// y la traza que cuenta qué pasó exactamente.
+		s.logger.ErrorContext(r.Context(), "fallo al hablar con el core",
+			"error", err, "path", r.URL.Path, "trace_id", telemetry.TraceID(r.Context()))
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "servicio no disponible, intenta de nuevo")
 	}
 }
