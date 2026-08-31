@@ -7,8 +7,10 @@
 use aibank_core::grpc::pb::{
     account_service_server::AccountServiceServer, ledger_service_server::LedgerServiceServer,
     product_service_server::ProductServiceServer,
+    reconciliation_service_server::ReconciliationServiceServer,
 };
-use aibank_core::grpc::{AccountApi, LedgerApi, ProductApi};
+use aibank_core::grpc::{AccountApi, LedgerApi, ProductApi, ReconciliationApi};
+use aibank_core::reconciliation::Reconciler;
 use aibank_core::{db, AccountRepository, PostingService, ProductRepository};
 use std::error::Error;
 use tonic::transport::Server;
@@ -33,6 +35,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let ledger = LedgerApi::new(PostingService::new(pool.clone()), AccountRepository::new(pool.clone()));
     let accounts = AccountApi::new(AccountRepository::new(pool.clone()), ProductRepository::new(pool.clone()));
     let products = ProductApi::new(ProductRepository::new(pool.clone()));
+    let reconciliation = ReconciliationApi::new(Reconciler::new(pool.clone()));
 
     tracing::info!(%bind_addr, "core escuchando");
 
@@ -40,6 +43,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .add_service(LedgerServiceServer::new(ledger))
         .add_service(AccountServiceServer::new(accounts))
         .add_service(ProductServiceServer::new(products))
+        .add_service(ReconciliationServiceServer::new(reconciliation))
         .serve_with_shutdown(bind_addr.parse()?, async {
             let _ = tokio::signal::ctrl_c().await;
             tracing::info!("apagando");

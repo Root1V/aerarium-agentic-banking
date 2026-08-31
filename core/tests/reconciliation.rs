@@ -360,7 +360,7 @@ async fn las_diferencias_quedan_abiertas_hasta_resolverse(pool: PgPool) {
     let run = reconciler.check_internal().await.unwrap();
     assert_eq!(run.findings.len(), 1);
 
-    let open = reconciler.open_findings().await.unwrap();
+    let open = reconciler.open_findings(100).await.unwrap();
     assert_eq!(open.len(), 1, "la diferencia debe quedar en la cola");
 
     let closed = reconciler
@@ -369,6 +369,6 @@ async fn las_diferencias_quedan_abiertas_hasta_resolverse(pool: PgPool) {
         .unwrap();
     assert_eq!(closed, 1);
 
-    let open_after = reconciler.open_findings().await.unwrap();
+    let open_after = reconciler.open_findings(100).await.unwrap();
     assert!(open_after.is_empty(), "resuelta, ya no debe estar abierta");
 }

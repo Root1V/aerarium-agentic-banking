@@ -1,10 +1,20 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT kind as \"kind: FindingKind\", account_id, reference,\n                   expected_minor, actual_minor, currency, detail\n            FROM reconciliation_findings\n            WHERE resolved_at IS NULL\n            ORDER BY id DESC\n            ",
+  "query": "\n            SELECT id, run_id, kind as \"kind: FindingKind\", account_id, reference,\n                   expected_minor, actual_minor, currency, detail, created_at\n            FROM reconciliation_findings\n            WHERE resolved_at IS NULL\n            ORDER BY id DESC\n            LIMIT $1\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
         "name": "kind: FindingKind",
         "type_info": {
           "Custom": {
@@ -22,48 +32,58 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 3,
         "name": "account_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 2,
+        "ordinal": 4,
         "name": "reference",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 5,
         "name": "expected_minor",
         "type_info": "Int8"
       },
       {
-        "ordinal": 4,
+        "ordinal": 6,
         "name": "actual_minor",
         "type_info": "Int8"
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "name": "currency",
         "type_info": "Bpchar"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "detail",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Int8"
+      ]
     },
     "nullable": [
+      false,
+      false,
       false,
       true,
       true,
       true,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "5926554c3110914c24f9daf06db4d0a09bee15122ed0ea47c3f85d5949c04ff9"
+  "hash": "96acc9a50d714c39d7e0cd4a66be7127cac1f5f598965fb648a41f43cbd46ebd"
 }

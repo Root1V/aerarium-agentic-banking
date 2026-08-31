@@ -224,3 +224,68 @@ service ProductService {
   rpc CreateProduct(CreateProductRequest) returns (Product);
   rpc GetProduct(GetProductRequest) returns (Product);
 }
+
+// ---------------------------------------------------------------- conciliación
+
+enum FindingKind {
+  FINDING_KIND_UNSPECIFIED = 0;
+  // El saldo materializado no coincide con la suma de los asientos.
+  FINDING_KIND_BALANCE_DRIFT = 1;
+  // El proveedor reporta un movimiento que no está en el ledger.
+  FINDING_KIND_MISSING_IN_LEDGER = 2;
+  // El ledger registra un movimiento que el proveedor no reporta.
+  FINDING_KIND_MISSING_AT_PROVIDER = 3;
+  // Ambos lo tienen, por importes distintos.
+  FINDING_KIND_AMOUNT_MISMATCH = 4;
+  // Dinero detenido en tránsito o retención más allá del plazo razonable.
+  FINDING_KIND_STALE_SUSPENSE = 5;
+}
+
+message Finding {
+  int64 id = 1;
+  string run_id = 2;
+  FindingKind kind = 3;
+  string account_id = 4;
+  string reference = 5;
+  // Lo que debería ser y lo que hay, en unidades menores.
+  int64 expected_minor = 6;
+  int64 actual_minor = 7;
+  string currency = 8;
+  string detail = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message ListOpenFindingsRequest {
+  int32 limit = 1;
+}
+
+message ListOpenFindingsResponse {
+  repeated Finding findings = 1;
+}
+
+message ResolveFindingRequest {
+  int64 finding_id = 1;
+  // Cómo se resolvió. Queda registrado: una diferencia cerrada sin explicación
+  // no sirve ante una auditoría.
+  string resolution = 2;
+}
+
+message ResolveFindingResponse {
+  bool resolved = 1;
+}
+
+message RunInternalCheckRequest {}
+
+message RunInternalCheckResponse {
+  string run_id = 1;
+  int32 findings_count = 2;
+}
+
+service ReconciliationService {
+  // Diferencias abiertas, para la cola de operaciones.
+  rpc ListOpenFindings(ListOpenFindingsRequest) returns (ListOpenFindingsResponse);
+  // Cierra una diferencia dejando constancia.
+  rpc ResolveFinding(ResolveFindingRequest) returns (ResolveFindingResponse);
+  // Dispara la conciliación interna bajo demanda.
+  rpc RunInternalCheck(RunInternalCheckRequest) returns (RunInternalCheckResponse);
+}
