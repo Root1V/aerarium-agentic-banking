@@ -1,0 +1,207 @@
+// Package coreclient es el cliente Go del core bancario.
+//
+// Su valor añadido sobre el código generado es traducir los rechazos del core a
+// errores tipados de Go: un adaptador debe poder distinguir "fondos insuficientes"
+// (definitivo — no reintentar, informar al cliente) de "core no disponible"
+// (transitorio — reintentar con backoff). Confundirlos es cómo se duplican pagos.
+package coreclient
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+)
+
+// Client habla con el core bancario.
+type Client struct {
+	conn     *grpc.ClientConn
+	ledger   corev1.LedgerServiceClient
+	accounts corev1.AccountServiceClient
+	products corev1.ProductServiceClient
+}
+
+// Dial abre una conexión con el core.
+//
+// Sin TLS: el core solo escucha en la red interna. La terminación TLS y la
+// autenticación entre servicios se resuelven en la malla, no aquí.
+func Dial(_ context.Context, target string) (*Client, error) {
+	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("conectar al core: %w", err)
+	}
+	return &Client{
+		conn:     conn,
+		ledger:   corev1.NewLedgerServiceClient(conn),
+		accounts: corev1.NewAccountServiceClient(conn),
+		products: corev1.NewProductServiceClient(conn),
+	}, nil
+}
+
+func (c *Client) Close() error { return c.conn.Close() }
+
+// ---------------------------------------------------------------- ledger
+
+// Entry es un asiento contable. El monto es siempre positivo en unidades
+// menores (centavos); el signo lo aporta la dirección.
+type Entry struct {
+	AccountID   string
+	Direction   corev1.Direction
+	AmountMinor int64
+	Currency    string
+}
+
+// Debit construye un asiento al debe.
+func Debit(accountID string, amountMinor int64, currency string) Entry {
+	return Entry{accountID, corev1.Direction_DIRECTION_DEBIT, amountMinor, currency}
+}
+
+// Credit construye un asiento al haber.
+func Credit(accountID string, amountMinor int64, currency string) Entry {
+	return Entry{accountID, corev1.Direction_DIRECTION_CREDIT, amountMinor, currency}
+}
+
+// PostResult describe el efecto de un movimiento.
+type PostResult struct {
+	TransactionID string
+	PostedAt      time.Time
+	// Replayed indica que la clave ya existía: el core devolvió la transacción
+	// original sin duplicar el efecto. No es un error: es la idempotencia funcionando.
+	Replayed bool
+}
+
+// Post asienta un movimiento en el ledger.
+//
+// idempotencyKey debe ser estable para la MISMA operación de negocio: si un riel
+// reenvía el mismo webhook, reusar la clave evita el doble abono.
+func (c *Client) Post(ctx context.Context, idempotencyKey, kind string, entries []Entry, description string) (*PostResult, error) {
+	pbEntries := make([]*corev1.Entry, 0, len(entries))
+	for _, e := range entries {
+		pbEntries = append(pbEntries, &corev1.Entry{
+			AccountId: e.AccountID,
+			Direction: e.Direction,
+			Amount:    &corev1.Money{AmountMinor: e.AmountMinor, Currency: e.Currency},
+		})
+	}
+
+	var trailer metadata.MD
+	resp, err := c.ledger.Post(ctx, &corev1.PostRequest{
+		IdempotencyKey: idempotencyKey,
+		Kind:           kind,
+		Entries:        pbEntries,
+		Description:    description,
+	}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+
+	return &PostResult{
+		TransactionID: resp.TransactionId,
+		PostedAt:      resp.PostedAt.AsTime(),
+		Replayed:      resp.Replayed,
+	}, nil
+}
+
+// Balance es el saldo de una cuenta junto a su verificación contra el ledger.
+type Balance struct {
+	AmountMinor int64
+	Currency    string
+	EntryCount  int64
+	// ProjectedMinor recalcula el saldo desde los asientos. Si difiere de
+	// AmountMinor hay una inconsistencia contable que debe escalarse.
+	ProjectedMinor int64
+}
+
+// Consistent indica si el saldo materializado coincide con la proyección del ledger.
+func (b Balance) Consistent() bool { return b.AmountMinor == b.ProjectedMinor }
+
+func (c *Client) GetBalance(ctx context.Context, accountID string) (*Balance, error) {
+	var trailer metadata.MD
+	resp, err := c.ledger.GetBalance(ctx,
+		&corev1.GetBalanceRequest{AccountId: accountID}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return &Balance{
+		AmountMinor:    resp.Balance.AmountMinor,
+		Currency:       resp.Balance.Currency,
+		EntryCount:     resp.EntryCount,
+		ProjectedMinor: resp.ProjectedBalance.AmountMinor,
+	}, nil
+}
+
+// ---------------------------------------------------------------- cuentas
+
+func (c *Client) OpenCustomerAccount(ctx context.Context, code, name, customerID, productCode string) (*corev1.Account, error) {
+	var trailer metadata.MD
+	account, err := c.accounts.OpenCustomerAccount(ctx, &corev1.OpenCustomerAccountRequest{
+		Code: code, Name: name, CustomerId: customerID, ProductCode: productCode,
+	}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return account, nil
+}
+
+func (c *Client) CreateInternalAccount(ctx context.Context, code, name string, accountType corev1.AccountType, currency string) (*corev1.Account, error) {
+	var trailer metadata.MD
+	account, err := c.accounts.CreateInternalAccount(ctx, &corev1.CreateInternalAccountRequest{
+		Code: code, Name: name, Type: accountType, Currency: currency,
+	}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return account, nil
+}
+
+func (c *Client) GetAccount(ctx context.Context, code string) (*corev1.Account, error) {
+	var trailer metadata.MD
+	account, err := c.accounts.GetAccount(ctx,
+		&corev1.GetAccountRequest{Code: code}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return account, nil
+}
+
+// ---------------------------------------------------------------- productos
+
+// NewProduct describe un producto del catálogo. Los topes nil significan "sin tope".
+type NewProduct struct {
+	Code                string
+	Name                string
+	Currency            string
+	AllowsOverdraft     bool
+	MaxBalanceMinor     *int64
+	MaxTransactionMinor *int64
+}
+
+func (c *Client) CreateProduct(ctx context.Context, p NewProduct) (*corev1.Product, error) {
+	var trailer metadata.MD
+	product, err := c.products.CreateProduct(ctx, &corev1.CreateProductRequest{
+		Code:                p.Code,
+		Name:                p.Name,
+		Currency:            p.Currency,
+		AllowsOverdraft:     p.AllowsOverdraft,
+		MaxBalanceMinor:     p.MaxBalanceMinor,
+		MaxTransactionMinor: p.MaxTransactionMinor,
+	}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return product, nil
+}
+
+func (c *Client) GetProduct(ctx context.Context, code string) (*corev1.Product, error) {
+	var trailer metadata.MD
+	product, err := c.products.GetProduct(ctx,
+		&corev1.GetProductRequest{Code: code}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return product, nil
+}

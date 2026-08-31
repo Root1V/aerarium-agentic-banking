@@ -11,7 +11,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Monorepo + entorno local (Cargo, docker-compose Postgres) | Rust | feat/core-ledger | ✅ |
 | Core ledger: doble partida + motor de posting + invariantes (10 tests) | Rust | feat/core-ledger | ✅ |
 | Cuentas + catálogo de productos, sin sobregiro y topes regulatorios (8 tests) | Rust | feat/core-accounts | ✅ |
-| Contratos Protobuf/OpenAPI entre core y adaptadores | proto | feat/contracts | ⬜ |
+| Contratos gRPC core↔adaptadores + servidor Rust + cliente Go (9 tests) | proto/Rust/Go | feat/contracts | ✅ |
 | Bus de eventos (Kafka + esquema de eventos del ledger) | Rust | feat/events | ⬜ |
 | Simuladores: ProveedorCuentas (BaaS) + RielPagos | Go | feat/sim-baas-rails | ⬜ |
 

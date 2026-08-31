@@ -100,6 +100,37 @@ impl AccountRepository {
         }))
     }
 
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Account>, sqlx::Error> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id, code, name,
+                   type   as "account_type: AccountType",
+                   owner  as "owner: AccountOwner",
+                   owner_id, product_id, currency,
+                   status as "status: AccountStatus",
+                   allows_overdraft, created_at
+            FROM accounts WHERE id = $1
+            "#,
+            id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| Account {
+            id: r.id,
+            code: r.code,
+            name: r.name,
+            account_type: r.account_type,
+            owner: r.owner,
+            owner_id: r.owner_id,
+            product_id: r.product_id,
+            currency: r.currency,
+            status: r.status,
+            allows_overdraft: r.allows_overdraft,
+            created_at: r.created_at,
+        }))
+    }
+
     /// Saldo materializado (lectura rápida, mantenido transaccionalmente).
     pub async fn balance(&self, account_id: Uuid) -> Result<Balance, sqlx::Error> {
         let row = sqlx::query!(

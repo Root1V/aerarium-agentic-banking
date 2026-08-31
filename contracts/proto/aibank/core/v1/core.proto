@@ -1,0 +1,189 @@
+// Contrato del core bancario de AIBank.
+//
+// Fuente de verdad de la frontera entre el core (Rust) y los adaptadores (Go).
+// Un cambio incompatible aquí rompe la compilación de ambos lados, no la producción.
+//
+// Reglas del contrato:
+//   - El dinero SIEMPRE viaja como entero en unidades menores (centavos) + moneda.
+//     Nunca punto flotante, nunca decimales en texto.
+//   - Toda escritura lleva idempotency_key: los rieles y las redes de tarjetas
+//     reintentan, y el efecto debe ocurrir exactamente una vez.
+//   - Los errores de negocio viajan con un PostingErrorReason en la metadata
+//     `x-aibank-reason`, para que el llamador distinga "fondos insuficientes"
+//     (definitivo, no reintentar) de "base no disponible" (reintentable).
+
+syntax = "proto3";
+
+package aibank.core.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/aibank/aibank/clients/go/corev1;corev1";
+
+// ---------------------------------------------------------------- tipos base
+
+// Importe monetario. `amount_minor` es siempre positivo en los asientos: el signo
+// lo aporta la dirección contable.
+message Money {
+  int64 amount_minor = 1;
+  string currency = 2; // ISO-4217, 3 letras
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_DEBIT = 1;
+  DIRECTION_CREDIT = 2;
+}
+
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  ACCOUNT_TYPE_ASSET = 1;
+  ACCOUNT_TYPE_LIABILITY = 2;
+  ACCOUNT_TYPE_EQUITY = 3;
+  ACCOUNT_TYPE_INCOME = 4;
+  ACCOUNT_TYPE_EXPENSE = 5;
+}
+
+enum AccountOwner {
+  ACCOUNT_OWNER_UNSPECIFIED = 0;
+  ACCOUNT_OWNER_CUSTOMER = 1;
+  ACCOUNT_OWNER_INTERNAL = 2;
+}
+
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_ACTIVE = 1;
+  ACCOUNT_STATUS_FROZEN = 2;
+  ACCOUNT_STATUS_CLOSED = 3;
+}
+
+// Motivo de un rechazo. Viaja en la metadata `x-aibank-reason` junto al código gRPC.
+enum PostingErrorReason {
+  POSTING_ERROR_REASON_UNSPECIFIED = 0;
+  // La solicitud viola una regla del ledger (desbalance, monto <= 0, moneda).
+  POSTING_ERROR_REASON_INVALID = 1;
+  // La clave de idempotencia ya se usó con un payload distinto.
+  POSTING_ERROR_REASON_IDEMPOTENCY_CONFLICT = 2;
+  // La cuenta quedaría en negativo y el producto no admite sobregiro.
+  POSTING_ERROR_REASON_INSUFFICIENT_FUNDS = 3;
+  // El saldo superaría el tope regulatorio del producto.
+  POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED = 4;
+  // El monto supera el tope por operación del producto.
+  POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED = 5;
+}
+
+// ---------------------------------------------------------------- ledger
+
+message Entry {
+  string account_id = 1; // UUID
+  Direction direction = 2;
+  Money amount = 3;
+}
+
+message PostRequest {
+  // Definida por quien origina la operación. Garantiza efecto único.
+  string idempotency_key = 1;
+  // Naturaleza del movimiento: "deposit", "withdrawal", "p2p_transfer", ...
+  string kind = 2;
+  // Dos o más asientos que deben balancear por moneda.
+  repeated Entry entries = 3;
+  string description = 4;
+}
+
+message PostResponse {
+  string transaction_id = 1;
+  google.protobuf.Timestamp posted_at = 2;
+  // true si la clave ya existía: se devolvió la transacción original sin duplicar.
+  bool replayed = 3;
+}
+
+message GetBalanceRequest {
+  string account_id = 1;
+}
+
+message GetBalanceResponse {
+  Money balance = 1;
+  int64 entry_count = 2;
+  // Saldo recalculado desde los asientos. Debe coincidir con `balance`;
+  // una discrepancia es un incidente contable.
+  Money projected_balance = 3;
+}
+
+service LedgerService {
+  // Única vía de escritura al ledger. Idempotente por `idempotency_key`.
+  rpc Post(PostRequest) returns (PostResponse);
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+}
+
+// ---------------------------------------------------------------- cuentas
+
+message Account {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  AccountType type = 4;
+  AccountOwner owner = 5;
+  string owner_id = 6;   // vacío en cuentas internas
+  string product_id = 7; // vacío en cuentas internas
+  string currency = 8;
+  AccountStatus status = 9;
+  bool allows_overdraft = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message OpenCustomerAccountRequest {
+  string code = 1;
+  string name = 2;
+  string customer_id = 3;
+  // Producto del catálogo del que la cuenta hereda moneda y reglas.
+  string product_code = 4;
+}
+
+message CreateInternalAccountRequest {
+  string code = 1;
+  string name = 2;
+  AccountType type = 3;
+  string currency = 4;
+}
+
+message GetAccountRequest {
+  string code = 1;
+}
+
+service AccountService {
+  rpc OpenCustomerAccount(OpenCustomerAccountRequest) returns (Account);
+  rpc CreateInternalAccount(CreateInternalAccountRequest) returns (Account);
+  rpc GetAccount(GetAccountRequest) returns (Account);
+}
+
+// ---------------------------------------------------------------- productos
+
+message Product {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  string currency = 4;
+  bool allows_overdraft = 5;
+  // Topes regulatorios; ausentes = sin tope.
+  optional int64 max_balance_minor = 6;
+  optional int64 max_transaction_minor = 7;
+  bool active = 8;
+}
+
+message CreateProductRequest {
+  string code = 1;
+  string name = 2;
+  string currency = 3;
+  bool allows_overdraft = 4;
+  optional int64 max_balance_minor = 5;
+  optional int64 max_transaction_minor = 6;
+}
+
+message GetProductRequest {
+  string code = 1;
+}
+
+service ProductService {
+  rpc CreateProduct(CreateProductRequest) returns (Product);
+  rpc GetProduct(GetProductRequest) returns (Product);
+}

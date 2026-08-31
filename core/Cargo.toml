@@ -13,11 +13,23 @@ sqlx = { version = "0.8", default-features = false, features = [
     "macros",
     "migrate",
 ] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 thiserror = "2"
 sha2 = "0.10"
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[[bin]]
+name = "aibank-core-server"
+path = "src/bin/server.rs"
