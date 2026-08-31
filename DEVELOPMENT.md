@@ -184,6 +184,21 @@ Regla dura: en una traza NUNCA entran datos personales ni secretos. Hay una guar
 (`is_safe_attribute` / `IsSafeAttribute`) que filtra por subcadena y es
 deliberadamente estricta — las trazas salen a herramientas de terceros.
 
+## Riesgo crediticio (Python)
+
+```bash
+cd risk && python3 -m pytest
+```
+
+Es una tarjeta de puntuación transparente, no un modelo entrenado: sin cartera
+colocada no hay incumplimientos que aprender, y un modelo ajustado sobre datos que
+no se tienen es teatro. Tres propiedades no negociables: **explicable** (toda
+negativa trae motivos comunicables), **reproducible** (mismas entradas y versión →
+mismo resultado, años después) y **no discriminatoria** (los atributos protegidos
+no pueden intervenir, con la barrera en el camino de ejecución).
+
+Sin dependencias: elimina toda fuente de no determinismo en una decisión auditable.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).

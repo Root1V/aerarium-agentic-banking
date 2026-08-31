@@ -36,7 +36,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Scoring crediticio con datos transaccionales, explicable y auditable | Python | feat/credit-scoring | ⬜ |
+| Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | 👀 |
 | Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
 
 ## Deuda técnica anotada
