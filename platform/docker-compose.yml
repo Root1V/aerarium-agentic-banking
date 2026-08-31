@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: aibank_dev
       POSTGRES_DB: aibank
     ports:
-      - "5433:5432"   # 5433 en el host para no chocar con un Postgres local
+      - "5434:5432"   # 5434 en el host para no chocar con un Postgres local
     volumes:
       - aibank_pgdata:/var/lib/postgresql/data
     healthcheck:

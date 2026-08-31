@@ -153,10 +153,12 @@ SELECT
     a.owner_id,
     a.currency,
     a.status,
+    -- SUM() sobre bigint devuelve NUMERIC en Postgres; el saldo es bigint por definición
+    -- (unidades menores), así que se castea explícitamente en vez de coercionarlo al leer.
     CASE WHEN a.type IN ('ASSET', 'EXPENSE')
          THEN COALESCE(SUM(CASE WHEN e.direction = 'DEBIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
          ELSE COALESCE(SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
-    END AS balance_minor
+    END::BIGINT AS balance_minor
 FROM accounts a
 LEFT JOIN ledger_entries e ON e.account_id = a.id
 GROUP BY a.id;

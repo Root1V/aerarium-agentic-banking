@@ -119,16 +119,20 @@ Regla de dependencia: **los adaptadores dependen del core; el core no sabe qué 
 
 Estructura de monorepo propuesta:
 
+Políglota por tarea (justificación en [doc 06 §2](06-stack-tecnologico.md)):
+
 ```
 aibank/
-├── core/            # ledger, cuentas, catálogo, posting (Kotlin, sin dependencias de proveedores)
-├── adapters/        # un módulo por puerto: baas/, cards/, rails/, kyc/, aml/, notify/
-│   └── */sim/       # implementación simulada de cada puerto
-├── services/        # onboarding, reconciliación, notificaciones
-├── bff/             # API para la app
-├── app/             # Flutter
-├── backoffice/
-├── platform/        # infra: terraform/, k8s/, kafka esquemas, observabilidad
+├── core/            # RUST — ledger, cuentas, catálogo, posting (sin SDKs de proveedores)
+├── adapters/        # GO — un servicio por puerto: baas/, cards/, rails/, kyc/, aml/, notify/
+│   └── */sim/       #      implementación simulada de cada puerto
+├── services/        # GO — onboarding, reconciliación, notificaciones
+├── bff/             # GO — API para la app
+├── risk/            # PYTHON — scoring, antifraude, modelos (Fase 2)
+├── app/             # DART/FLUTTER
+├── backoffice/      # TYPESCRIPT/REACT
+├── contracts/       # Protobuf/OpenAPI — contratos tipados entre lenguajes
+├── platform/        # infra: terraform/, k8s/, docker-compose, observabilidad
 └── docs/            # este plan
 ```
 
