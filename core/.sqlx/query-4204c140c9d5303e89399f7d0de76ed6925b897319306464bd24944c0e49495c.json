@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT balance_minor, entry_count FROM account_balances WHERE account_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "balance_minor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "entry_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4204c140c9d5303e89399f7d0de76ed6925b897319306464bd24944c0e49495c"
+}

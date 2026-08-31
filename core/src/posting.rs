@@ -26,18 +26,24 @@ impl PostingService {
         validate(request)?;
         let hash = request_hash(request);
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool.begin().await.map_err(PostingError::from_db)?;
 
-        let result = match insert_transaction(&mut tx, request, &hash).await? {
+        let result = match insert_transaction(&mut tx, request, &hash)
+            .await
+            .map_err(PostingError::from_db)?
+        {
             Some(transaction) => {
-                insert_entries(&mut tx, transaction.id, &request.entries).await?;
+                insert_entries(&mut tx, transaction.id, &request.entries)
+                    .await
+                    .map_err(PostingError::from_db)?;
                 PostingResult { transaction, replayed: false }
             }
             None => {
                 // La clave ya existe. `ON CONFLICT DO NOTHING` espera a que la transacción
                 // concurrente dueña de la clave termine, así que aquí ya es visible.
                 let (transaction, existing_hash) = find_by_key(&mut tx, &request.idempotency_key)
-                    .await?
+                    .await
+                    .map_err(PostingError::from_db)?
                     .ok_or_else(|| {
                         PostingError::Database(sqlx::Error::Protocol(
                             "idempotency key vanished after conflict; concurrent rollback".into(),
@@ -50,8 +56,9 @@ impl PostingService {
             }
         };
 
-        // El trigger diferido de balance se evalúa aquí: un desbalance aborta el COMMIT.
-        tx.commit().await?;
+        // Aquí se evalúan los triggers diferidos: desbalance, sobregiro y topes del
+        // producto abortan el COMMIT.
+        tx.commit().await.map_err(PostingError::from_db)?;
         Ok(result)
     }
 }
@@ -163,7 +170,13 @@ async fn insert_entries(
     transaction_id: Uuid,
     entries: &[EntryCommand],
 ) -> Result<(), sqlx::Error> {
-    for entry in entries {
+    // Insertar en orden determinista por cuenta: el trigger de saldo toma lock de
+    // fila, y un orden global fijo evita deadlocks entre transferencias cruzadas
+    // (A→B y B→A simultáneas bloquearían en orden inverso sin esto).
+    let mut ordered: Vec<&EntryCommand> = entries.iter().collect();
+    ordered.sort_by_key(|e| (e.account_id, e.direction as i32, e.amount_minor));
+
+    for entry in ordered {
         sqlx::query!(
             r#"
             INSERT INTO ledger_entries (transaction_id, account_id, direction, amount_minor, currency)

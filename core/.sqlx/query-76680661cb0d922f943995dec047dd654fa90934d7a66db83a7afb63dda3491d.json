@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO accounts (code, name, type, owner, owner_id, currency)\n        VALUES ($1, $2, $3, $4, $5, $6)\n        RETURNING id, code, name,\n                  type   as \"account_type: AccountType\",\n                  owner  as \"owner: AccountOwner\",\n                  owner_id, currency,\n                  status as \"status: AccountStatus\",\n                  created_at\n        ",
+  "query": "\n            SELECT id, code, name,\n                   type   as \"account_type: AccountType\",\n                   owner  as \"owner: AccountOwner\",\n                   owner_id, product_id, currency,\n                   status as \"status: AccountStatus\",\n                   allows_overdraft, created_at\n            FROM accounts WHERE code = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -58,11 +58,16 @@
       },
       {
         "ordinal": 6,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "currency",
         "type_info": "Bpchar"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "status: AccountStatus",
         "type_info": {
           "Custom": {
@@ -78,42 +83,19 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
+        "name": "allows_overdraft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        {
-          "Custom": {
-            "name": "account_type",
-            "kind": {
-              "Enum": [
-                "ASSET",
-                "LIABILITY",
-                "EQUITY",
-                "INCOME",
-                "EXPENSE"
-              ]
-            }
-          }
-        },
-        {
-          "Custom": {
-            "name": "account_owner",
-            "kind": {
-              "Enum": [
-                "CUSTOMER",
-                "INTERNAL"
-              ]
-            }
-          }
-        },
-        "Uuid",
-        "Bpchar"
+        "Text"
       ]
     },
     "nullable": [
@@ -123,10 +105,12 @@
       false,
       false,
       true,
+      true,
+      false,
       false,
       false,
       false
     ]
   },
-  "hash": "18ef4a5be4e3a7eb5c526aebd778f8db32e07ddc521c46eb213748900b419443"
+  "hash": "76680661cb0d922f943995dec047dd654fa90934d7a66db83a7afb63dda3491d"
 }
