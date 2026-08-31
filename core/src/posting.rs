@@ -36,6 +36,14 @@ impl PostingService {
                 insert_entries(&mut tx, transaction.id, &request.entries)
                     .await
                     .map_err(PostingError::from_db)?;
+
+                // El evento se encola en ESTA misma transacción: si el COMMIT falla
+                // (desbalance, sobregiro, tope), el evento desaparece con los asientos.
+                // Nunca hay asiento sin evento ni evento sin asiento.
+                emit_posted_event(&mut tx, &transaction, request)
+                    .await
+                    .map_err(PostingError::from_db)?;
+
                 PostingResult { transaction, replayed: false }
             }
             None => {
@@ -192,6 +200,65 @@ async fn insert_entries(
         .await?;
     }
     Ok(())
+}
+
+/// Encola el evento de dominio con el saldo resultante de cada cuenta.
+///
+/// Los saldos ya están actualizados dentro de la transacción (el trigger de saldo
+/// corre en el INSERT de cada asiento), así que el evento lleva el estado final y
+/// un consumidor puede notificar "recibiste X, tu saldo es Y" sin consultar el core.
+async fn emit_posted_event(
+    tx: &mut Transaction<'_, Postgres>,
+    transaction: &LedgerTransaction,
+    request: &PostingRequest,
+) -> Result<(), sqlx::Error> {
+    use crate::outbox::pb;
+
+    let mut entries = Vec::with_capacity(request.entries.len());
+    for entry in &request.entries {
+        let balance = sqlx::query!(
+            "SELECT balance_minor FROM account_balances WHERE account_id = $1",
+            entry.account_id,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        entries.push(pb::PostedEntry {
+            account_id: entry.account_id.to_string(),
+            direction: match entry.direction {
+                Direction::Debit => 1,  // DIRECTION_DEBIT
+                Direction::Credit => 2, // DIRECTION_CREDIT
+            },
+            amount: Some(crate::grpc::pb::Money {
+                amount_minor: entry.amount_minor,
+                currency: entry.currency.clone(),
+            }),
+            balance_after_minor: balance.balance_minor,
+        });
+    }
+
+    let event_id = Uuid::new_v4();
+    let event = pb::LedgerTransactionPosted {
+        event_id: event_id.to_string(),
+        transaction_id: transaction.id.to_string(),
+        idempotency_key: transaction.idempotency_key.clone(),
+        kind: transaction.kind.clone(),
+        entries,
+        posted_at: Some(prost_types::Timestamp {
+            seconds: transaction.posted_at.timestamp(),
+            nanos: transaction.posted_at.timestamp_subsec_nanos() as i32,
+        }),
+    };
+
+    crate::outbox::write(
+        tx,
+        event_id,
+        "aibank.events.v1.LedgerTransactionPosted",
+        "ledger_transaction",
+        transaction.id,
+        &event,
+    )
+    .await
 }
 
 async fn find_by_key(

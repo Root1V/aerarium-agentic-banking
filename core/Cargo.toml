@@ -23,13 +23,20 @@ prost = "0.13"
 prost-types = "0.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+rdkafka = { version = "0.37", features = ["tokio"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 
 [build-dependencies]
 tonic-build = "0.12"
+prost-build = "0.13"
 
 [[bin]]
 name = "aibank-core-server"
 path = "src/bin/server.rs"
+
+[[bin]]
+name = "aibank-outbox-relay"
+path = "src/bin/relay.rs"

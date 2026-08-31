@@ -5,6 +5,10 @@
 //! entre el contrato y el dominio, y traducir los errores de negocio a códigos
 //! gRPC con el motivo tipado en la metadata `x-aibank-reason`.
 
+// `tonic::Status` pesa 176 bytes y es el tipo de error obligado de todo handler
+// gRPC: boxearlo solo añadiría indirección sin ganancia.
+#![allow(clippy::result_large_err)]
+
 use crate::model::*;
 use crate::{AccountRepository, PostingService, ProductRepository};
 use tonic::{Request, Response, Status};
