@@ -1,0 +1,10 @@
+analyzer:
+  exclude:
+    - build/**
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # El dinero nunca se maneja como coma flotante en esta app.
+    avoid_double_and_int_checks: true
+    prefer_final_locals: true

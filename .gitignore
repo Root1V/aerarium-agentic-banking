@@ -20,3 +20,8 @@ target/
 
 # Go
 clients/go/**/*.test
+
+# Flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*

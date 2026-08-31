@@ -115,6 +115,21 @@ desarrollo vive en `bff/sim` para que no pueda cablearse a producción por descu
 Dos reglas del canal: el dinero viaja como entero en unidades menores (nunca
 decimal en JSON) y toda operación que mueve dinero exige `Idempotency-Key`.
 
+## App (Flutter)
+
+```bash
+export PATH="/opt/homebrew/Caskroom/flutter/3.47.2/flutter/bin:$PATH"
+cd app && flutter test && flutter analyze
+
+# Contra el BFF real:
+flutter run --dart-define=AIBANK_BFF_URL=http://localhost:8080 \
+            --dart-define=AIBANK_TOKEN=... --dart-define=AIBANK_ACCOUNT_ID=...
+```
+
+Dos reglas del cliente: el dinero nunca es `double` (entero en centavos, se formatea
+solo para mostrar) y un reintento de envío CONSERVA la clave de idempotencia — si
+generara una nueva, un timeout que el servidor sí procesó cobraría dos veces.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
