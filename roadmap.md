@@ -29,7 +29,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 |---|---|---|---|
 | Tarjetas: autorización, retención, cobro y reversa (14 tests) | Go | feat/cards-sim | ✅ |
 | Conciliación: interna, contra proveedor y limbo (11 tests) | Rust | feat/reconciliation | ✅ |
-| Backoffice v0: cola de conciliación con roles y auditoría (18 tests) | TypeScript | feat/backoffice | 👀 |
+| Backoffice v0: cola de conciliación con roles y auditoría (18 tests) | TypeScript | feat/backoffice | ✅ |
 | Observabilidad: trazas E2E entre Rust y Go (OpenTelemetry) | Rust/Go | feat/observability | ⬜ |
 
 ## Deuda técnica anotada
