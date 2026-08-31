@@ -8,8 +8,8 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Monorepo + entorno local (Cargo, docker-compose Postgres) | Rust | feat/core-ledger | 👀 |
-| Core ledger: doble partida + motor de posting + invariantes (10 tests) | Rust | feat/core-ledger | 👀 |
+| Monorepo + entorno local (Cargo, docker-compose Postgres) | Rust | feat/core-ledger | ✅ |
+| Core ledger: doble partida + motor de posting + invariantes (10 tests) | Rust | feat/core-ledger | ✅ |
 | Cuentas + catálogo de productos v1 (producto "cuenta simple") | Rust | feat/core-accounts | ⬜ |
 | Contratos Protobuf/OpenAPI entre core y adaptadores | proto | feat/contracts | ⬜ |
 | Bus de eventos (Kafka + esquema de eventos del ledger) | Rust | feat/events | ⬜ |
