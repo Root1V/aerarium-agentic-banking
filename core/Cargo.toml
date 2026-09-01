@@ -46,3 +46,7 @@ path = "src/bin/server.rs"
 [[bin]]
 name = "aibank-outbox-relay"
 path = "src/bin/relay.rs"
+
+[[bin]]
+name = "aibank-authorization-sweeper"
+path = "src/bin/sweeper.rs"

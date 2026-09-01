@@ -1,0 +1,666 @@
+openapi: 3.1.0
+
+info:
+  title: AIBank — riel de pago para agentes
+  version: "1.0.0"
+  summary: Autorizar y capturar pagos entre sub-cuentas de una plataforma de agentes.
+  description: |
+    Implementación del contrato `aibank_integration_contract.md` v0.3 de Mercatus,
+    con los defaults acordados en `docs/10-preguntas-mercatus.md` y confirmados en
+    la respuesta de Mercatus.
+
+    ## Unidad monetaria
+
+    **Todo importe es un entero en millonésimas (10⁻⁶) de la unidad mayor.**
+
+    | Importe | Valor |
+    |---|---|
+    | $0.001 | `1000` |
+    | $0.50 | `500000` |
+    | $1.00 | `1000000` |
+
+    Seis decimales es el máximo representable. Un importe con más precisión se
+    rechaza en vez de truncarse en silencio.
+
+    ## Autorizar y después capturar
+
+    `POST /v1/authorizations` reserva el dinero en la cuenta pagadora sin
+    entregarlo. `POST /v1/authorizations/{id}/capture` lo mueve de verdad. Entre
+    medias, el vendedor verifica el pago contra el banco con `GET`, sin confiar en
+    la palabra del comprador.
+
+    Una autorización vive **15 minutos**. Al vencer, el dinero vuelve al pagador
+    automáticamente y la captura se rechaza con `409 authorization_expired`.
+
+    ## Idempotencia
+
+    `POST /v1/authorizations` **exige** el encabezado `Idempotency-Key`. Un
+    reintento con la misma clave devuelve la autorización que ya existe, nunca una
+    nueva, con `200` y `Idempotent-Replay: true`. La misma clave con otro monto o
+    con otras cuentas es `409 idempotency_key_reused`.
+
+    Las claves se conservan **indefinidamente**. Es más estricto que una ventana
+    de 24 horas, no menos: una clave reusada a las 25 horas se rechaza en vez de
+    crear un pago nuevo.
+
+    `capture` y `refund` son idempotentes por naturaleza, sin encabezado: se
+    identifican por el `authorization_id`, que ya es único.
+
+servers:
+  - url: https://sandbox.aibank.local
+    description: Sandbox. Sin dinero real; admite abrir cuentas con saldo inicial.
+  - url: https://api.aibank.local
+    description: Producción.
+
+security:
+  - bearerToken: []
+
+tags:
+  - name: Autenticación
+  - name: Cuentas
+  - name: Pagos
+
+paths:
+  /oauth/token:
+    post:
+      tags: [Autenticación]
+      summary: Emite un token de acceso
+      operationId: issueToken
+      security: []
+      description: |
+        `client_credentials` de OAuth2. El token dura una hora; cachéalo y renuévalo
+        antes de que venza en vez de pedir uno por llamada.
+
+        Las credenciales pueden ir en el cuerpo o por `Basic` auth.
+
+        Omitir `scope` concede todos los scopes del cliente. Pedir un scope que el
+        cliente no tiene es `400 invalid_scope`, no un token recortado en silencio.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type:
+                  type: string
+                  const: client_credentials
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  format: password
+                scope:
+                  type: string
+                  description: Separados por espacio.
+                  examples: ["payments:read payments:write"]
+      responses:
+        "200":
+          description: Token emitido.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in, scope]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, const: Bearer }
+                  expires_in: { type: integer, const: 3600 }
+                  scope: { type: string }
+              example:
+                access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                token_type: Bearer
+                expires_in: 3600
+                scope: payments:read payments:write accounts:write
+        "400":
+          description: |
+            `unsupported_grant_type` si `grant_type` no es `client_credentials`;
+            `invalid_scope` si se pidió un scope no concedido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+        "401":
+          description: |
+            `invalid_client`. La respuesta es idéntica para cliente inexistente,
+            secreto incorrecto y cliente desactivado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/accounts:
+    post:
+      tags: [Cuentas]
+      summary: Abre una sub-cuenta para un agente
+      operationId: openAccount
+      description: |
+        Idempotente por `(owner_reference, currency)`: repetir la llamada devuelve
+        la cuenta que ya existe con `200`, nunca una segunda que partiría el saldo
+        del agente en dos.
+
+        Las cuentas son **mono-moneda**. Un agente que opera en dos monedas tiene
+        dos cuentas con identificadores distintos.
+
+        `owner_reference` debe ser trazable a una persona natural o jurídica real
+        en los sistemas de la plataforma: el banco hace diligencia sobre la
+        integración, la plataforma responde por quién está detrás de cada cuenta.
+      security:
+        - bearerToken: [accounts:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OpenAccountRequest" }
+            example:
+              owner_reference: agent_7c1e9a
+              currency: USD
+              display_name: Mercatus · research-bot-42
+      responses:
+        "201":
+          description: Cuenta abierta.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+              example:
+                account_id: acc_7f3e9a2b4c1d4e5f8a9b0c1d2e3f4a5b
+                currency: USD
+                status: active
+        "200":
+          description: La cuenta ya existía. Mismo cuerpo que `201`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "400":
+          description: |
+            `malformed_request`: falta `owner_reference`, `currency` no es ISO-4217,
+            o se mandó `initial_balance` fuera del sandbox.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`currency_mismatch`: la moneda no está habilitada en este entorno."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/accounts/{accountId}/transactions:
+    get:
+      tags: [Cuentas]
+      summary: Movimientos de una cuenta
+      operationId: listTransactions
+      description: |
+        Del más reciente al más antiguo. Para la siguiente página, pasa el
+        `next_cursor` de la respuesta anterior en `cursor`.
+      security:
+        - bearerToken: [payments:read]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+          example: acc_7f3e9a2b4c1d4e5f8a9b0c1d2e3f4a5b
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Página del extracto.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transactions" }
+        "400":
+          description: "`malformed_request`: `limit` fuera de rango."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/AccountNotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/authorizations:
+    post:
+      tags: [Pagos]
+      summary: Reserva el monto en la cuenta pagadora
+      operationId: createAuthorization
+      description: |
+        No mueve dinero al receptor: lo retiene. La retención vence en 15 minutos
+        y el dinero vuelve solo al pagador si nadie captura.
+      security:
+        - bearerToken: [payments:write]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 255 }
+          description: |
+            Un identificador por INTENTO DE PAGO LÓGICO, no por intento HTTP.
+            Derívalo del `cart_id`, que ya es de un solo uso.
+          example: cart_9c2f1e88
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthorizeRequest" }
+            example:
+              payer_account_id: acc_7f3e9a2b4c1d4e5f8a9b0c1d2e3f4a5b
+              payee_account_id: acc_1c9d44f0a1b2c3d4e5f60718293a4b5c
+              amount: 1000
+              currency: USD
+      responses:
+        "201":
+          description: Autorización creada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Authorization" }
+              example:
+                authorization_id: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
+                status: authorized
+                expires_at: "2026-09-01T18:57:00Z"
+        "200":
+          description: |
+            Reintento con una clave ya usada: se devuelve la autorización original.
+            Nada se creó.
+          headers:
+            Idempotent-Replay:
+              schema: { type: string, const: "true" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Authorization" }
+        "400":
+          description: |
+            `malformed_request`: falta `Idempotency-Key`, `amount` no es positivo,
+            `currency` no es ISO-4217, o el cuerpo trae un campo desconocido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402":
+          description: "`insufficient_funds`: la cuenta pagadora no llega al monto."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example:
+                error: insufficient_funds
+                message: la cuenta pagadora no tiene saldo suficiente
+        "403":
+          description: |
+            `insufficient_scope` si el token no incluye `payments:write`;
+            `account_frozen` si una de las cuentas está bloqueada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/AccountNotFound" }
+        "409":
+          description: |
+            `idempotency_key_reused`: la misma clave llegó con otro monto o con
+            otras cuentas.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: |
+            `same_account` si pagador y receptor coinciden;
+            `currency_mismatch` si no comparten moneda.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /v1/authorizations/{authorizationId}:
+    get:
+      tags: [Pagos]
+      summary: Consulta el estado de una autorización
+      operationId: getAuthorization
+      description: |
+        La llama el **vendedor**, no el comprador: es la verificación independiente
+        de que el pago existe y coincide antes de entregar lo pagado.
+
+        Los parámetros `expected_*` son opcionales. Si se envían y no coinciden, la
+        respuesta es `422` en vez del estado — así el vendedor no tiene que
+        comparar de su lado, aunque puede seguir haciéndolo si prefiere.
+      security:
+        - bearerToken: [payments:read]
+      parameters:
+        - name: authorizationId
+          in: path
+          required: true
+          schema: { type: string }
+          example: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
+        - name: expected_amount
+          in: query
+          schema: { type: integer, format: int64 }
+          description: Monto que el vendedor espera, en millonésimas.
+        - name: expected_payee_account_id
+          in: query
+          schema: { type: string }
+          description: Cuenta receptora que el vendedor espera.
+      responses:
+        "200":
+          description: Estado de la autorización.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthorizationDetail" }
+              example:
+                authorization_id: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
+                payer_account_id: acc_7f3e9a2b4c1d4e5f8a9b0c1d2e3f4a5b
+                payee_account_id: acc_1c9d44f0a1b2c3d4e5f60718293a4b5c
+                amount: 1000
+                currency: USD
+                status: captured
+                expires_at: "2026-09-01T18:57:00Z"
+                settled_at: "2026-09-01T18:42:12Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/AuthorizationNotFound" }
+        "422":
+          description: |
+            `amount_mismatch` o `recipient_mismatch`: lo autorizado no coincide con
+            lo que el vendedor esperaba.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/authorizations/{authorizationId}/capture:
+    post:
+      tags: [Pagos]
+      summary: Liquida la retención al receptor
+      operationId: captureAuthorization
+      description: |
+        Mueve el dinero de verdad, y la respuesta trae el resultado final: no hay
+        webhook porque pagador y receptor son dos cuentas del mismo banco y la
+        liquidación es una sola transacción de ledger.
+
+        **Idempotente sin encabezado.** Capturar dos veces devuelve `200` con el
+        mismo `settled_at`, no un error: un timeout de red no se distingue de un
+        fallo real desde el cliente, y responder "ya capturada" a un reintento
+        legítimo obligaría a adivinar si el dinero se movió.
+      security:
+        - bearerToken: [payments:write]
+      parameters:
+        - name: authorizationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Liquidada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Authorization" }
+              example:
+                authorization_id: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
+                status: captured
+                settled_at: "2026-09-01T18:42:12Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/AuthorizationNotFound" }
+        "409":
+          description: |
+            `authorization_expired`: la retención venció y el dinero volvió al
+            pagador. Hay que autorizar de nuevo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example:
+                error: authorization_expired
+                message: la autorización venció y el dinero se devuelve al pagador
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /v1/authorizations/{authorizationId}/refund:
+    post:
+      tags: [Pagos]
+      summary: Devuelve al pagador un cobro ya liquidado
+      operationId: refundAuthorization
+      description: |
+        Reembolso **total** sobre una captura. No lo ejercita el flujo de pago
+        normal; lo necesita la operación de soporte.
+
+        Repetirlo es inofensivo: devuelve el estado ya reembolsado sin mover dinero
+        una segunda vez.
+      security:
+        - bearerToken: [payments:write]
+      parameters:
+        - name: authorizationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reembolsada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Authorization" }
+              example:
+                authorization_id: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
+                status: refunded
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/AuthorizationNotFound" }
+        "409":
+          description: |
+            `nothing_to_refund`: la autorización no tiene un cobro que devolver
+            (nunca se capturó, o venció).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Motivo legible por máquina. Estable; compáralo por igualdad.
+        message:
+          type: string
+          description: Explicación para un humano. NO es estable; no lo parsees.
+
+    OAuthError:
+      type: object
+      required: [error]
+      description: Formato de RFC 6749 §5.2.
+      properties:
+        error: { type: string }
+        error_description: { type: string }
+
+    OpenAccountRequest:
+      type: object
+      required: [owner_reference, currency]
+      properties:
+        owner_reference:
+          type: string
+          maxLength: 255
+          description: |
+            Identificador del agente en la plataforma. Debe ser trazable a una
+            entidad real.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO-4217.
+        display_name:
+          type: string
+          maxLength: 255
+          description: Solo para paneles de soporte; el protocolo no lo usa.
+        initial_balance:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            **Solo sandbox.** Saldo con el que nace la cuenta, en millonésimas. Es
+            lo que permite probar de verdad el camino de `insufficient_funds`
+            abriendo una cuenta con $0.10 (`100000`). En producción se rechaza.
+
+    Account:
+      type: object
+      required: [account_id, currency, status]
+      properties:
+        account_id:
+          type: string
+          pattern: "^acc_[0-9a-f]{32}$"
+          description: Opaco y estable. No lo interpretes.
+        currency: { type: string }
+        status:
+          type: string
+          enum: [active]
+
+    AuthorizeRequest:
+      type: object
+      required: [payer_account_id, payee_account_id, amount, currency]
+      properties:
+        payer_account_id: { type: string }
+        payee_account_id: { type: string }
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          description: En millonésimas. `1000` son $0.001.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+
+    AuthorizationStatus:
+      type: string
+      enum:
+        - authorized
+        - captured
+        - partially_refunded
+        - refunded
+        - released
+        - expired
+      description: |
+        - `authorized`: dinero retenido, todavía no entregado.
+        - `captured`: liquidado al receptor.
+        - `refunded` / `partially_refunded`: devuelto al pagador.
+        - `released`: la retención se devolvió sin cobrar.
+        - `expired`: la vigencia terminó. No se puede capturar.
+
+    Authorization:
+      type: object
+      required: [authorization_id, status]
+      properties:
+        authorization_id:
+          type: string
+          pattern: "^auth_[0-9a-f]{32}$"
+        status: { $ref: "#/components/schemas/AuthorizationStatus" }
+        expires_at:
+          type: string
+          format: date-time
+        settled_at:
+          type: string
+          format: date-time
+          description: Presente solo tras capturar.
+
+    AuthorizationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Authorization"
+        - type: object
+          properties:
+            payer_account_id: { type: string }
+            payee_account_id: { type: string }
+            amount: { type: integer, format: int64 }
+            currency: { type: string }
+
+    Transactions:
+      type: object
+      required: [account_id, transactions]
+      properties:
+        account_id: { type: string }
+        transactions:
+          type: array
+          items:
+            type: object
+            required: [cursor, transaction_id, amount, currency, direction, kind, posted_at]
+            properties:
+              cursor: { type: string }
+              transaction_id: { type: string }
+              amount: { type: integer, format: int64 }
+              currency: { type: string }
+              direction:
+                type: string
+                enum: [credit, debit]
+                description: Respecto de la cuenta consultada.
+              kind:
+                type: string
+                description: |
+                  `authorization_hold`, `authorization_capture`,
+                  `authorization_release`, `authorization_refund`, `sandbox_funding`.
+              posted_at: { type: string, format: date-time }
+        next_cursor:
+          type: string
+          description: Ausente cuando no hay más páginas.
+
+  responses:
+    Unauthorized:
+      description: |
+        `invalid_credential`: falta el token, expiró o no es válido. Pide uno nuevo.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    Forbidden:
+      description: |
+        `insufficient_scope`: el token es válido pero no incluye el scope
+        necesario. Pedir otro token con el mismo `client_id` NO lo resuelve.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    AccountNotFound:
+      description: |
+        `account_not_found`. Misma respuesta si la cuenta no existe, si el
+        identificador está mal formado o si pertenece a otra integración.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    AuthorizationNotFound:
+      description: "`authorization_not_found`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    RateLimited:
+      description: |
+        `rate_limited`. Espera lo que indique `Retry-After` y reintenta con la
+        MISMA `Idempotency-Key`.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Segundos.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    Unavailable:
+      description: |
+        `service_unavailable`. Es transitorio: reintenta con la misma
+        `Idempotency-Key`, que no duplica nada.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
