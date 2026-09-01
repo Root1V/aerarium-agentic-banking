@@ -27,6 +27,7 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 | 05 | [Arquitectura de la plataforma](docs/05-arquitectura-plataforma.md) | Principios, diagrama de referencia, ledger y reconciliación, abstracción de rieles de pago, multi-país, seguridad y cumplimiento técnico, IA |
 | 06 | [Stack tecnológico](docs/06-stack-tecnologico.md) | Matriz build vs buy por componente con proveedores, stack recomendado (Kotlin, Flutter, PostgreSQL, Kafka, AWS) y trade-offs explícitos |
 | 07 | [Roadmap de desarrollo](docs/07-roadmap-desarrollo.md) | Fases 0–4 con entregables, equipo, costos, calendario (Gantt), gates de avance y riesgos de ejecución |
+| 09 | [Integración Mercatus](docs/09-integracion-mercatus.md) | Riel de pago para agentes de IA: análisis del contrato, bloqueantes (unidad monetaria, estructura de cuentas) y plan |
 | 08 | [Decisión del core y plan de construcción](docs/08-plan-de-construccion.md) | **La decisión cerrada**: core delgado propio (ledger+cuentas+catálogo+posting), tabla definitiva construir/alquilar/simular, estructura del monorepo y backlog de los primeros 6 sprints |
 
 ## Decisiones estructurales clave

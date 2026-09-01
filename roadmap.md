@@ -39,6 +39,27 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | 👀 |
 | Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
 
+## Integración Mercatus (riel de pago para agentes de IA)
+
+Análisis y bloqueantes en [docs/09-integracion-mercatus.md](docs/09-integracion-mercatus.md).
+Las tres primeras no dependen de los bloqueantes y son deuda propia que había que pagar igual.
+
+| # | Feature | Lenguaje | Rama | Estado |
+|---|---|---|---|---|
+| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | ⬜ |
+| 2 | Autenticación OAuth2 con scopes (hoy solo hay un puerto con sustituto) | Go/Rust | feat/oauth2 | ⬜ |
+| 3 | Primitiva de autorización en el core (retención → captura, con expiración) | Rust | feat/authorizations | ⬜ |
+| 4 | API REST de Mercatus: los cinco endpoints del contrato | Go | feat/mercatus-api | ⬜ |
+| 5 | Sandbox: entorno separado, saldos configurables, rate limiting | Go | feat/sandbox | ⬜ |
+| 6 | Reembolsos (fase 2 del propio contrato) | Go | feat/mercatus-refunds | ⬜ |
+
+**Bloqueado, requiere decisión externa:**
+- Estructura de cuenta ómnibus (no se le puede abrir cuenta a un software) — necesita
+  asesoría regulatoria y que el proveedor BaaS la acepte.
+- Fecha de sandbox comprometida (2026-09-02) inalcanzable: el alcance real es de 4–6 semanas.
+- Tres huecos del contrato por aclarar con Mercatus: expiración de autorizaciones,
+  semántica de `recipient_mismatch`/`amount_mismatch`, y ventana de idempotencia.
+
 ## Deuda técnica anotada
 
 - El pool de PostgreSQL del core espera hasta 10 s por una conexión bajo carga en
