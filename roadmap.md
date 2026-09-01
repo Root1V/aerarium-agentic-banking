@@ -53,12 +53,17 @@ Las tres primeras no dependen de los bloqueantes y son deuda propia que había q
 | 5 | Sandbox: entorno separado, saldos configurables, rate limiting | Go | feat/sandbox | ⬜ |
 | 6 | Reembolsos (fase 2 del propio contrato) | Go | feat/mercatus-refunds | ⬜ |
 
-**Bloqueado, requiere decisión externa:**
-- Estructura de cuenta ómnibus (no se le puede abrir cuenta a un software) — necesita
-  asesoría regulatoria y que el proveedor BaaS la acepte.
-- Fecha de sandbox comprometida (2026-09-02) inalcanzable: el alcance real es de 4–6 semanas.
-- Tres huecos del contrato por aclarar con Mercatus: expiración de autorizaciones,
-  semántica de `recipient_mismatch`/`amount_mismatch`, y ventana de idempotencia.
+**Bloqueado, requiere respuesta de Mercatus** — cuestionario en
+[docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) (24 preguntas, cada una con
+supuesto por defecto para no detener el desarrollo):
+- **Q1–Q5 (P0)**: estructura de cuenta ómnibus y fondeo. Sin esto no se abre ninguna
+  cuenta; necesita además asesoría regulatoria y que el proveedor BaaS lo acepte.
+- **Calendario**: la fecha comprometida (2026-09-02) es inalcanzable. Contrapropuesta de
+  cuatro entregas, con OpenAPI congelado + servidor de respuestas fijas en 3 días.
+- **Q8–Q10 (P1)**: expiración de autorizaciones, idempotencia de `capture` y semántica de
+  `recipient_mismatch`/`amount_mismatch`. Cambian la forma de la API: cerrar antes de que
+  Mercatus escriba el cliente.
+- **Q16 (P1)**: volumen esperado, para publicar un rate limiting real.
 
 ## Deuda técnica anotada
 
