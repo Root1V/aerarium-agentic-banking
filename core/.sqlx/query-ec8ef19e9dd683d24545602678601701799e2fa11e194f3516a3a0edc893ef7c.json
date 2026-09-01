@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.idempotency_key, e.amount_minor, e.currency, t.posted_at\n            FROM ledger_entries e\n            JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND t.posted_at < $2\n            ORDER BY t.posted_at\n            ",
+  "query": "\n            SELECT t.idempotency_key, e.amount_micros, e.currency, t.posted_at\n            FROM ledger_entries e\n            JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND t.posted_at < $2\n            ORDER BY t.posted_at\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "amount_minor",
+        "name": "amount_micros",
         "type_info": "Int8"
       },
       {
@@ -37,5 +37,5 @@
       false
     ]
   },
-  "hash": "0e6f5b2c107b64f9c943d2d21c6d46cc1c5280a13a06ad8b1ddac62763291ca8"
+  "hash": "ec8ef19e9dd683d24545602678601701799e2fa11e194f3516a3a0edc893ef7c"
 }

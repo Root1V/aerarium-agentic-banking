@@ -18,6 +18,16 @@ cd core && SQLX_OFFLINE=true cargo test               # 10 tests de invariantes 
 
 Las migraciones se aplican solas al correr los tests (`sqlx::migrate!`).
 
+> **Si tu base local es anterior a la migración a micras**, `sqlx` va a rechazar
+> arrancar porque el checksum de las migraciones cambió. Es la protección
+> funcionando: una base con importes en centavos leídos como micras daría saldos
+> diez mil veces menores sin que nada falle. Recrea el esquema:
+>
+> ```bash
+> docker exec aibank-postgres psql -U aibank -d aibank \
+>   -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS cards CASCADE;'
+> ```
+
 ### Consultas verificadas en compilación
 
 `sqlx` valida cada consulta SQL contra el esquema real **en tiempo de compilación**. Dos modos:
@@ -112,8 +122,8 @@ La autenticación es un PUERTO (`bff.Authenticator`), no una implementación: ba
 se resuelve con passkeys FIDO2 vinculadas al dispositivo. El sustituto de
 desarrollo vive en `bff/sim` para que no pueda cablearse a producción por descuido.
 
-Dos reglas del canal: el dinero viaja como entero en unidades menores (nunca
-decimal en JSON) y toda operación que mueve dinero exige `Idempotency-Key`.
+Dos reglas del canal: el dinero viaja como entero en micras (nunca decimal en
+JSON) y toda operación que mueve dinero exige `Idempotency-Key`.
 
 ## App (Flutter)
 
@@ -126,7 +136,7 @@ flutter run --dart-define=AIBANK_BFF_URL=http://localhost:8080 \
             --dart-define=AIBANK_TOKEN=... --dart-define=AIBANK_ACCOUNT_ID=...
 ```
 
-Dos reglas del cliente: el dinero nunca es `double` (entero en centavos, se formatea
+Dos reglas del cliente: el dinero nunca es `double` (entero en micras, se formatea
 solo para mostrar) y un reintento de envío CONSERVA la clave de idempotencia — si
 generara una nueva, un timeout que el servidor sí procesó cobraría dos veces.
 
@@ -203,5 +213,7 @@ Sin dependencias: elimina toda fuente de no determinismo en una decisión audita
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
 - Regla del core: `core/` no depende de SDKs de proveedores; todo lo externo entra por adaptadores.
-- Montos: siempre enteros en unidades menores (centavos). Nunca coma flotante.
+- Montos: siempre enteros en **micras** — millonésimas (10⁻⁶) de la unidad mayor.
+  1 USD = `1_000_000`; 1 centavo = `10_000`; $0,001 = `1_000`. Nunca coma flotante.
+  El porqué de la escala 6, en [`core/src/money.rs`](core/src/money.rs).
 - El ledger es append-only: las correcciones son asientos de reversa, jamás UPDATE.

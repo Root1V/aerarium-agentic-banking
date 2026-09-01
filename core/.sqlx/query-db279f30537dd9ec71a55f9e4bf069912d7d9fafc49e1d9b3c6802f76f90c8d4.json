@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT projected_minor as \"projected_minor!\", projected_entries as \"projected_entries!\"\n            FROM account_balance_projection WHERE account_id = $1\n            ",
+  "query": "\n            SELECT projected_micros as \"projected_micros!\", projected_entries as \"projected_entries!\"\n            FROM account_balance_projection WHERE account_id = $1\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "projected_minor!",
+        "name": "projected_micros!",
         "type_info": "Int8"
       },
       {
@@ -24,5 +24,5 @@
       true
     ]
   },
-  "hash": "bb98092a6868c082297e84de346b71d5cfeff8fa0f858cab50e65d6f6e0a490c"
+  "hash": "db279f30537dd9ec71a55f9e4bf069912d7d9fafc49e1d9b3c6802f76f90c8d4"
 }

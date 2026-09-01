@@ -31,18 +31,26 @@ Prioridades: **P0** bloquea escribir código de esa parte · **P1** bloquea el s
 | `Idempotency-Key` derivada del `cart_id` (§6) | **Aceptado**, y es mejor que un UUID por intento |
 | Autorizar y después capturar (§2) | **Aceptado.** Ya tenemos ese patrón funcionando para tarjetas; se generaliza |
 
-## 2. Lo que cambia de nuestro lado por el punto de las millonésimas
+## 2. Lo que cambió de nuestro lado por el punto de las millonésimas
 
-No es una objeción, es un aviso de alcance: **todo AIBank cuenta hoy en centavos**. Su
-argumento es correcto —un servicio a $0.001 por llamada no se puede representar en
-centavos, y convertir en el borde perdería dinero justo en el caso de uso principal— así
-que vamos a **migrar el ledger completo a escala 6**, no a poner un conversor en el
-adaptador.
+AIBank contaba en centavos. Su argumento es correcto —un servicio a $0.001 por llamada no
+se puede representar en centavos, y convertir en el borde perdería dinero justo en el caso
+de uso principal— así que **migramos el ledger completo a escala 6** en vez de poner un
+conversor en el adaptador.
 
-Eso implica reescribir el esquema de base de datos, los contratos internos y las pruebas
-de los cinco lenguajes del sistema. Es la decisión correcta y el momento correcto (todavía
-no hay datos de producción), pero es la razón principal por la que la fecha de sandbox
-cambia — ver §7.
+**Ya está hecho**: el esquema de base de datos, los contratos internos y el código de los
+cinco lenguajes del sistema cuentan en micras. Se hizo primero y de una sola vez porque
+todavía no hay datos de producción; después del lanzamiento habría sido un proyecto de
+meses con riesgo contable.
+
+Dos consecuencias que les afectan:
+
+- **La escala es de almacenamiento, no de presentación.** La app de consumo le sigue
+  mostrando dos decimales a una persona. Lo que ya no puede pasar es que un importe con
+  fracción de centavo se muestre como `0,00` y desaparezca de la pantalla.
+- **Seis decimales es el máximo representable.** Un importe con más precisión se rechaza
+  en vez de truncarse en silencio. Si su catálogo llegara a bajar de $0.000001 por llamada,
+  hay que hablarlo antes y no descubrirlo en un redondeo.
 
 ---
 
@@ -260,10 +268,10 @@ El contrato registra **2026-09-02 como "Confirmado por AIBank"** (§11). Esa fec
 alcanzable y preferimos decirlo ahora: ustedes van a escribir el cliente contra lo que
 publiquemos, y cambiarlo después cuesta el doble.
 
-El alcance real es la migración del ledger a escala 6, un servidor OAuth2 completo (hoy la
-autenticación de AIBank es un puerto con sustituto de desarrollo), la primitiva de
-autorización, los endpoints, el sandbox y el rate limiting: **4 a 6 semanas** para algo
-utilizable de verdad.
+El alcance real es la migración del ledger a escala 6 (**ya completada**), un servidor
+OAuth2 completo (hoy la autenticación de AIBank es un puerto con sustituto de
+desarrollo), la primitiva de autorización, los endpoints, el sandbox y el rate
+limiting: **4 a 6 semanas** para algo utilizable de verdad.
 
 **Lo que proponemos en su lugar:**
 
@@ -289,7 +297,7 @@ cuentas ni siquiera de prueba, si van a llevar dinero real.
 Para que quede claro que nada de esto detiene el trabajo. Estas tres piezas ya están en
 nuestro backlog y no dependen de ninguna pregunta de este documento:
 
-1. **Migración del ledger a millonésimas** — decidida, empieza ya.
+1. ~~Migración del ledger a millonésimas~~ — **hecha**.
 2. **Servidor OAuth2 con scopes** — deuda propia que teníamos que pagar igual para exponer
    cualquier API a un tercero.
 3. **Primitiva de autorización en el core** — generalizar el patrón retención→captura que

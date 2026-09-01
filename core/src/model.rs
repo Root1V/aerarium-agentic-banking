@@ -1,7 +1,8 @@
 //! Tipos del dominio contable.
 //!
-//! Los montos son SIEMPRE `i64` en unidades menores (centavos) y positivos;
-//! el signo lo aporta [`Direction`]. Nunca coma flotante.
+//! Los montos son SIEMPRE `i64` en micras (millonésimas, 10⁻⁶) y positivos;
+//! el signo lo aporta [`Direction`]. Nunca coma flotante. Ver [`crate::money`]
+//! para por qué la escala es 6 y no 2.
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -55,8 +56,8 @@ pub struct Product {
     pub kind: ProductKind,
     pub currency: String,
     pub allows_overdraft: bool,
-    pub max_balance_minor: Option<i64>,
-    pub max_transaction_minor: Option<i64>,
+    pub max_balance_micros: Option<i64>,
+    pub max_transaction_micros: Option<i64>,
     pub active: bool,
 }
 
@@ -68,8 +69,8 @@ pub struct NewProduct {
     pub kind: ProductKind,
     pub currency: String,
     pub allows_overdraft: bool,
-    pub max_balance_minor: Option<i64>,
-    pub max_transaction_minor: Option<i64>,
+    pub max_balance_micros: Option<i64>,
+    pub max_transaction_micros: Option<i64>,
 }
 
 impl NewProduct {
@@ -81,15 +82,15 @@ impl NewProduct {
             kind: ProductKind::DepositAccount,
             currency: currency.to_owned(),
             allows_overdraft: false,
-            max_balance_minor: None,
-            max_transaction_minor: None,
+            max_balance_micros: None,
+            max_transaction_micros: None,
         }
     }
 
     /// Aplica topes regulatorios de cuenta simplificada.
-    pub fn with_caps(mut self, max_balance_minor: Option<i64>, max_transaction_minor: Option<i64>) -> Self {
-        self.max_balance_minor = max_balance_minor;
-        self.max_transaction_minor = max_transaction_minor;
+    pub fn with_caps(mut self, max_balance_micros: Option<i64>, max_transaction_micros: Option<i64>) -> Self {
+        self.max_balance_micros = max_balance_micros;
+        self.max_transaction_micros = max_transaction_micros;
         self
     }
 }
@@ -116,7 +117,7 @@ pub struct AccountEntry {
     pub id: i64,
     pub transaction_id: Uuid,
     pub direction: Direction,
-    pub amount_minor: i64,
+    pub amount_micros: i64,
     pub currency: String,
     pub kind: String,
     pub description: Option<String>,
@@ -126,7 +127,7 @@ pub struct AccountEntry {
 /// Saldo materializado y su contador de asientos, para auditarlo contra la proyección.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Balance {
-    pub balance_minor: i64,
+    pub balance_micros: i64,
     pub entry_count: i64,
 }
 
@@ -135,17 +136,17 @@ pub struct Balance {
 pub struct EntryCommand {
     pub account_id: Uuid,
     pub direction: Direction,
-    pub amount_minor: i64,
+    pub amount_micros: i64,
     pub currency: String,
 }
 
 impl EntryCommand {
-    pub fn debit(account_id: Uuid, amount_minor: i64, currency: &str) -> Self {
-        Self { account_id, direction: Direction::Debit, amount_minor, currency: currency.to_owned() }
+    pub fn debit(account_id: Uuid, amount_micros: i64, currency: &str) -> Self {
+        Self { account_id, direction: Direction::Debit, amount_micros, currency: currency.to_owned() }
     }
 
-    pub fn credit(account_id: Uuid, amount_minor: i64, currency: &str) -> Self {
-        Self { account_id, direction: Direction::Credit, amount_minor, currency: currency.to_owned() }
+    pub fn credit(account_id: Uuid, amount_micros: i64, currency: &str) -> Self {
+        Self { account_id, direction: Direction::Credit, amount_micros, currency: currency.to_owned() }
     }
 }
 

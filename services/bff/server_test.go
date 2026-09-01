@@ -110,8 +110,8 @@ func setup(t *testing.T) *fixture {
 
 	return &fixture{
 		srv: ts, core: core, auth: auth, ctx: ctx, cash: cash.Id,
-		alice:   newCustomer("alice", 500_00),
-		bob:     newCustomer("bob", 100_00),
+		alice:   newCustomer("alice", 500_000000),
+		bob:     newCustomer("bob", 100_000000),
 		mallory: newCustomer("mallory", 0),
 	}
 }
@@ -209,7 +209,7 @@ func TestNoSePuedeTransferirDesdeLaCuentaDeOtroCliente(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.mallory.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.mallory.accountID,
-		"amount_minor":    100_00,
+		"amount_micros":    100_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -221,8 +221,8 @@ func TestNoSePuedeTransferirDesdeLaCuentaDeOtroCliente(t *testing.T) {
 	if err != nil {
 		t.Fatalf("consultar saldo: %v", err)
 	}
-	if balance.AmountMinor != 500_00 {
-		t.Errorf("saldo de la víctima = %d: el intento movió dinero", balance.AmountMinor)
+	if balance.AmountMicros != 500_000000 {
+		t.Errorf("saldo de la víctima = %d: el intento movió dinero", balance.AmountMicros)
 	}
 }
 
@@ -242,7 +242,7 @@ func TestNoSePuedeTransferirHaciaUnaCuentaInterna(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.cash,
-		"amount_minor":    10_00,
+		"amount_micros":    10_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -267,13 +267,13 @@ func TestHomeDevuelveCuentaSaldoYMovimientos(t *testing.T) {
 			Currency string `json:"currency"`
 		} `json:"account"`
 		Balance struct {
-			AmountMinor int64  `json:"amount_minor"`
+			AmountMicros int64  `json:"amount_micros"`
 			Currency    string `json:"currency"`
 		} `json:"balance"`
 		Movements []struct {
 			Sign   int `json:"sign"`
 			Amount struct {
-				AmountMinor int64 `json:"amount_minor"`
+				AmountMicros int64 `json:"amount_micros"`
 			} `json:"amount"`
 		} `json:"movements"`
 	}
@@ -284,8 +284,8 @@ func TestHomeDevuelveCuentaSaldoYMovimientos(t *testing.T) {
 	if home.Account.ID != f.alice.accountID {
 		t.Errorf("cuenta = %s", home.Account.ID)
 	}
-	if home.Balance.AmountMinor != 500_00 {
-		t.Errorf("saldo = %d, se esperaba 50000", home.Balance.AmountMinor)
+	if home.Balance.AmountMicros != 500_000000 {
+		t.Errorf("saldo = %d, se esperaba 50000", home.Balance.AmountMicros)
 	}
 	if len(home.Movements) != 1 {
 		t.Fatalf("movimientos = %d, se esperaba 1", len(home.Movements))
@@ -297,14 +297,16 @@ func TestHomeDevuelveCuentaSaldoYMovimientos(t *testing.T) {
 
 // El dinero nunca puede viajar como decimal: JSON no distingue enteros de
 // flotantes y el consumidor acabaría haciendo aritmética binaria con saldos.
-func TestElDineroViajaComoEnteroEnUnidadesMenores(t *testing.T) {
+func TestElDineroViajaComoEnteroEnMicras(t *testing.T) {
 	f := setup(t)
 
 	_, body := f.do(t, http.MethodGet, "/v1/accounts/"+f.alice.accountID+"/balance", f.alice.token, nil, nil)
 
 	raw := string(body)
-	if !strings.Contains(raw, `"amount_minor":50000`) {
-		t.Errorf("el saldo debe ir como entero en centavos, se obtuvo: %s", raw)
+	// El valor completo, no un prefijo: con importes en micras, "50000" es
+	// prefijo de "500000000" y la aserción pasaría con un saldo equivocado.
+	if !strings.Contains(raw, `"amount_micros":500000000,`) {
+		t.Errorf("el saldo debe ir como entero en micras, se obtuvo: %s", raw)
 	}
 	if strings.Contains(raw, "500.0") || strings.Contains(raw, "500.00") {
 		t.Errorf("el importe viaja como decimal: %s", raw)
@@ -316,8 +318,8 @@ func TestLosMovimientosPaginanConCursor(t *testing.T) {
 
 	for i := 0; i < 4; i++ {
 		if _, err := f.core.Post(f.ctx, uuid.NewString(), "deposit", []coreclient.Entry{
-			coreclient.Debit(f.cash, 10_00, "USD"),
-			coreclient.Credit(f.alice.accountID, 10_00, "USD"),
+			coreclient.Debit(f.cash, 10_000000, "USD"),
+			coreclient.Credit(f.alice.accountID, 10_000000, "USD"),
 		}, fmt.Sprintf("depósito %d", i)); err != nil {
 			t.Fatalf("depositar: %v", err)
 		}
@@ -363,7 +365,7 @@ func TestTransferenciaEntreClientes(t *testing.T) {
 	resp, body := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_minor":    120_00,
+		"amount_micros":    120_000000,
 		"currency":        "USD",
 		"description":     "pago",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
@@ -374,11 +376,11 @@ func TestTransferenciaEntreClientes(t *testing.T) {
 
 	alice, _ := f.core.GetBalance(f.ctx, f.alice.accountID)
 	bob, _ := f.core.GetBalance(f.ctx, f.bob.accountID)
-	if alice.AmountMinor != 380_00 {
-		t.Errorf("saldo de origen = %d, se esperaba 38000", alice.AmountMinor)
+	if alice.AmountMicros != 380_000000 {
+		t.Errorf("saldo de origen = %d, se esperaba 38000", alice.AmountMicros)
 	}
-	if bob.AmountMinor != 220_00 {
-		t.Errorf("saldo de destino = %d, se esperaba 22000", bob.AmountMinor)
+	if bob.AmountMicros != 220_000000 {
+		t.Errorf("saldo de destino = %d, se esperaba 22000", bob.AmountMicros)
 	}
 }
 
@@ -389,7 +391,7 @@ func TestElMismoIdempotencyKeyNoTransfiereDosVeces(t *testing.T) {
 	payload := map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_minor":    50_00,
+		"amount_micros":    50_000000,
 		"currency":        "USD",
 	}
 
@@ -402,8 +404,8 @@ func TestElMismoIdempotencyKeyNoTransfiereDosVeces(t *testing.T) {
 	}
 
 	balance, _ := f.core.GetBalance(f.ctx, f.alice.accountID)
-	if balance.AmountMinor != 450_00 {
-		t.Errorf("saldo = %d, se esperaba 45000: el reenvío transfirió dos veces", balance.AmountMinor)
+	if balance.AmountMicros != 450_000000 {
+		t.Errorf("saldo = %d, se esperaba 45000: el reenvío transfirió dos veces", balance.AmountMicros)
 	}
 }
 
@@ -413,7 +415,7 @@ func TestSinIdempotencyKeySeRechazaLaTransferencia(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_minor":    10_00,
+		"amount_micros":    10_000000,
 		"currency":        "USD",
 	}, nil)
 
@@ -431,7 +433,7 @@ func TestLaClaveDeIdempotenciaEstaAisladaPorCliente(t *testing.T) {
 		resp, body := f.do(t, http.MethodPost, "/v1/transfers", c.token, map[string]any{
 			"from_account_id": c.accountID,
 			"to_account_id":   f.mallory.accountID,
-			"amount_minor":    10_00,
+			"amount_micros":    10_000000,
 			"currency":        "USD",
 		}, map[string]string{"Idempotency-Key": sharedKey})
 		if resp.StatusCode != http.StatusCreated {
@@ -440,8 +442,8 @@ func TestLaClaveDeIdempotenciaEstaAisladaPorCliente(t *testing.T) {
 	}
 
 	balance, _ := f.core.GetBalance(f.ctx, f.mallory.accountID)
-	if balance.AmountMinor != 20_00 {
-		t.Errorf("destino = %d, se esperaba 2000: la clave de un cliente bloqueó la de otro", balance.AmountMinor)
+	if balance.AmountMicros != 20_000000 {
+		t.Errorf("destino = %d, se esperaba 2000: la clave de un cliente bloqueó la de otro", balance.AmountMicros)
 	}
 }
 
@@ -451,7 +453,7 @@ func TestSaldoInsuficienteDevuelveUnMotivoAccionable(t *testing.T) {
 	resp, body := f.do(t, http.MethodPost, "/v1/transfers", f.bob.token, map[string]any{
 		"from_account_id": f.bob.accountID,
 		"to_account_id":   f.alice.accountID,
-		"amount_minor":    900_00,
+		"amount_micros":    900_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -487,7 +489,7 @@ func TestReintentosConcurrentesConLaMismaClaveTransfierenUnaVez(t *testing.T) {
 			resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 				"from_account_id": f.alice.accountID,
 				"to_account_id":   f.bob.accountID,
-				"amount_minor":    30_00,
+				"amount_micros":    30_000000,
 				"currency":        "USD",
 			}, map[string]string{"Idempotency-Key": key})
 			statuses[i] = resp.StatusCode
@@ -501,7 +503,7 @@ func TestReintentosConcurrentesConLaMismaClaveTransfierenUnaVez(t *testing.T) {
 		}
 	}
 	balance, _ := f.core.GetBalance(f.ctx, f.alice.accountID)
-	if balance.AmountMinor != 470_00 {
-		t.Errorf("saldo = %d, se esperaba 47000 pese a %d reintentos", balance.AmountMinor, attempts)
+	if balance.AmountMicros != 470_000000 {
+		t.Errorf("saldo = %d, se esperaba 47000 pese a %d reintentos", balance.AmountMicros, attempts)
 	}
 }

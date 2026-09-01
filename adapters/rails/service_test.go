@@ -122,9 +122,9 @@ func (f *fixture) balance(t *testing.T, accountID string) int64 {
 		t.Fatalf("consultar saldo: %v", err)
 	}
 	if !b.Consistent() {
-		t.Errorf("saldo materializado %d != proyección %d", b.AmountMinor, b.ProjectedMinor)
+		t.Errorf("saldo materializado %d != proyección %d", b.AmountMicros, b.ProjectedMicros)
 	}
-	return b.AmountMinor
+	return b.AmountMicros
 }
 
 // externalAlias devuelve un alias de destino fuera del banco.
@@ -140,7 +140,7 @@ func (f *fixture) externalAlias(t *testing.T) string {
 func TestAcreditacionEntranteAbonaAlCliente(t *testing.T) {
 	f := setup(t, 0)
 
-	credit := sim.EmitCredit(f.alias, 120_00, "USD", "Pagador")
+	credit := sim.EmitCredit(f.alias, 120_000000, "USD", "Pagador")
 	result, err := f.svc.HandleInboundCredit(f.ctx, credit)
 	if err != nil {
 		t.Fatalf("acreditar: %v", err)
@@ -148,10 +148,10 @@ func TestAcreditacionEntranteAbonaAlCliente(t *testing.T) {
 	if result.Duplicate {
 		t.Error("la primera acreditación no es duplicado")
 	}
-	if got := f.balance(t, f.customerID); got != 120_00 {
+	if got := f.balance(t, f.customerID); got != 120_000000 {
 		t.Errorf("saldo del cliente = %d, se esperaba 12000", got)
 	}
-	if got := f.balance(t, f.accounts.SettlementID); got != 120_00 {
+	if got := f.balance(t, f.accounts.SettlementID); got != 120_000000 {
 		t.Errorf("posición frente al riel = %d: entrar dinero aumenta el activo", got)
 	}
 }
@@ -159,7 +159,7 @@ func TestAcreditacionEntranteAbonaAlCliente(t *testing.T) {
 // El caso más frecuente en producción: el riel no recibió el ACK y reenvía.
 func TestNotificacionDuplicadaAcreditaUnaSolaVez(t *testing.T) {
 	f := setup(t, 0)
-	credit := sim.EmitCredit(f.alias, 80_00, "USD", "Pagador")
+	credit := sim.EmitCredit(f.alias, 80_000000, "USD", "Pagador")
 
 	first, err := f.svc.HandleInboundCredit(f.ctx, credit)
 	if err != nil {
@@ -176,7 +176,7 @@ func TestNotificacionDuplicadaAcreditaUnaSolaVez(t *testing.T) {
 	if second.TransactionID != first.TransactionID {
 		t.Error("el reenvío debe resolver a la misma transacción")
 	}
-	if got := f.balance(t, f.customerID); got != 80_00 {
+	if got := f.balance(t, f.customerID); got != 80_000000 {
 		t.Errorf("saldo = %d, se esperaba 8000: el reenvío duplicó el abono", got)
 	}
 }
@@ -185,9 +185,9 @@ func TestEntregasDesordenadasNoAlteranElSaldoFinal(t *testing.T) {
 	f := setup(t, 0)
 
 	credits := []rails.InboundCredit{
-		sim.EmitCredit(f.alias, 10_00, "USD", "A"),
-		sim.EmitCredit(f.alias, 20_00, "USD", "B"),
-		sim.EmitCredit(f.alias, 30_00, "USD", "C"),
+		sim.EmitCredit(f.alias, 10_000000, "USD", "A"),
+		sim.EmitCredit(f.alias, 20_000000, "USD", "B"),
+		sim.EmitCredit(f.alias, 30_000000, "USD", "C"),
 	}
 	for _, c := range sim.Shuffle(credits) {
 		if _, err := f.svc.HandleInboundCredit(f.ctx, c); err != nil {
@@ -195,7 +195,7 @@ func TestEntregasDesordenadasNoAlteranElSaldoFinal(t *testing.T) {
 		}
 	}
 
-	if got := f.balance(t, f.customerID); got != 60_00 {
+	if got := f.balance(t, f.customerID); got != 60_000000 {
 		t.Errorf("saldo = %d, se esperaba 6000", got)
 	}
 }
@@ -203,7 +203,7 @@ func TestEntregasDesordenadasNoAlteranElSaldoFinal(t *testing.T) {
 // Ráfaga de reintentos simultáneos del mismo webhook.
 func TestReenviosConcurrentesAcreditanUnaVez(t *testing.T) {
 	f := setup(t, 0)
-	credit := sim.EmitCredit(f.alias, 45_00, "USD", "Pagador")
+	credit := sim.EmitCredit(f.alias, 45_000000, "USD", "Pagador")
 
 	const attempts = 8
 	var wg sync.WaitGroup
@@ -226,7 +226,7 @@ func TestReenviosConcurrentesAcreditanUnaVez(t *testing.T) {
 			t.Fatalf("intento %d: %v", i, err)
 		}
 	}
-	if got := f.balance(t, f.customerID); got != 45_00 {
+	if got := f.balance(t, f.customerID); got != 45_000000 {
 		t.Errorf("saldo = %d, se esperaba 4500 pese a %d reenvíos simultáneos", got, attempts)
 	}
 }
@@ -234,7 +234,7 @@ func TestReenviosConcurrentesAcreditanUnaVez(t *testing.T) {
 func TestAcreditacionAAliasAjenoNoAsientaNada(t *testing.T) {
 	f := setup(t, 0)
 
-	credit := sim.EmitCredit("alias-de-otro-banco", 50_00, "USD", "Pagador")
+	credit := sim.EmitCredit("alias-de-otro-banco", 50_000000, "USD", "Pagador")
 	_, err := f.svc.HandleInboundCredit(f.ctx, credit)
 
 	if !errors.Is(err, rails.ErrAliasNotOurs) {
@@ -248,14 +248,14 @@ func TestAcreditacionAAliasAjenoNoAsientaNada(t *testing.T) {
 // ---------------------------------------------------------------- salientes
 
 func TestTransferenciaSalienteConfirmadaSaleDelCliente(t *testing.T) {
-	f := setup(t, 500_00)
+	f := setup(t, 500_000000)
 	target := f.externalAlias(t)
 
 	result, err := f.svc.SendOutbound(f.ctx, rails.OutboundRequest{
 		TransferID:    uuid.NewString(),
 		FromAccountID: f.customerID,
 		ToAlias:       target,
-		AmountMinor:   200_00,
+		AmountMicros:   200_000000,
 		Currency:      "USD",
 	})
 	if err != nil {
@@ -265,13 +265,13 @@ func TestTransferenciaSalienteConfirmadaSaleDelCliente(t *testing.T) {
 	if result.Status != rails.OutboundSettled {
 		t.Errorf("estado = %s, se esperaba settled", result.Status)
 	}
-	if got := f.balance(t, f.customerID); got != 300_00 {
+	if got := f.balance(t, f.customerID); got != 300_000000 {
 		t.Errorf("saldo del cliente = %d, se esperaba 30000", got)
 	}
 	if got := f.balance(t, f.accounts.InTransitID); got != 0 {
 		t.Errorf("tránsito = %d, debe quedar saldado tras confirmar", got)
 	}
-	if got := f.balance(t, f.accounts.SettlementID); got != -200_00 {
+	if got := f.balance(t, f.accounts.SettlementID); got != -200_000000 {
 		t.Errorf("posición frente al riel = %d: salir dinero reduce el activo", got)
 	}
 }
@@ -279,14 +279,14 @@ func TestTransferenciaSalienteConfirmadaSaleDelCliente(t *testing.T) {
 // El core rechaza ANTES de que el riel se entere: no se puede enviar dinero que
 // no existe, y el riel no debe recibir una orden que luego habría que revertir.
 func TestSinFondosNoSeLlamaAlRiel(t *testing.T) {
-	f := setup(t, 50_00)
+	f := setup(t, 50_000000)
 	target := f.externalAlias(t)
 
 	_, err := f.svc.SendOutbound(f.ctx, rails.OutboundRequest{
 		TransferID:    uuid.NewString(),
 		FromAccountID: f.customerID,
 		ToAlias:       target,
-		AmountMinor:   200_00,
+		AmountMicros:   200_000000,
 		Currency:      "USD",
 	})
 
@@ -296,13 +296,13 @@ func TestSinFondosNoSeLlamaAlRiel(t *testing.T) {
 	if f.rail.SendCount() != 0 {
 		t.Error("el riel no debe recibir la orden si no hay fondos")
 	}
-	if got := f.balance(t, f.customerID); got != 50_00 {
+	if got := f.balance(t, f.customerID); got != 50_000000 {
 		t.Errorf("saldo = %d, no debe alterarse", got)
 	}
 }
 
 func TestRechazoDelRielDevuelveElDineroAlCliente(t *testing.T) {
-	f := setup(t, 300_00)
+	f := setup(t, 300_000000)
 	target := f.externalAlias(t)
 	f.rail.RejectNext(1)
 
@@ -310,7 +310,7 @@ func TestRechazoDelRielDevuelveElDineroAlCliente(t *testing.T) {
 		TransferID:    uuid.NewString(),
 		FromAccountID: f.customerID,
 		ToAlias:       target,
-		AmountMinor:   100_00,
+		AmountMicros:   100_000000,
 		Currency:      "USD",
 	})
 	if err != nil {
@@ -320,7 +320,7 @@ func TestRechazoDelRielDevuelveElDineroAlCliente(t *testing.T) {
 	if result.Status != rails.OutboundReversed {
 		t.Errorf("estado = %s, se esperaba reversed", result.Status)
 	}
-	if got := f.balance(t, f.customerID); got != 300_00 {
+	if got := f.balance(t, f.customerID); got != 300_000000 {
 		t.Errorf("saldo = %d: el rechazo debe devolver el dinero íntegro", got)
 	}
 	if got := f.balance(t, f.accounts.InTransitID); got != 0 {
@@ -331,7 +331,7 @@ func TestRechazoDelRielDevuelveElDineroAlCliente(t *testing.T) {
 // El escenario caro: el riel no responde. Revertir sería un error, porque la
 // orden pudo haberse procesado del otro lado.
 func TestSinRespuestaDelRielElDineroQuedaEnTransitoYNoSeDevuelve(t *testing.T) {
-	f := setup(t, 400_00)
+	f := setup(t, 400_000000)
 	target := f.externalAlias(t)
 	f.rail.FailNext(1)
 
@@ -339,7 +339,7 @@ func TestSinRespuestaDelRielElDineroQuedaEnTransitoYNoSeDevuelve(t *testing.T) {
 		TransferID:    uuid.NewString(),
 		FromAccountID: f.customerID,
 		ToAlias:       target,
-		AmountMinor:   150_00,
+		AmountMicros:   150_000000,
 		Currency:      "USD",
 	})
 	if err != nil {
@@ -349,24 +349,24 @@ func TestSinRespuestaDelRielElDineroQuedaEnTransitoYNoSeDevuelve(t *testing.T) {
 	if result.Status != rails.OutboundInTransit {
 		t.Fatalf("estado = %s, se esperaba in_transit", result.Status)
 	}
-	if got := f.balance(t, f.customerID); got != 250_00 {
+	if got := f.balance(t, f.customerID); got != 250_000000 {
 		t.Errorf("saldo = %d: el dinero NO debe devolverse ante un desenlace ambiguo", got)
 	}
-	if got := f.balance(t, f.accounts.InTransitID); got != 150_00 {
+	if got := f.balance(t, f.accounts.InTransitID); got != 150_000000 {
 		t.Errorf("tránsito = %d: el limbo debe quedar visible para la conciliación", got)
 	}
 }
 
 // Reintentar tras un timeout con el MISMO TransferID no debe cobrar dos veces.
 func TestReintentoTrasTimeoutNoCobraDosVeces(t *testing.T) {
-	f := setup(t, 400_00)
+	f := setup(t, 400_000000)
 	target := f.externalAlias(t)
 	transferID := uuid.NewString()
 	req := rails.OutboundRequest{
 		TransferID:    transferID,
 		FromAccountID: f.customerID,
 		ToAlias:       target,
-		AmountMinor:   100_00,
+		AmountMicros:   100_000000,
 		Currency:      "USD",
 	}
 
@@ -387,7 +387,7 @@ func TestReintentoTrasTimeoutNoCobraDosVeces(t *testing.T) {
 	if second.Status != rails.OutboundSettled {
 		t.Errorf("reintento = %s, se esperaba settled", second.Status)
 	}
-	if got := f.balance(t, f.customerID); got != 300_00 {
+	if got := f.balance(t, f.customerID); got != 300_000000 {
 		t.Errorf("saldo = %d: el reintento cobró dos veces al cliente", got)
 	}
 	if got := f.balance(t, f.accounts.InTransitID); got != 0 {
@@ -396,20 +396,20 @@ func TestReintentoTrasTimeoutNoCobraDosVeces(t *testing.T) {
 }
 
 func TestAliasDesconocidoNoMueveDinero(t *testing.T) {
-	f := setup(t, 100_00)
+	f := setup(t, 100_000000)
 
 	_, err := f.svc.SendOutbound(f.ctx, rails.OutboundRequest{
 		TransferID:    uuid.NewString(),
 		FromAccountID: f.customerID,
 		ToAlias:       "no-existe",
-		AmountMinor:   10_00,
+		AmountMicros:   10_000000,
 		Currency:      "USD",
 	})
 
 	if !errors.Is(err, rails.ErrUnknownAlias) {
 		t.Fatalf("se esperaba ErrUnknownAlias, se obtuvo %v", err)
 	}
-	if got := f.balance(t, f.customerID); got != 100_00 {
+	if got := f.balance(t, f.customerID); got != 100_000000 {
 		t.Errorf("saldo = %d, no debe alterarse", got)
 	}
 }

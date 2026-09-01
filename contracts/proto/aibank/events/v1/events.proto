@@ -22,14 +22,14 @@ option go_package = "github.com/aibank/aibank/clients/go/eventsv1;eventsv1";
 
 // Asiento tal como quedó registrado, con el saldo resultante de la cuenta.
 //
-// `balance_after_minor` se incluye deliberadamente: permite que un consumidor
+// `balance_after_micros` se incluye deliberadamente: permite que un consumidor
 // notifique "recibiste $X, tu saldo es $Y" sin volver a consultar el core, y
 // evita que dos eventos concurrentes lean saldos en desorden.
 message PostedEntry {
   string account_id = 1;
   aibank.core.v1.Direction direction = 2;
   aibank.core.v1.Money amount = 3;
-  int64 balance_after_minor = 4;
+  int64 balance_after_micros = 4;
 }
 
 // Una transacción contable quedó asentada en el ledger.

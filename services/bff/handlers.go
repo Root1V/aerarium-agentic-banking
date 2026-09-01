@@ -43,8 +43,8 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, p *Principal
 		// contable. Se prefiere no responder antes que mostrar una cifra dudosa.
 		s.logger.ErrorContext(r.Context(), "saldo inconsistente con el ledger",
 			"account_id", accountID,
-			"materialized", balance.AmountMinor,
-			"projected", balance.ProjectedMinor)
+			"materialized", balance.AmountMicros,
+			"projected", balance.ProjectedMicros)
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "servicio no disponible, intenta de nuevo")
 		return
 	}
@@ -57,7 +57,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, p *Principal
 
 	writeJSON(w, http.StatusOK, homeResponse{
 		Account:   accountJSON{ID: account.Id, Name: account.Name, Currency: account.Currency},
-		Balance:   moneyJSON{AmountMinor: balance.AmountMinor, Currency: balance.Currency},
+		Balance:   moneyJSON{AmountMicros: balance.AmountMicros, Currency: balance.Currency},
 		Movements: toMovementsJSON(statement.Movements),
 	})
 }
@@ -74,7 +74,7 @@ func (s *Server) handleBalance(w http.ResponseWriter, r *http.Request, p *Princi
 		s.writeCoreError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, moneyJSON{AmountMinor: balance.AmountMinor, Currency: balance.Currency})
+	writeJSON(w, http.StatusOK, moneyJSON{AmountMicros: balance.AmountMicros, Currency: balance.Currency})
 }
 
 type movementsResponse struct {
@@ -115,7 +115,7 @@ func (s *Server) handleMovements(w http.ResponseWriter, r *http.Request, p *Prin
 type transferRequest struct {
 	FromAccountID string `json:"from_account_id"`
 	ToAccountID   string `json:"to_account_id"`
-	AmountMinor   int64  `json:"amount_minor"`
+	AmountMicros   int64  `json:"amount_micros"`
 	Currency      string `json:"currency"`
 	Description   string `json:"description"`
 }
@@ -144,7 +144,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		writeError(w, http.StatusBadRequest, "invalid_request", "cuerpo inválido")
 		return
 	}
-	if req.AmountMinor <= 0 {
+	if req.AmountMicros <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "el monto debe ser positivo")
 		return
 	}
@@ -182,8 +182,8 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 	key := "bff:transfer:" + p.CustomerID + ":" + idempotencyKey
 
 	result, err := s.core.Post(r.Context(), key, "p2p_transfer", []coreclient.Entry{
-		coreclient.Debit(req.FromAccountID, req.AmountMinor, req.Currency),
-		coreclient.Credit(req.ToAccountID, req.AmountMinor, req.Currency),
+		coreclient.Debit(req.FromAccountID, req.AmountMicros, req.Currency),
+		coreclient.Credit(req.ToAccountID, req.AmountMicros, req.Currency),
 	}, req.Description)
 	if err != nil {
 		s.writeCoreError(w, r, err)
@@ -210,7 +210,7 @@ func toMovementsJSON(movements []coreclient.Movement) []movementJSON {
 		out = append(out, movementJSON{
 			ID:          m.TransactionID,
 			Cursor:      m.Cursor,
-			Amount:      moneyJSON{AmountMinor: m.AmountMinor, Currency: m.Currency},
+			Amount:      moneyJSON{AmountMicros: m.AmountMicros, Currency: m.Currency},
 			Sign:        sign,
 			Kind:        m.Kind,
 			Description: m.Description,

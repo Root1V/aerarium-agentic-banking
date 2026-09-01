@@ -12,16 +12,16 @@ CREATE TABLE IF NOT EXISTS cards.authorizations (
     network_transaction_id TEXT PRIMARY KEY,
     card_id                TEXT NOT NULL,
     account_id             UUID NOT NULL,
-    amount_minor           BIGINT NOT NULL CHECK (amount_minor > 0),
+    amount_micros          BIGINT NOT NULL CHECK (amount_micros > 0),
     currency               CHAR(3) NOT NULL,
     merchant_name          TEXT,
     -- held: dinero retenido · cleared: cobrado · reversed: liberado sin cobro
     status                 TEXT NOT NULL,
     hold_transaction_id    UUID,
     -- Monto realmente cobrado; puede diferir del autorizado.
-    cleared_amount_minor   BIGINT,
+    cleared_amount_micros  BIGINT,
     -- Excedente que el cliente no pudo cubrir y el banco adelantó.
-    overage_minor          BIGINT NOT NULL DEFAULT 0,
+    overage_micros         BIGINT NOT NULL DEFAULT 0,
     authorized_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     resolved_at            TIMESTAMPTZ
 );
@@ -32,4 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_authorizations_held
 
 -- Los adelantos por excedente son cartera a recuperar.
 CREATE INDEX IF NOT EXISTS idx_authorizations_overage
-    ON cards.authorizations (account_id) WHERE overage_minor > 0;
+    ON cards.authorizations (account_id) WHERE overage_micros > 0;

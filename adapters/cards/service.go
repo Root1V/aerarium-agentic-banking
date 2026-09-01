@@ -52,8 +52,8 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (*Aut
 	if req.NetworkTransactionID == "" {
 		return nil, errors.New("la autorización no trae identificador de red")
 	}
-	if req.AmountMinor <= 0 {
-		return nil, fmt.Errorf("monto inválido: %d", req.AmountMinor)
+	if req.AmountMicros <= 0 {
+		return nil, fmt.Errorf("monto inválido: %d", req.AmountMicros)
 	}
 
 	card, err := s.directory.Card(ctx, req.CardID)
@@ -75,7 +75,7 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (*Aut
 		NetworkTransactionID: req.NetworkTransactionID,
 		CardID:               req.CardID,
 		AccountID:            card.AccountID,
-		AmountMinor:          req.AmountMinor,
+		AmountMicros:          req.AmountMicros,
 		Currency:             req.Currency,
 		MerchantName:         req.MerchantName,
 	})
@@ -97,8 +97,8 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (*Aut
 	// dentro del banco. Aquí es donde el core rechaza por falta de fondos.
 	result, err := s.core.Post(ctx, s.authKey(req.NetworkTransactionID), "card_authorization_hold",
 		[]coreclient.Entry{
-			coreclient.Debit(card.AccountID, req.AmountMinor, req.Currency),
-			coreclient.Credit(s.accounts.AuthHoldID, req.AmountMinor, req.Currency),
+			coreclient.Debit(card.AccountID, req.AmountMicros, req.Currency),
+			coreclient.Credit(s.accounts.AuthHoldID, req.AmountMicros, req.Currency),
 		},
 		req.MerchantName,
 	)
@@ -131,14 +131,14 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (*Aut
 // ClearingResult describe cómo quedó el cobro.
 type ClearingResult struct {
 	TransactionID string
-	// FinalAmountMinor es lo efectivamente cobrado.
-	FinalAmountMinor int64
-	// ReturnedMinor es lo que se devuelve al cliente cuando el comercio cobra
+	// FinalAmountMicros es lo efectivamente cobrado.
+	FinalAmountMicros int64
+	// ReturnedMicros es lo que se devuelve al cliente cuando el comercio cobra
 	// menos de lo autorizado.
-	ReturnedMinor int64
-	// OverageMinor es el excedente que el banco adelantó porque el cliente no
+	ReturnedMicros int64
+	// OverageMicros es el excedente que el banco adelantó porque el cliente no
 	// tenía saldo para cubrir la diferencia. Es cartera por cobrar.
-	OverageMinor int64
+	OverageMicros int64
 	Duplicate    bool
 }
 
@@ -156,8 +156,8 @@ func (s *Service) Clear(ctx context.Context, notification ClearingNotification) 
 	if notification.ClearingID == "" {
 		return nil, errors.New("el cobro no trae identificador")
 	}
-	if notification.FinalAmountMinor <= 0 {
-		return nil, fmt.Errorf("monto final inválido: %d", notification.FinalAmountMinor)
+	if notification.FinalAmountMicros <= 0 {
+		return nil, fmt.Errorf("monto final inválido: %d", notification.FinalAmountMicros)
 	}
 
 	auth, err := s.store.Get(ctx, notification.NetworkTransactionID)
@@ -167,8 +167,8 @@ func (s *Service) Clear(ctx context.Context, notification ClearingNotification) 
 	if auth.Status == statusCleared {
 		// La red reenvió un cobro ya aplicado.
 		return &ClearingResult{
-			FinalAmountMinor: auth.ClearedAmountMinor,
-			OverageMinor:     auth.OverageMinor,
+			FinalAmountMicros: auth.ClearedAmountMicros,
+			OverageMicros:     auth.OverageMicros,
 			Duplicate:        true,
 		}, nil
 	}
@@ -176,22 +176,22 @@ func (s *Service) Clear(ctx context.Context, notification ClearingNotification) 
 		return nil, fmt.Errorf("no se puede cobrar una autorización reversada: %s", auth.NetworkTransactionID)
 	}
 
-	final := notification.FinalAmountMinor
+	final := notification.FinalAmountMicros
 	currency := auth.Currency
 	key := s.clearKey(notification.ClearingID)
 
 	entries := []coreclient.Entry{
-		coreclient.Debit(s.accounts.AuthHoldID, auth.AmountMinor, currency),
+		coreclient.Debit(s.accounts.AuthHoldID, auth.AmountMicros, currency),
 		coreclient.Credit(s.accounts.SettlementID, final, currency),
 	}
 
 	var returned, overage int64
 	switch {
-	case final < auth.AmountMinor:
-		returned = auth.AmountMinor - final
+	case final < auth.AmountMicros:
+		returned = auth.AmountMicros - final
 		entries = append(entries, coreclient.Credit(auth.AccountID, returned, currency))
-	case final > auth.AmountMinor:
-		overage = final - auth.AmountMinor
+	case final > auth.AmountMicros:
+		overage = final - auth.AmountMicros
 		entries = append(entries, coreclient.Debit(auth.AccountID, overage, currency))
 	}
 
@@ -217,9 +217,9 @@ func (s *Service) Clear(ctx context.Context, notification ClearingNotification) 
 
 	return &ClearingResult{
 		TransactionID:    result.TransactionID,
-		FinalAmountMinor: final,
-		ReturnedMinor:    returned,
-		OverageMinor:     boolTo(absorbed, overage),
+		FinalAmountMicros: final,
+		ReturnedMicros:    returned,
+		OverageMicros:     boolTo(absorbed, overage),
 		Duplicate:        result.Replayed,
 	}, nil
 }
@@ -244,8 +244,8 @@ func (s *Service) Reverse(ctx context.Context, notification ReversalNotification
 
 	if _, err := s.core.Post(ctx, s.reverseKey(notification.ReversalID), "card_authorization_reversal",
 		[]coreclient.Entry{
-			coreclient.Debit(s.accounts.AuthHoldID, auth.AmountMinor, auth.Currency),
-			coreclient.Credit(auth.AccountID, auth.AmountMinor, auth.Currency),
+			coreclient.Debit(s.accounts.AuthHoldID, auth.AmountMicros, auth.Currency),
+			coreclient.Credit(auth.AccountID, auth.AmountMicros, auth.Currency),
 		},
 		notification.Reason,
 	); err != nil {

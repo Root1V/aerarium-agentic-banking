@@ -73,7 +73,7 @@ type AuthorizationRequest struct {
 	// red reintenta.
 	NetworkTransactionID string
 	CardID               string
-	AmountMinor          int64
+	AmountMicros          int64
 	Currency             string
 	MerchantName         string
 	RequestedAt          time.Time
@@ -129,9 +129,9 @@ type ClearingNotification struct {
 	NetworkTransactionID string
 	// ClearingID identifica este cobro; la red puede reenviarlo.
 	ClearingID string
-	// FinalAmountMinor puede diferir del autorizado: propinas, combustible,
+	// FinalAmountMicros puede diferir del autorizado: propinas, combustible,
 	// cobros parciales.
-	FinalAmountMinor int64
+	FinalAmountMicros int64
 	Currency         string
 	SettledAt        time.Time
 }

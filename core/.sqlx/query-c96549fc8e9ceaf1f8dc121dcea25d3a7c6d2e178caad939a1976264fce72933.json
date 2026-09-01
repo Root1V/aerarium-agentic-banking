@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT balance_minor as \"balance_minor!\" FROM account_balances WHERE account_id = $1",
+  "query": "SELECT balance_micros as \"balance_micros!\" FROM account_balances WHERE account_id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "balance_minor!",
+        "name": "balance_micros!",
         "type_info": "Int8"
       }
     ],
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "0e199db5bf87b747d93fff0a4cf484b8e419027264b738fbbaf30ba6b72a1d8f"
+  "hash": "c96549fc8e9ceaf1f8dc121dcea25d3a7c6d2e178caad939a1976264fce72933"
 }

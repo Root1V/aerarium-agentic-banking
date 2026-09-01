@@ -44,7 +44,7 @@ class Assessment:
         return {
             "customer_id": self.customer_id,
             "outcome": self.decision.outcome.value,
-            "limit_minor": self.decision.limit_minor,
+            "limit_micros": self.decision.limit_micros,
             "currency": self.decision.currency,
             "score": self.decision.score,
             "model_version": self.decision.model_version,
@@ -91,7 +91,7 @@ def assess(
     score_result: Score = score(features)
     decision: CreditDecision = decide(
         score_result,
-        average_monthly_inflow_minor=features.average_monthly_inflow_minor,
+        average_monthly_inflow_micros=features.average_monthly_inflow_micros,
         months_of_history=features.months_of_history,
         currency=currency,
     )

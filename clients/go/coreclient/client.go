@@ -53,23 +53,23 @@ func (c *Client) Close() error { return c.conn.Close() }
 
 // ---------------------------------------------------------------- ledger
 
-// Entry es un asiento contable. El monto es siempre positivo en unidades
-// menores (centavos); el signo lo aporta la dirección.
+// Entry es un asiento contable. El monto es siempre positivo y va en micras
+// (millonésimas, 10^-6); el signo lo aporta la dirección.
 type Entry struct {
 	AccountID   string
 	Direction   corev1.Direction
-	AmountMinor int64
+	AmountMicros int64
 	Currency    string
 }
 
 // Debit construye un asiento al debe.
-func Debit(accountID string, amountMinor int64, currency string) Entry {
-	return Entry{accountID, corev1.Direction_DIRECTION_DEBIT, amountMinor, currency}
+func Debit(accountID string, amountMicros int64, currency string) Entry {
+	return Entry{accountID, corev1.Direction_DIRECTION_DEBIT, amountMicros, currency}
 }
 
 // Credit construye un asiento al haber.
-func Credit(accountID string, amountMinor int64, currency string) Entry {
-	return Entry{accountID, corev1.Direction_DIRECTION_CREDIT, amountMinor, currency}
+func Credit(accountID string, amountMicros int64, currency string) Entry {
+	return Entry{accountID, corev1.Direction_DIRECTION_CREDIT, amountMicros, currency}
 }
 
 // PostResult describe el efecto de un movimiento.
@@ -91,7 +91,7 @@ func (c *Client) Post(ctx context.Context, idempotencyKey, kind string, entries 
 		pbEntries = append(pbEntries, &corev1.Entry{
 			AccountId: e.AccountID,
 			Direction: e.Direction,
-			Amount:    &corev1.Money{AmountMinor: e.AmountMinor, Currency: e.Currency},
+			Amount:    &corev1.Money{AmountMicros: e.AmountMicros, Currency: e.Currency},
 		})
 	}
 
@@ -115,16 +115,16 @@ func (c *Client) Post(ctx context.Context, idempotencyKey, kind string, entries 
 
 // Balance es el saldo de una cuenta junto a su verificación contra el ledger.
 type Balance struct {
-	AmountMinor int64
+	AmountMicros int64
 	Currency    string
 	EntryCount  int64
-	// ProjectedMinor recalcula el saldo desde los asientos. Si difiere de
-	// AmountMinor hay una inconsistencia contable que debe escalarse.
-	ProjectedMinor int64
+	// ProjectedMicros recalcula el saldo desde los asientos. Si difiere de
+	// AmountMicros hay una inconsistencia contable que debe escalarse.
+	ProjectedMicros int64
 }
 
 // Consistent indica si el saldo materializado coincide con la proyección del ledger.
-func (b Balance) Consistent() bool { return b.AmountMinor == b.ProjectedMinor }
+func (b Balance) Consistent() bool { return b.AmountMicros == b.ProjectedMicros }
 
 func (c *Client) GetBalance(ctx context.Context, accountID string) (*Balance, error) {
 	var trailer metadata.MD
@@ -134,10 +134,10 @@ func (c *Client) GetBalance(ctx context.Context, accountID string) (*Balance, er
 		return nil, translate(err, trailer)
 	}
 	return &Balance{
-		AmountMinor:    resp.Balance.AmountMinor,
+		AmountMicros:    resp.Balance.AmountMicros,
 		Currency:       resp.Balance.Currency,
 		EntryCount:     resp.EntryCount,
-		ProjectedMinor: resp.ProjectedBalance.AmountMinor,
+		ProjectedMicros: resp.ProjectedBalance.AmountMicros,
 	}, nil
 }
 
@@ -147,7 +147,7 @@ type Movement struct {
 	TransactionID string
 	// Direction indica si el movimiento suma o resta en la cuenta consultada.
 	Direction   corev1.Direction
-	AmountMinor int64
+	AmountMicros int64
 	Currency    string
 	Kind        string
 	Description string
@@ -177,7 +177,7 @@ func (c *Client) ListMovements(ctx context.Context, accountID string, limit int3
 			Cursor:        e.Cursor,
 			TransactionID: e.TransactionId,
 			Direction:     e.Direction,
-			AmountMinor:   e.Amount.AmountMinor,
+			AmountMicros:   e.Amount.AmountMicros,
 			Currency:      e.Amount.Currency,
 			Kind:          e.Kind,
 			Description:   e.Description,
@@ -240,8 +240,8 @@ type NewProduct struct {
 	Name                string
 	Currency            string
 	AllowsOverdraft     bool
-	MaxBalanceMinor     *int64
-	MaxTransactionMinor *int64
+	MaxBalanceMicros     *int64
+	MaxTransactionMicros *int64
 }
 
 func (c *Client) CreateProduct(ctx context.Context, p NewProduct) (*corev1.Product, error) {
@@ -251,8 +251,8 @@ func (c *Client) CreateProduct(ctx context.Context, p NewProduct) (*corev1.Produ
 		Name:                p.Name,
 		Currency:            p.Currency,
 		AllowsOverdraft:     p.AllowsOverdraft,
-		MaxBalanceMinor:     p.MaxBalanceMinor,
-		MaxTransactionMinor: p.MaxTransactionMinor,
+		MaxBalanceMicros:     p.MaxBalanceMicros,
+		MaxTransactionMicros: p.MaxTransactionMicros,
 	}, grpc.Trailer(&trailer))
 	if err != nil {
 		return nil, translate(err, trailer)

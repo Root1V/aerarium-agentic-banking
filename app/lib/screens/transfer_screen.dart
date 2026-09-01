@@ -138,9 +138,9 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   Future<void> _send() async {
-    final int amountMinor;
+    final int amountMicros;
     try {
-      amountMinor = parseAmountToMinor(_amountField.text);
+      amountMicros = parseAmountToMicros(_amountField.text);
     } on AmountFormatException catch (e) {
       setState(() => _amountError = e.message);
       return;
@@ -150,7 +150,7 @@ class _TransferScreenState extends State<TransferScreen> {
     await _controller.send(
       fromAccountId: widget.fromAccountId,
       toAccountId: _destinationField.text.trim(),
-      amountMinor: amountMinor,
+      amountMicros: amountMicros,
       currency: widget.currency,
       description: _descriptionField.text.trim(),
     );

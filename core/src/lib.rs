@@ -8,6 +8,7 @@ pub mod db;
 pub mod grpc;
 pub mod kafka;
 pub mod model;
+pub mod money;
 pub mod outbox;
 pub mod posting;
 pub mod reconciliation;

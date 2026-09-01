@@ -19,7 +19,7 @@ import {
 import {
   CoreUnavailableError,
   FindingNotFoundError,
-  formatMinor,
+  formatMicros,
   type CoreClient,
   type Finding,
 } from './core-client.ts';
@@ -284,4 +284,4 @@ function sendHtml(res: http.ServerResponse, status: number, html: string): void 
   res.end(html);
 }
 
-export { formatMinor, UnauthenticatedError };
+export { formatMicros, UnauthenticatedError };

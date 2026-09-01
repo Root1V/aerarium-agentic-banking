@@ -6,7 +6,7 @@ produce un sistema que niega crédito por quién es la persona en vez de por có
 maneja su dinero, y a esa escala el daño es masivo y silencioso.
 
 **Por qué la comparación no es por subcadena.** La primera versión de esta guarda
-comparaba subcadenas y bloqueó `average_monthly_inflow_minor`, porque "aver*age*"
+comparaba subcadenas y bloqueó `average_monthly_inflow_micros`, porque "aver*age*"
 contiene "age". Una regla así parece más segura y en realidad es peor: deja el
 motor sin las características legítimas que permiten prestarle a quien no tiene
 buró, que es justamente el segmento que se busca atender. Los términos cortos se

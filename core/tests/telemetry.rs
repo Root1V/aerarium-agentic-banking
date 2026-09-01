@@ -83,7 +83,7 @@ async fn el_evento_del_outbox_conserva_la_traza_de_su_origen(pool: PgPool) {
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 120_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 120_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
 
@@ -114,7 +114,7 @@ async fn sin_traza_activa_el_evento_se_asienta_igual(pool: PgPool) {
     // Sin contexto: un proceso por lotes, una migración, una prueba.
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 50_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 50_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .expect("la ausencia de traza no puede impedir mover dinero");
 
@@ -151,7 +151,7 @@ async fn el_relay_recupera_la_traza_al_publicar(pool: PgPool) {
     let origin = context_with_trace(SAMPLE);
     let _guard = origin.attach();
     ctx.posting
-        .post(&deposit(cash, customer, 70_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 70_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
     drop(_guard);
@@ -208,7 +208,7 @@ fn los_identificadores_de_negocio_si_pueden_registrarse() {
         "transaction_id",
         "account_id",
         "idempotency_key",
-        "amount_minor",
+        "amount_micros",
         "currency",
         "kind",
         "network_transaction_id",
@@ -225,12 +225,12 @@ fn el_filtro_descarta_solo_lo_prohibido() {
     let filtered = telemetry::safe_attributes([
         ("transaction_id", "tx-1"),
         ("document_number", "12345678"),
-        ("amount_minor", "12000"),
+        ("amount_micros", "12000"),
         ("password", "hunter2"),
     ]);
 
     let keys: Vec<_> = filtered.iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, vec!["transaction_id", "amount_minor"]);
+    assert_eq!(keys, vec!["transaction_id", "amount_micros"]);
 }
 
 #[test]

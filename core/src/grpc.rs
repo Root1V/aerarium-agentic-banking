@@ -125,8 +125,8 @@ fn product_to_pb(product: Product) -> pb::Product {
         name: product.name,
         currency: product.currency,
         allows_overdraft: product.allows_overdraft,
-        max_balance_minor: product.max_balance_minor,
-        max_transaction_minor: product.max_transaction_minor,
+        max_balance_micros: product.max_balance_micros,
+        max_transaction_micros: product.max_transaction_micros,
         active: product.active,
     }
 }
@@ -166,7 +166,7 @@ impl LedgerApi {
             entries.push(EntryCommand {
                 account_id: parse_uuid(&entry.account_id, &format!("entry {i}: account_id"))?,
                 direction,
-                amount_minor: amount.amount_minor,
+                amount_micros: amount.amount_micros,
                 currency: amount.currency.clone(),
             });
         }
@@ -257,7 +257,7 @@ impl LedgerService for LedgerApi {
                         Direction::Credit => pb::Direction::Credit,
                     } as i32,
                     amount: Some(pb::Money {
-                        amount_minor: e.amount_minor,
+                        amount_micros: e.amount_micros,
                         currency: e.currency,
                     }),
                     kind: e.kind,
@@ -295,12 +295,12 @@ impl LedgerService for LedgerApi {
 
         Ok(Response::new(pb::GetBalanceResponse {
             balance: Some(pb::Money {
-                amount_minor: balance.balance_minor,
+                amount_micros: balance.balance_micros,
                 currency: account.currency.clone(),
             }),
             entry_count: balance.entry_count,
             projected_balance: Some(pb::Money {
-                amount_minor: projected.balance_minor,
+                amount_micros: projected.balance_micros,
                 currency: account.currency,
             }),
         }))
@@ -416,8 +416,8 @@ impl ProductService for ProductApi {
                 kind: ProductKind::DepositAccount,
                 currency: req.currency,
                 allows_overdraft: req.allows_overdraft,
-                max_balance_minor: req.max_balance_minor,
-                max_transaction_minor: req.max_transaction_minor,
+                max_balance_micros: req.max_balance_micros,
+                max_transaction_micros: req.max_transaction_micros,
             })
             .await
             .map_err(to_status)?;
@@ -493,8 +493,8 @@ impl ReconciliationService for ReconciliationApi {
                     kind: finding_kind_to_pb(f.kind) as i32,
                     account_id: f.account_id.map(|id| id.to_string()).unwrap_or_default(),
                     reference: f.reference.unwrap_or_default(),
-                    expected_minor: f.expected_minor.unwrap_or_default(),
-                    actual_minor: f.actual_minor.unwrap_or_default(),
+                    expected_micros: f.expected_micros.unwrap_or_default(),
+                    actual_micros: f.actual_micros.unwrap_or_default(),
                     currency: f.currency.unwrap_or_default(),
                     detail: f.detail,
                     created_at: f.created_at.map(to_timestamp),

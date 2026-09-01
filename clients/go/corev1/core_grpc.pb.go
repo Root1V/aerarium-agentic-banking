@@ -4,7 +4,7 @@
 // Un cambio incompatible aquí rompe la compilación de ambos lados, no la producción.
 //
 // Reglas del contrato:
-//   - El dinero SIEMPRE viaja como entero en unidades menores (centavos) + moneda.
+//   - El dinero SIEMPRE viaja como entero en micras (millonésimas, 10^-6) + moneda.
 //     Nunca punto flotante, nunca decimales en texto.
 //   - Toda escritura lleva idempotency_key: los rieles y las redes de tarjetas
 //     reintentan, y el efecto debe ocurrir exactamente una vez.
@@ -564,6 +564,190 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetProduct",
 			Handler:    _ProductService_GetProduct_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "aibank/core/v1/core.proto",
+}
+
+const (
+	ReconciliationService_ListOpenFindings_FullMethodName = "/aibank.core.v1.ReconciliationService/ListOpenFindings"
+	ReconciliationService_ResolveFinding_FullMethodName   = "/aibank.core.v1.ReconciliationService/ResolveFinding"
+	ReconciliationService_RunInternalCheck_FullMethodName = "/aibank.core.v1.ReconciliationService/RunInternalCheck"
+)
+
+// ReconciliationServiceClient is the client API for ReconciliationService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ReconciliationServiceClient interface {
+	// Diferencias abiertas, para la cola de operaciones.
+	ListOpenFindings(ctx context.Context, in *ListOpenFindingsRequest, opts ...grpc.CallOption) (*ListOpenFindingsResponse, error)
+	// Cierra una diferencia dejando constancia.
+	ResolveFinding(ctx context.Context, in *ResolveFindingRequest, opts ...grpc.CallOption) (*ResolveFindingResponse, error)
+	// Dispara la conciliación interna bajo demanda.
+	RunInternalCheck(ctx context.Context, in *RunInternalCheckRequest, opts ...grpc.CallOption) (*RunInternalCheckResponse, error)
+}
+
+type reconciliationServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewReconciliationServiceClient(cc grpc.ClientConnInterface) ReconciliationServiceClient {
+	return &reconciliationServiceClient{cc}
+}
+
+func (c *reconciliationServiceClient) ListOpenFindings(ctx context.Context, in *ListOpenFindingsRequest, opts ...grpc.CallOption) (*ListOpenFindingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOpenFindingsResponse)
+	err := c.cc.Invoke(ctx, ReconciliationService_ListOpenFindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reconciliationServiceClient) ResolveFinding(ctx context.Context, in *ResolveFindingRequest, opts ...grpc.CallOption) (*ResolveFindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveFindingResponse)
+	err := c.cc.Invoke(ctx, ReconciliationService_ResolveFinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reconciliationServiceClient) RunInternalCheck(ctx context.Context, in *RunInternalCheckRequest, opts ...grpc.CallOption) (*RunInternalCheckResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunInternalCheckResponse)
+	err := c.cc.Invoke(ctx, ReconciliationService_RunInternalCheck_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReconciliationServiceServer is the server API for ReconciliationService service.
+// All implementations must embed UnimplementedReconciliationServiceServer
+// for forward compatibility.
+type ReconciliationServiceServer interface {
+	// Diferencias abiertas, para la cola de operaciones.
+	ListOpenFindings(context.Context, *ListOpenFindingsRequest) (*ListOpenFindingsResponse, error)
+	// Cierra una diferencia dejando constancia.
+	ResolveFinding(context.Context, *ResolveFindingRequest) (*ResolveFindingResponse, error)
+	// Dispara la conciliación interna bajo demanda.
+	RunInternalCheck(context.Context, *RunInternalCheckRequest) (*RunInternalCheckResponse, error)
+	mustEmbedUnimplementedReconciliationServiceServer()
+}
+
+// UnimplementedReconciliationServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedReconciliationServiceServer struct{}
+
+func (UnimplementedReconciliationServiceServer) ListOpenFindings(context.Context, *ListOpenFindingsRequest) (*ListOpenFindingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOpenFindings not implemented")
+}
+func (UnimplementedReconciliationServiceServer) ResolveFinding(context.Context, *ResolveFindingRequest) (*ResolveFindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveFinding not implemented")
+}
+func (UnimplementedReconciliationServiceServer) RunInternalCheck(context.Context, *RunInternalCheckRequest) (*RunInternalCheckResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunInternalCheck not implemented")
+}
+func (UnimplementedReconciliationServiceServer) mustEmbedUnimplementedReconciliationServiceServer() {}
+func (UnimplementedReconciliationServiceServer) testEmbeddedByValue()                               {}
+
+// UnsafeReconciliationServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ReconciliationServiceServer will
+// result in compilation errors.
+type UnsafeReconciliationServiceServer interface {
+	mustEmbedUnimplementedReconciliationServiceServer()
+}
+
+func RegisterReconciliationServiceServer(s grpc.ServiceRegistrar, srv ReconciliationServiceServer) {
+	// If the following call panics, it indicates UnimplementedReconciliationServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ReconciliationService_ServiceDesc, srv)
+}
+
+func _ReconciliationService_ListOpenFindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOpenFindingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReconciliationServiceServer).ListOpenFindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReconciliationService_ListOpenFindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReconciliationServiceServer).ListOpenFindings(ctx, req.(*ListOpenFindingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReconciliationService_ResolveFinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveFindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReconciliationServiceServer).ResolveFinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReconciliationService_ResolveFinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReconciliationServiceServer).ResolveFinding(ctx, req.(*ResolveFindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReconciliationService_RunInternalCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunInternalCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReconciliationServiceServer).RunInternalCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReconciliationService_RunInternalCheck_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReconciliationServiceServer).RunInternalCheck(ctx, req.(*RunInternalCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ReconciliationService_ServiceDesc is the grpc.ServiceDesc for ReconciliationService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ReconciliationService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "aibank.core.v1.ReconciliationService",
+	HandlerType: (*ReconciliationServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListOpenFindings",
+			Handler:    _ReconciliationService_ListOpenFindings_Handler,
+		},
+		{
+			MethodName: "ResolveFinding",
+			Handler:    _ReconciliationService_ResolveFinding_Handler,
+		},
+		{
+			MethodName: "RunInternalCheck",
+			Handler:    _ReconciliationService_RunInternalCheck_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
