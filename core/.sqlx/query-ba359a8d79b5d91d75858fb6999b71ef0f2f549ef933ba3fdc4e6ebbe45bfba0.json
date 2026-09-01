@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE authorizations SET status = $2, refunded_micros = $3 WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "authorization_status",
+            "kind": {
+              "Enum": [
+                "AUTHORIZED",
+                "CAPTURED",
+                "PARTIALLY_REFUNDED",
+                "REFUNDED",
+                "RELEASED"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba359a8d79b5d91d75858fb6999b71ef0f2f549ef933ba3fdc4e6ebbe45bfba0"
+}

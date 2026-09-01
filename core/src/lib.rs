@@ -4,6 +4,7 @@
 //! externo entra por adaptadores que llaman al motor de posting.
 
 pub mod accounts;
+pub mod authorizations;
 pub mod db;
 pub mod grpc;
 pub mod kafka;

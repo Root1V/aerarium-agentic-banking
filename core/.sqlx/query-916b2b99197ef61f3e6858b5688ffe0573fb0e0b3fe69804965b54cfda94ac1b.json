@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE authorizations SET status = 'RELEASED', released_at = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "916b2b99197ef61f3e6858b5688ffe0573fb0e0b3fe69804965b54cfda94ac1b"
+}
