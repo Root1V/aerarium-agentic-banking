@@ -375,6 +375,149 @@ func (FindingKind) EnumDescriptor() ([]byte, []int) {
 	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{5}
 }
 
+// Estado de una autorización tal como se le reporta a quien consulta.
+//
+// `EXPIRED` no es un estado almacenado sino uno derivado: es lo que significa una
+// retención viva cuya fecha ya pasó. Guardarlo obligaría a escribir en la base
+// cada vez que el reloj avanza.
+type AuthorizationStatus int32
+
+const (
+	AuthorizationStatus_AUTHORIZATION_STATUS_UNSPECIFIED AuthorizationStatus = 0
+	// Dinero retenido, todavía no entregado al receptor.
+	AuthorizationStatus_AUTHORIZATION_STATUS_AUTHORIZED AuthorizationStatus = 1
+	// Liquidada: el dinero está en la cuenta del receptor.
+	AuthorizationStatus_AUTHORIZATION_STATUS_CAPTURED           AuthorizationStatus = 2
+	AuthorizationStatus_AUTHORIZATION_STATUS_PARTIALLY_REFUNDED AuthorizationStatus = 3
+	AuthorizationStatus_AUTHORIZATION_STATUS_REFUNDED           AuthorizationStatus = 4
+	// La retención se devolvió al pagador sin cobrar.
+	AuthorizationStatus_AUTHORIZATION_STATUS_RELEASED AuthorizationStatus = 5
+	// Vigencia terminada y todavía sin barrer. No se puede capturar.
+	AuthorizationStatus_AUTHORIZATION_STATUS_EXPIRED AuthorizationStatus = 6
+)
+
+// Enum value maps for AuthorizationStatus.
+var (
+	AuthorizationStatus_name = map[int32]string{
+		0: "AUTHORIZATION_STATUS_UNSPECIFIED",
+		1: "AUTHORIZATION_STATUS_AUTHORIZED",
+		2: "AUTHORIZATION_STATUS_CAPTURED",
+		3: "AUTHORIZATION_STATUS_PARTIALLY_REFUNDED",
+		4: "AUTHORIZATION_STATUS_REFUNDED",
+		5: "AUTHORIZATION_STATUS_RELEASED",
+		6: "AUTHORIZATION_STATUS_EXPIRED",
+	}
+	AuthorizationStatus_value = map[string]int32{
+		"AUTHORIZATION_STATUS_UNSPECIFIED":        0,
+		"AUTHORIZATION_STATUS_AUTHORIZED":         1,
+		"AUTHORIZATION_STATUS_CAPTURED":           2,
+		"AUTHORIZATION_STATUS_PARTIALLY_REFUNDED": 3,
+		"AUTHORIZATION_STATUS_REFUNDED":           4,
+		"AUTHORIZATION_STATUS_RELEASED":           5,
+		"AUTHORIZATION_STATUS_EXPIRED":            6,
+	}
+)
+
+func (x AuthorizationStatus) Enum() *AuthorizationStatus {
+	p := new(AuthorizationStatus)
+	*p = x
+	return p
+}
+
+func (x AuthorizationStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuthorizationStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_aibank_core_v1_core_proto_enumTypes[6].Descriptor()
+}
+
+func (AuthorizationStatus) Type() protoreflect.EnumType {
+	return &file_aibank_core_v1_core_proto_enumTypes[6]
+}
+
+func (x AuthorizationStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuthorizationStatus.Descriptor instead.
+func (AuthorizationStatus) EnumDescriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{6}
+}
+
+// Motivo de un rechazo sobre una autorización. Viaja en `x-aibank-reason`.
+type AuthorizationErrorReason int32
+
+const (
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_UNSPECIFIED          AuthorizationErrorReason = 0
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID              AuthorizationErrorReason = 1
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT AuthorizationErrorReason = 2
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_NOT_FOUND            AuthorizationErrorReason = 3
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_FOUND    AuthorizationErrorReason = 4
+	// La cuenta existe pero está congelada o cerrada.
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_OPERATIVE AuthorizationErrorReason = 5
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_EXPIRED               AuthorizationErrorReason = 6
+	// La operación no aplica al estado actual (reembolsar sin capturar, por ejemplo).
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INVALID_STATE      AuthorizationErrorReason = 7
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_INSUFFICIENT_FUNDS AuthorizationErrorReason = 8
+	AuthorizationErrorReason_AUTHORIZATION_ERROR_REASON_CURRENCY_MISMATCH  AuthorizationErrorReason = 9
+)
+
+// Enum value maps for AuthorizationErrorReason.
+var (
+	AuthorizationErrorReason_name = map[int32]string{
+		0: "AUTHORIZATION_ERROR_REASON_UNSPECIFIED",
+		1: "AUTHORIZATION_ERROR_REASON_INVALID",
+		2: "AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT",
+		3: "AUTHORIZATION_ERROR_REASON_NOT_FOUND",
+		4: "AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_FOUND",
+		5: "AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_OPERATIVE",
+		6: "AUTHORIZATION_ERROR_REASON_EXPIRED",
+		7: "AUTHORIZATION_ERROR_REASON_INVALID_STATE",
+		8: "AUTHORIZATION_ERROR_REASON_INSUFFICIENT_FUNDS",
+		9: "AUTHORIZATION_ERROR_REASON_CURRENCY_MISMATCH",
+	}
+	AuthorizationErrorReason_value = map[string]int32{
+		"AUTHORIZATION_ERROR_REASON_UNSPECIFIED":           0,
+		"AUTHORIZATION_ERROR_REASON_INVALID":               1,
+		"AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT":  2,
+		"AUTHORIZATION_ERROR_REASON_NOT_FOUND":             3,
+		"AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_FOUND":     4,
+		"AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_OPERATIVE": 5,
+		"AUTHORIZATION_ERROR_REASON_EXPIRED":               6,
+		"AUTHORIZATION_ERROR_REASON_INVALID_STATE":         7,
+		"AUTHORIZATION_ERROR_REASON_INSUFFICIENT_FUNDS":    8,
+		"AUTHORIZATION_ERROR_REASON_CURRENCY_MISMATCH":     9,
+	}
+)
+
+func (x AuthorizationErrorReason) Enum() *AuthorizationErrorReason {
+	p := new(AuthorizationErrorReason)
+	*p = x
+	return p
+}
+
+func (x AuthorizationErrorReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuthorizationErrorReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_aibank_core_v1_core_proto_enumTypes[7].Descriptor()
+}
+
+func (AuthorizationErrorReason) Type() protoreflect.EnumType {
+	return &file_aibank_core_v1_core_proto_enumTypes[7]
+}
+
+func (x AuthorizationErrorReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuthorizationErrorReason.Descriptor instead.
+func (AuthorizationErrorReason) EnumDescriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{7}
+}
+
 // Importe monetario en MICRAS: millonésimas (10^-6) de la unidad mayor.
 // 1 USD = 1_000_000; 1 centavo = 10_000; $0,001 = 1_000.
 //
@@ -1915,6 +2058,492 @@ func (x *RunInternalCheckResponse) GetFindingsCount() int32 {
 	return 0
 }
 
+type Authorization struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	PayerAccountId string                 `protobuf:"bytes,3,opt,name=payer_account_id,json=payerAccountId,proto3" json:"payer_account_id,omitempty"`
+	PayeeAccountId string                 `protobuf:"bytes,4,opt,name=payee_account_id,json=payeeAccountId,proto3" json:"payee_account_id,omitempty"`
+	Amount         *Money                 `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
+	Status         AuthorizationStatus    `protobuf:"varint,6,opt,name=status,proto3,enum=aibank.core.v1.AuthorizationStatus" json:"status,omitempty"`
+	// Cuánto se devolvió ya. Cero mientras no haya reembolso.
+	RefundedMicros int64                  `protobuf:"varint,7,opt,name=refunded_micros,json=refundedMicros,proto3" json:"refunded_micros,omitempty"`
+	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Presente solo si se capturó.
+	SettledAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"`
+	ReleasedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=released_at,json=releasedAt,proto3,oneof" json:"released_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Authorization) Reset() {
+	*x = Authorization{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Authorization) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Authorization) ProtoMessage() {}
+
+func (x *Authorization) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Authorization.ProtoReflect.Descriptor instead.
+func (*Authorization) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *Authorization) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Authorization) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *Authorization) GetPayerAccountId() string {
+	if x != nil {
+		return x.PayerAccountId
+	}
+	return ""
+}
+
+func (x *Authorization) GetPayeeAccountId() string {
+	if x != nil {
+		return x.PayeeAccountId
+	}
+	return ""
+}
+
+func (x *Authorization) GetAmount() *Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *Authorization) GetStatus() AuthorizationStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AuthorizationStatus_AUTHORIZATION_STATUS_UNSPECIFIED
+}
+
+func (x *Authorization) GetRefundedMicros() int64 {
+	if x != nil {
+		return x.RefundedMicros
+	}
+	return 0
+}
+
+func (x *Authorization) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *Authorization) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Authorization) GetSettledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SettledAt
+	}
+	return nil
+}
+
+func (x *Authorization) GetReleasedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReleasedAt
+	}
+	return nil
+}
+
+type AuthorizeRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	PayerAccountId string                 `protobuf:"bytes,2,opt,name=payer_account_id,json=payerAccountId,proto3" json:"payer_account_id,omitempty"`
+	PayeeAccountId string                 `protobuf:"bytes,3,opt,name=payee_account_id,json=payeeAccountId,proto3" json:"payee_account_id,omitempty"`
+	Amount         *Money                 `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	// Vigencia. 0 = valor por defecto del servidor (15 minutos).
+	TtlMinutes    int32 `protobuf:"varint,5,opt,name=ttl_minutes,json=ttlMinutes,proto3" json:"ttl_minutes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthorizeRequest) Reset() {
+	*x = AuthorizeRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthorizeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthorizeRequest) ProtoMessage() {}
+
+func (x *AuthorizeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthorizeRequest.ProtoReflect.Descriptor instead.
+func (*AuthorizeRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AuthorizeRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *AuthorizeRequest) GetPayerAccountId() string {
+	if x != nil {
+		return x.PayerAccountId
+	}
+	return ""
+}
+
+func (x *AuthorizeRequest) GetPayeeAccountId() string {
+	if x != nil {
+		return x.PayeeAccountId
+	}
+	return ""
+}
+
+func (x *AuthorizeRequest) GetAmount() *Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *AuthorizeRequest) GetTtlMinutes() int32 {
+	if x != nil {
+		return x.TtlMinutes
+	}
+	return 0
+}
+
+type AuthorizeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authorization *Authorization         `protobuf:"bytes,1,opt,name=authorization,proto3" json:"authorization,omitempty"`
+	// true si la clave ya existía y se devolvió la autorización original.
+	Replayed      bool `protobuf:"varint,2,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthorizeResponse) Reset() {
+	*x = AuthorizeResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthorizeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthorizeResponse) ProtoMessage() {}
+
+func (x *AuthorizeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthorizeResponse.ProtoReflect.Descriptor instead.
+func (*AuthorizeResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AuthorizeResponse) GetAuthorization() *Authorization {
+	if x != nil {
+		return x.Authorization
+	}
+	return nil
+}
+
+func (x *AuthorizeResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+type CaptureRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationId string                 `protobuf:"bytes,1,opt,name=authorization_id,json=authorizationId,proto3" json:"authorization_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CaptureRequest) Reset() {
+	*x = CaptureRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CaptureRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CaptureRequest) ProtoMessage() {}
+
+func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
+func (*CaptureRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CaptureRequest) GetAuthorizationId() string {
+	if x != nil {
+		return x.AuthorizationId
+	}
+	return ""
+}
+
+type RefundRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationId string                 `protobuf:"bytes,1,opt,name=authorization_id,json=authorizationId,proto3" json:"authorization_id,omitempty"`
+	// 0 = reembolso total de lo que quede sin devolver.
+	AmountMicros  int64 `protobuf:"varint,2,opt,name=amount_micros,json=amountMicros,proto3" json:"amount_micros,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefundRequest) Reset() {
+	*x = RefundRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefundRequest) ProtoMessage() {}
+
+func (x *RefundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefundRequest.ProtoReflect.Descriptor instead.
+func (*RefundRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *RefundRequest) GetAuthorizationId() string {
+	if x != nil {
+		return x.AuthorizationId
+	}
+	return ""
+}
+
+func (x *RefundRequest) GetAmountMicros() int64 {
+	if x != nil {
+		return x.AmountMicros
+	}
+	return 0
+}
+
+type GetAuthorizationRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationId string                 `protobuf:"bytes,1,opt,name=authorization_id,json=authorizationId,proto3" json:"authorization_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GetAuthorizationRequest) Reset() {
+	*x = GetAuthorizationRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAuthorizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAuthorizationRequest) ProtoMessage() {}
+
+func (x *GetAuthorizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAuthorizationRequest.ProtoReflect.Descriptor instead.
+func (*GetAuthorizationRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GetAuthorizationRequest) GetAuthorizationId() string {
+	if x != nil {
+		return x.AuthorizationId
+	}
+	return ""
+}
+
+type ReleaseExpiredRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Máximo de autorizaciones a liberar en esta pasada. 0 = valor por defecto.
+	Limit         int32 `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseExpiredRequest) Reset() {
+	*x = ReleaseExpiredRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseExpiredRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseExpiredRequest) ProtoMessage() {}
+
+func (x *ReleaseExpiredRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseExpiredRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseExpiredRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ReleaseExpiredRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ReleaseExpiredResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationIds []string               `protobuf:"bytes,1,rep,name=authorization_ids,json=authorizationIds,proto3" json:"authorization_ids,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ReleaseExpiredResponse) Reset() {
+	*x = ReleaseExpiredResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseExpiredResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseExpiredResponse) ProtoMessage() {}
+
+func (x *ReleaseExpiredResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseExpiredResponse.ProtoReflect.Descriptor instead.
+func (*ReleaseExpiredResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ReleaseExpiredResponse) GetAuthorizationIds() []string {
+	if x != nil {
+		return x.AuthorizationIds
+	}
+	return nil
+}
+
 var File_aibank_core_v1_core_proto protoreflect.FileDescriptor
 
 const file_aibank_core_v1_core_proto_rawDesc = "" +
@@ -2043,7 +2672,47 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x17RunInternalCheckRequest\"X\n" +
 	"\x18RunInternalCheckResponse\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12%\n" +
-	"\x0efindings_count\x18\x02 \x01(\x05R\rfindingsCount*Q\n" +
+	"\x0efindings_count\x18\x02 \x01(\x05R\rfindingsCount\"\xc8\x04\n" +
+	"\rAuthorization\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12(\n" +
+	"\x10payer_account_id\x18\x03 \x01(\tR\x0epayerAccountId\x12(\n" +
+	"\x10payee_account_id\x18\x04 \x01(\tR\x0epayeeAccountId\x12-\n" +
+	"\x06amount\x18\x05 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x12;\n" +
+	"\x06status\x18\x06 \x01(\x0e2#.aibank.core.v1.AuthorizationStatusR\x06status\x12'\n" +
+	"\x0frefunded_micros\x18\a \x01(\x03R\x0erefundedMicros\x129\n" +
+	"\n" +
+	"expires_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x129\n" +
+	"\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12>\n" +
+	"\n" +
+	"settled_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampH\x00R\tsettledAt\x88\x01\x01\x12@\n" +
+	"\vreleased_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
+	"releasedAt\x88\x01\x01B\r\n" +
+	"\v_settled_atB\x0e\n" +
+	"\f_released_at\"\xdf\x01\n" +
+	"\x10AuthorizeRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12(\n" +
+	"\x10payer_account_id\x18\x02 \x01(\tR\x0epayerAccountId\x12(\n" +
+	"\x10payee_account_id\x18\x03 \x01(\tR\x0epayeeAccountId\x12-\n" +
+	"\x06amount\x18\x04 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x12\x1f\n" +
+	"\vttl_minutes\x18\x05 \x01(\x05R\n" +
+	"ttlMinutes\"t\n" +
+	"\x11AuthorizeResponse\x12C\n" +
+	"\rauthorization\x18\x01 \x01(\v2\x1d.aibank.core.v1.AuthorizationR\rauthorization\x12\x1a\n" +
+	"\breplayed\x18\x02 \x01(\bR\breplayed\";\n" +
+	"\x0eCaptureRequest\x12)\n" +
+	"\x10authorization_id\x18\x01 \x01(\tR\x0fauthorizationId\"_\n" +
+	"\rRefundRequest\x12)\n" +
+	"\x10authorization_id\x18\x01 \x01(\tR\x0fauthorizationId\x12#\n" +
+	"\ramount_micros\x18\x02 \x01(\x03R\famountMicros\"D\n" +
+	"\x17GetAuthorizationRequest\x12)\n" +
+	"\x10authorization_id\x18\x01 \x01(\tR\x0fauthorizationId\"-\n" +
+	"\x15ReleaseExpiredRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\"E\n" +
+	"\x16ReleaseExpiredResponse\x12+\n" +
+	"\x11authorization_ids\x18\x01 \x03(\tR\x10authorizationIds*Q\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_DEBIT\x10\x01\x12\x14\n" +
@@ -2078,7 +2747,26 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x1eFINDING_KIND_MISSING_IN_LEDGER\x10\x02\x12$\n" +
 	" FINDING_KIND_MISSING_AT_PROVIDER\x10\x03\x12 \n" +
 	"\x1cFINDING_KIND_AMOUNT_MISMATCH\x10\x04\x12\x1f\n" +
-	"\x1bFINDING_KIND_STALE_SUSPENSE\x10\x052\xff\x01\n" +
+	"\x1bFINDING_KIND_STALE_SUSPENSE\x10\x05*\x98\x02\n" +
+	"\x13AuthorizationStatus\x12$\n" +
+	" AUTHORIZATION_STATUS_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fAUTHORIZATION_STATUS_AUTHORIZED\x10\x01\x12!\n" +
+	"\x1dAUTHORIZATION_STATUS_CAPTURED\x10\x02\x12+\n" +
+	"'AUTHORIZATION_STATUS_PARTIALLY_REFUNDED\x10\x03\x12!\n" +
+	"\x1dAUTHORIZATION_STATUS_REFUNDED\x10\x04\x12!\n" +
+	"\x1dAUTHORIZATION_STATUS_RELEASED\x10\x05\x12 \n" +
+	"\x1cAUTHORIZATION_STATUS_EXPIRED\x10\x06*\xf0\x03\n" +
+	"\x18AuthorizationErrorReason\x12*\n" +
+	"&AUTHORIZATION_ERROR_REASON_UNSPECIFIED\x10\x00\x12&\n" +
+	"\"AUTHORIZATION_ERROR_REASON_INVALID\x10\x01\x123\n" +
+	"/AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT\x10\x02\x12(\n" +
+	"$AUTHORIZATION_ERROR_REASON_NOT_FOUND\x10\x03\x120\n" +
+	",AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_FOUND\x10\x04\x124\n" +
+	"0AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_OPERATIVE\x10\x05\x12&\n" +
+	"\"AUTHORIZATION_ERROR_REASON_EXPIRED\x10\x06\x12,\n" +
+	"(AUTHORIZATION_ERROR_REASON_INVALID_STATE\x10\a\x121\n" +
+	"-AUTHORIZATION_ERROR_REASON_INSUFFICIENT_FUNDS\x10\b\x120\n" +
+	",AUTHORIZATION_ERROR_REASON_CURRENCY_MISMATCH\x10\t2\xff\x01\n" +
 	"\rLedgerService\x12A\n" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +
@@ -2097,7 +2785,13 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x15ReconciliationService\x12e\n" +
 	"\x10ListOpenFindings\x12'.aibank.core.v1.ListOpenFindingsRequest\x1a(.aibank.core.v1.ListOpenFindingsResponse\x12_\n" +
 	"\x0eResolveFinding\x12%.aibank.core.v1.ResolveFindingRequest\x1a&.aibank.core.v1.ResolveFindingResponse\x12e\n" +
-	"\x10RunInternalCheck\x12'.aibank.core.v1.RunInternalCheckRequest\x1a(.aibank.core.v1.RunInternalCheckResponseB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
+	"\x10RunInternalCheck\x12'.aibank.core.v1.RunInternalCheckRequest\x1a(.aibank.core.v1.RunInternalCheckResponse2\xb7\x03\n" +
+	"\x14AuthorizationService\x12P\n" +
+	"\tAuthorize\x12 .aibank.core.v1.AuthorizeRequest\x1a!.aibank.core.v1.AuthorizeResponse\x12H\n" +
+	"\aCapture\x12\x1e.aibank.core.v1.CaptureRequest\x1a\x1d.aibank.core.v1.Authorization\x12F\n" +
+	"\x06Refund\x12\x1d.aibank.core.v1.RefundRequest\x1a\x1d.aibank.core.v1.Authorization\x12Z\n" +
+	"\x10GetAuthorization\x12'.aibank.core.v1.GetAuthorizationRequest\x1a\x1d.aibank.core.v1.Authorization\x12_\n" +
+	"\x0eReleaseExpired\x12%.aibank.core.v1.ReleaseExpiredRequest\x1a&.aibank.core.v1.ReleaseExpiredResponseB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
 
 var (
 	file_aibank_core_v1_core_proto_rawDescOnce sync.Once
@@ -2111,8 +2805,8 @@ func file_aibank_core_v1_core_proto_rawDescGZIP() []byte {
 	return file_aibank_core_v1_core_proto_rawDescData
 }
 
-var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_aibank_core_v1_core_proto_goTypes = []any{
 	(Direction)(0),                       // 0: aibank.core.v1.Direction
 	(AccountType)(0),                     // 1: aibank.core.v1.AccountType
@@ -2120,80 +2814,108 @@ var file_aibank_core_v1_core_proto_goTypes = []any{
 	(AccountStatus)(0),                   // 3: aibank.core.v1.AccountStatus
 	(PostingErrorReason)(0),              // 4: aibank.core.v1.PostingErrorReason
 	(FindingKind)(0),                     // 5: aibank.core.v1.FindingKind
-	(*Money)(nil),                        // 6: aibank.core.v1.Money
-	(*Entry)(nil),                        // 7: aibank.core.v1.Entry
-	(*PostRequest)(nil),                  // 8: aibank.core.v1.PostRequest
-	(*PostResponse)(nil),                 // 9: aibank.core.v1.PostResponse
-	(*GetBalanceRequest)(nil),            // 10: aibank.core.v1.GetBalanceRequest
-	(*GetBalanceResponse)(nil),           // 11: aibank.core.v1.GetBalanceResponse
-	(*AccountEntry)(nil),                 // 12: aibank.core.v1.AccountEntry
-	(*ListEntriesRequest)(nil),           // 13: aibank.core.v1.ListEntriesRequest
-	(*ListEntriesResponse)(nil),          // 14: aibank.core.v1.ListEntriesResponse
-	(*Account)(nil),                      // 15: aibank.core.v1.Account
-	(*OpenCustomerAccountRequest)(nil),   // 16: aibank.core.v1.OpenCustomerAccountRequest
-	(*CreateInternalAccountRequest)(nil), // 17: aibank.core.v1.CreateInternalAccountRequest
-	(*GetAccountRequest)(nil),            // 18: aibank.core.v1.GetAccountRequest
-	(*GetAccountByIdRequest)(nil),        // 19: aibank.core.v1.GetAccountByIdRequest
-	(*Product)(nil),                      // 20: aibank.core.v1.Product
-	(*CreateProductRequest)(nil),         // 21: aibank.core.v1.CreateProductRequest
-	(*GetProductRequest)(nil),            // 22: aibank.core.v1.GetProductRequest
-	(*Finding)(nil),                      // 23: aibank.core.v1.Finding
-	(*ListOpenFindingsRequest)(nil),      // 24: aibank.core.v1.ListOpenFindingsRequest
-	(*ListOpenFindingsResponse)(nil),     // 25: aibank.core.v1.ListOpenFindingsResponse
-	(*ResolveFindingRequest)(nil),        // 26: aibank.core.v1.ResolveFindingRequest
-	(*ResolveFindingResponse)(nil),       // 27: aibank.core.v1.ResolveFindingResponse
-	(*RunInternalCheckRequest)(nil),      // 28: aibank.core.v1.RunInternalCheckRequest
-	(*RunInternalCheckResponse)(nil),     // 29: aibank.core.v1.RunInternalCheckResponse
-	(*timestamppb.Timestamp)(nil),        // 30: google.protobuf.Timestamp
+	(AuthorizationStatus)(0),             // 6: aibank.core.v1.AuthorizationStatus
+	(AuthorizationErrorReason)(0),        // 7: aibank.core.v1.AuthorizationErrorReason
+	(*Money)(nil),                        // 8: aibank.core.v1.Money
+	(*Entry)(nil),                        // 9: aibank.core.v1.Entry
+	(*PostRequest)(nil),                  // 10: aibank.core.v1.PostRequest
+	(*PostResponse)(nil),                 // 11: aibank.core.v1.PostResponse
+	(*GetBalanceRequest)(nil),            // 12: aibank.core.v1.GetBalanceRequest
+	(*GetBalanceResponse)(nil),           // 13: aibank.core.v1.GetBalanceResponse
+	(*AccountEntry)(nil),                 // 14: aibank.core.v1.AccountEntry
+	(*ListEntriesRequest)(nil),           // 15: aibank.core.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),          // 16: aibank.core.v1.ListEntriesResponse
+	(*Account)(nil),                      // 17: aibank.core.v1.Account
+	(*OpenCustomerAccountRequest)(nil),   // 18: aibank.core.v1.OpenCustomerAccountRequest
+	(*CreateInternalAccountRequest)(nil), // 19: aibank.core.v1.CreateInternalAccountRequest
+	(*GetAccountRequest)(nil),            // 20: aibank.core.v1.GetAccountRequest
+	(*GetAccountByIdRequest)(nil),        // 21: aibank.core.v1.GetAccountByIdRequest
+	(*Product)(nil),                      // 22: aibank.core.v1.Product
+	(*CreateProductRequest)(nil),         // 23: aibank.core.v1.CreateProductRequest
+	(*GetProductRequest)(nil),            // 24: aibank.core.v1.GetProductRequest
+	(*Finding)(nil),                      // 25: aibank.core.v1.Finding
+	(*ListOpenFindingsRequest)(nil),      // 26: aibank.core.v1.ListOpenFindingsRequest
+	(*ListOpenFindingsResponse)(nil),     // 27: aibank.core.v1.ListOpenFindingsResponse
+	(*ResolveFindingRequest)(nil),        // 28: aibank.core.v1.ResolveFindingRequest
+	(*ResolveFindingResponse)(nil),       // 29: aibank.core.v1.ResolveFindingResponse
+	(*RunInternalCheckRequest)(nil),      // 30: aibank.core.v1.RunInternalCheckRequest
+	(*RunInternalCheckResponse)(nil),     // 31: aibank.core.v1.RunInternalCheckResponse
+	(*Authorization)(nil),                // 32: aibank.core.v1.Authorization
+	(*AuthorizeRequest)(nil),             // 33: aibank.core.v1.AuthorizeRequest
+	(*AuthorizeResponse)(nil),            // 34: aibank.core.v1.AuthorizeResponse
+	(*CaptureRequest)(nil),               // 35: aibank.core.v1.CaptureRequest
+	(*RefundRequest)(nil),                // 36: aibank.core.v1.RefundRequest
+	(*GetAuthorizationRequest)(nil),      // 37: aibank.core.v1.GetAuthorizationRequest
+	(*ReleaseExpiredRequest)(nil),        // 38: aibank.core.v1.ReleaseExpiredRequest
+	(*ReleaseExpiredResponse)(nil),       // 39: aibank.core.v1.ReleaseExpiredResponse
+	(*timestamppb.Timestamp)(nil),        // 40: google.protobuf.Timestamp
 }
 var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	0,  // 0: aibank.core.v1.Entry.direction:type_name -> aibank.core.v1.Direction
-	6,  // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
-	7,  // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
-	30, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
-	6,  // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
-	6,  // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
+	8,  // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
+	9,  // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
+	40, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
+	8,  // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
+	8,  // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
 	0,  // 6: aibank.core.v1.AccountEntry.direction:type_name -> aibank.core.v1.Direction
-	6,  // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
-	30, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
-	12, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
+	8,  // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
+	40, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
+	14, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
 	1,  // 10: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
 	2,  // 11: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
 	3,  // 12: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
-	30, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	40, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 14: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
 	5,  // 15: aibank.core.v1.Finding.kind:type_name -> aibank.core.v1.FindingKind
-	30, // 16: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
-	23, // 17: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
-	8,  // 18: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
-	10, // 19: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
-	13, // 20: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
-	16, // 21: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
-	17, // 22: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
-	18, // 23: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
-	19, // 24: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
-	21, // 25: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
-	22, // 26: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
-	24, // 27: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
-	26, // 28: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
-	28, // 29: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
-	9,  // 30: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
-	11, // 31: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
-	14, // 32: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
-	15, // 33: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
-	15, // 34: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
-	15, // 35: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
-	15, // 36: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
-	20, // 37: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
-	20, // 38: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
-	25, // 39: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
-	27, // 40: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
-	29, // 41: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
-	30, // [30:42] is the sub-list for method output_type
-	18, // [18:30] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	40, // 16: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
+	25, // 17: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
+	8,  // 18: aibank.core.v1.Authorization.amount:type_name -> aibank.core.v1.Money
+	6,  // 19: aibank.core.v1.Authorization.status:type_name -> aibank.core.v1.AuthorizationStatus
+	40, // 20: aibank.core.v1.Authorization.expires_at:type_name -> google.protobuf.Timestamp
+	40, // 21: aibank.core.v1.Authorization.created_at:type_name -> google.protobuf.Timestamp
+	40, // 22: aibank.core.v1.Authorization.settled_at:type_name -> google.protobuf.Timestamp
+	40, // 23: aibank.core.v1.Authorization.released_at:type_name -> google.protobuf.Timestamp
+	8,  // 24: aibank.core.v1.AuthorizeRequest.amount:type_name -> aibank.core.v1.Money
+	32, // 25: aibank.core.v1.AuthorizeResponse.authorization:type_name -> aibank.core.v1.Authorization
+	10, // 26: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
+	12, // 27: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
+	15, // 28: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
+	18, // 29: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
+	19, // 30: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
+	20, // 31: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
+	21, // 32: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
+	23, // 33: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
+	24, // 34: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
+	26, // 35: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
+	28, // 36: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
+	30, // 37: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
+	33, // 38: aibank.core.v1.AuthorizationService.Authorize:input_type -> aibank.core.v1.AuthorizeRequest
+	35, // 39: aibank.core.v1.AuthorizationService.Capture:input_type -> aibank.core.v1.CaptureRequest
+	36, // 40: aibank.core.v1.AuthorizationService.Refund:input_type -> aibank.core.v1.RefundRequest
+	37, // 41: aibank.core.v1.AuthorizationService.GetAuthorization:input_type -> aibank.core.v1.GetAuthorizationRequest
+	38, // 42: aibank.core.v1.AuthorizationService.ReleaseExpired:input_type -> aibank.core.v1.ReleaseExpiredRequest
+	11, // 43: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
+	13, // 44: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
+	16, // 45: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
+	17, // 46: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
+	17, // 47: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
+	17, // 48: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
+	17, // 49: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
+	22, // 50: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
+	22, // 51: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
+	27, // 52: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
+	29, // 53: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
+	31, // 54: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
+	34, // 55: aibank.core.v1.AuthorizationService.Authorize:output_type -> aibank.core.v1.AuthorizeResponse
+	32, // 56: aibank.core.v1.AuthorizationService.Capture:output_type -> aibank.core.v1.Authorization
+	32, // 57: aibank.core.v1.AuthorizationService.Refund:output_type -> aibank.core.v1.Authorization
+	32, // 58: aibank.core.v1.AuthorizationService.GetAuthorization:output_type -> aibank.core.v1.Authorization
+	39, // 59: aibank.core.v1.AuthorizationService.ReleaseExpired:output_type -> aibank.core.v1.ReleaseExpiredResponse
+	43, // [43:60] is the sub-list for method output_type
+	26, // [26:43] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_aibank_core_v1_core_proto_init() }
@@ -2203,15 +2925,16 @@ func file_aibank_core_v1_core_proto_init() {
 	}
 	file_aibank_core_v1_core_proto_msgTypes[14].OneofWrappers = []any{}
 	file_aibank_core_v1_core_proto_msgTypes[15].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[24].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aibank_core_v1_core_proto_rawDesc), len(file_aibank_core_v1_core_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   24,
+			NumEnums:      8,
+			NumMessages:   32,
 			NumExtensions: 0,
-			NumServices:   4,
+			NumServices:   5,
 		},
 		GoTypes:           file_aibank_core_v1_core_proto_goTypes,
 		DependencyIndexes: file_aibank_core_v1_core_proto_depIdxs,

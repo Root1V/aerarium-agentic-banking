@@ -753,3 +753,267 @@ var ReconciliationService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "aibank/core/v1/core.proto",
 }
+
+const (
+	AuthorizationService_Authorize_FullMethodName        = "/aibank.core.v1.AuthorizationService/Authorize"
+	AuthorizationService_Capture_FullMethodName          = "/aibank.core.v1.AuthorizationService/Capture"
+	AuthorizationService_Refund_FullMethodName           = "/aibank.core.v1.AuthorizationService/Refund"
+	AuthorizationService_GetAuthorization_FullMethodName = "/aibank.core.v1.AuthorizationService/GetAuthorization"
+	AuthorizationService_ReleaseExpired_FullMethodName   = "/aibank.core.v1.AuthorizationService/ReleaseExpired"
+)
+
+// AuthorizationServiceClient is the client API for AuthorizationService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AuthorizationServiceClient interface {
+	// Retiene el monto en la cuenta pagadora. Idempotente por `idempotency_key`.
+	Authorize(ctx context.Context, in *AuthorizeRequest, opts ...grpc.CallOption) (*AuthorizeResponse, error)
+	// Liquida la retención al receptor. Idempotente por naturaleza: capturar dos
+	// veces devuelve la misma captura, con el mismo `settled_at`.
+	Capture(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (*Authorization, error)
+	// Devuelve dinero ya capturado al pagador.
+	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Authorization, error)
+	GetAuthorization(ctx context.Context, in *GetAuthorizationRequest, opts ...grpc.CallOption) (*Authorization, error)
+	// Libera las retenciones vencidas. La invoca un proceso periódico.
+	ReleaseExpired(ctx context.Context, in *ReleaseExpiredRequest, opts ...grpc.CallOption) (*ReleaseExpiredResponse, error)
+}
+
+type authorizationServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAuthorizationServiceClient(cc grpc.ClientConnInterface) AuthorizationServiceClient {
+	return &authorizationServiceClient{cc}
+}
+
+func (c *authorizationServiceClient) Authorize(ctx context.Context, in *AuthorizeRequest, opts ...grpc.CallOption) (*AuthorizeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeResponse)
+	err := c.cc.Invoke(ctx, AuthorizationService_Authorize_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorizationServiceClient) Capture(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (*Authorization, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Authorization)
+	err := c.cc.Invoke(ctx, AuthorizationService_Capture_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorizationServiceClient) Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Authorization, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Authorization)
+	err := c.cc.Invoke(ctx, AuthorizationService_Refund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorizationServiceClient) GetAuthorization(ctx context.Context, in *GetAuthorizationRequest, opts ...grpc.CallOption) (*Authorization, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Authorization)
+	err := c.cc.Invoke(ctx, AuthorizationService_GetAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorizationServiceClient) ReleaseExpired(ctx context.Context, in *ReleaseExpiredRequest, opts ...grpc.CallOption) (*ReleaseExpiredResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseExpiredResponse)
+	err := c.cc.Invoke(ctx, AuthorizationService_ReleaseExpired_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AuthorizationServiceServer is the server API for AuthorizationService service.
+// All implementations must embed UnimplementedAuthorizationServiceServer
+// for forward compatibility.
+type AuthorizationServiceServer interface {
+	// Retiene el monto en la cuenta pagadora. Idempotente por `idempotency_key`.
+	Authorize(context.Context, *AuthorizeRequest) (*AuthorizeResponse, error)
+	// Liquida la retención al receptor. Idempotente por naturaleza: capturar dos
+	// veces devuelve la misma captura, con el mismo `settled_at`.
+	Capture(context.Context, *CaptureRequest) (*Authorization, error)
+	// Devuelve dinero ya capturado al pagador.
+	Refund(context.Context, *RefundRequest) (*Authorization, error)
+	GetAuthorization(context.Context, *GetAuthorizationRequest) (*Authorization, error)
+	// Libera las retenciones vencidas. La invoca un proceso periódico.
+	ReleaseExpired(context.Context, *ReleaseExpiredRequest) (*ReleaseExpiredResponse, error)
+	mustEmbedUnimplementedAuthorizationServiceServer()
+}
+
+// UnimplementedAuthorizationServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAuthorizationServiceServer struct{}
+
+func (UnimplementedAuthorizationServiceServer) Authorize(context.Context, *AuthorizeRequest) (*AuthorizeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Authorize not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) Capture(context.Context, *CaptureRequest) (*Authorization, error) {
+	return nil, status.Error(codes.Unimplemented, "method Capture not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) Refund(context.Context, *RefundRequest) (*Authorization, error) {
+	return nil, status.Error(codes.Unimplemented, "method Refund not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) GetAuthorization(context.Context, *GetAuthorizationRequest) (*Authorization, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuthorization not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) ReleaseExpired(context.Context, *ReleaseExpiredRequest) (*ReleaseExpiredResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseExpired not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) mustEmbedUnimplementedAuthorizationServiceServer() {}
+func (UnimplementedAuthorizationServiceServer) testEmbeddedByValue()                              {}
+
+// UnsafeAuthorizationServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AuthorizationServiceServer will
+// result in compilation errors.
+type UnsafeAuthorizationServiceServer interface {
+	mustEmbedUnimplementedAuthorizationServiceServer()
+}
+
+func RegisterAuthorizationServiceServer(s grpc.ServiceRegistrar, srv AuthorizationServiceServer) {
+	// If the following call panics, it indicates UnimplementedAuthorizationServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AuthorizationService_ServiceDesc, srv)
+}
+
+func _AuthorizationService_Authorize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).Authorize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_Authorize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).Authorize(ctx, req.(*AuthorizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorizationService_Capture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CaptureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).Capture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_Capture_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).Capture(ctx, req.(*CaptureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorizationService_Refund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).Refund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_Refund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).Refund(ctx, req.(*RefundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorizationService_GetAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).GetAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_GetAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).GetAuthorization(ctx, req.(*GetAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthorizationService_ReleaseExpired_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseExpiredRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).ReleaseExpired(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_ReleaseExpired_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).ReleaseExpired(ctx, req.(*ReleaseExpiredRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AuthorizationService_ServiceDesc is the grpc.ServiceDesc for AuthorizationService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AuthorizationService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "aibank.core.v1.AuthorizationService",
+	HandlerType: (*AuthorizationServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Authorize",
+			Handler:    _AuthorizationService_Authorize_Handler,
+		},
+		{
+			MethodName: "Capture",
+			Handler:    _AuthorizationService_Capture_Handler,
+		},
+		{
+			MethodName: "Refund",
+			Handler:    _AuthorizationService_Refund_Handler,
+		},
+		{
+			MethodName: "GetAuthorization",
+			Handler:    _AuthorizationService_GetAuthorization_Handler,
+		},
+		{
+			MethodName: "ReleaseExpired",
+			Handler:    _AuthorizationService_ReleaseExpired_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "aibank/core/v1/core.proto",
+}

@@ -20,10 +20,11 @@ import (
 
 // Client habla con el core bancario.
 type Client struct {
-	conn     *grpc.ClientConn
-	ledger   corev1.LedgerServiceClient
-	accounts corev1.AccountServiceClient
-	products corev1.ProductServiceClient
+	conn           *grpc.ClientConn
+	ledger         corev1.LedgerServiceClient
+	accounts       corev1.AccountServiceClient
+	products       corev1.ProductServiceClient
+	authorizations corev1.AuthorizationServiceClient
 }
 
 // Dial abre una conexión con el core.
@@ -42,10 +43,11 @@ func Dial(_ context.Context, target string) (*Client, error) {
 		return nil, fmt.Errorf("conectar al core: %w", err)
 	}
 	return &Client{
-		conn:     conn,
-		ledger:   corev1.NewLedgerServiceClient(conn),
-		accounts: corev1.NewAccountServiceClient(conn),
-		products: corev1.NewProductServiceClient(conn),
+		conn:           conn,
+		ledger:         corev1.NewLedgerServiceClient(conn),
+		accounts:       corev1.NewAccountServiceClient(conn),
+		products:       corev1.NewProductServiceClient(conn),
+		authorizations: corev1.NewAuthorizationServiceClient(conn),
 	}, nil
 }
 
@@ -56,10 +58,10 @@ func (c *Client) Close() error { return c.conn.Close() }
 // Entry es un asiento contable. El monto es siempre positivo y va en micras
 // (millonésimas, 10^-6); el signo lo aporta la dirección.
 type Entry struct {
-	AccountID   string
-	Direction   corev1.Direction
+	AccountID    string
+	Direction    corev1.Direction
 	AmountMicros int64
-	Currency    string
+	Currency     string
 }
 
 // Debit construye un asiento al debe.
@@ -116,8 +118,8 @@ func (c *Client) Post(ctx context.Context, idempotencyKey, kind string, entries 
 // Balance es el saldo de una cuenta junto a su verificación contra el ledger.
 type Balance struct {
 	AmountMicros int64
-	Currency    string
-	EntryCount  int64
+	Currency     string
+	EntryCount   int64
 	// ProjectedMicros recalcula el saldo desde los asientos. Si difiere de
 	// AmountMicros hay una inconsistencia contable que debe escalarse.
 	ProjectedMicros int64
@@ -135,8 +137,8 @@ func (c *Client) GetBalance(ctx context.Context, accountID string) (*Balance, er
 	}
 	return &Balance{
 		AmountMicros:    resp.Balance.AmountMicros,
-		Currency:       resp.Balance.Currency,
-		EntryCount:     resp.EntryCount,
+		Currency:        resp.Balance.Currency,
+		EntryCount:      resp.EntryCount,
 		ProjectedMicros: resp.ProjectedBalance.AmountMicros,
 	}, nil
 }
@@ -146,12 +148,12 @@ type Movement struct {
 	Cursor        string
 	TransactionID string
 	// Direction indica si el movimiento suma o resta en la cuenta consultada.
-	Direction   corev1.Direction
+	Direction    corev1.Direction
 	AmountMicros int64
-	Currency    string
-	Kind        string
-	Description string
-	PostedAt    time.Time
+	Currency     string
+	Kind         string
+	Description  string
+	PostedAt     time.Time
 }
 
 // Statement es una página del extracto.
@@ -177,7 +179,7 @@ func (c *Client) ListMovements(ctx context.Context, accountID string, limit int3
 			Cursor:        e.Cursor,
 			TransactionID: e.TransactionId,
 			Direction:     e.Direction,
-			AmountMicros:   e.Amount.AmountMicros,
+			AmountMicros:  e.Amount.AmountMicros,
 			Currency:      e.Amount.Currency,
 			Kind:          e.Kind,
 			Description:   e.Description,
@@ -236,10 +238,10 @@ func (c *Client) GetAccountByID(ctx context.Context, id string) (*corev1.Account
 
 // NewProduct describe un producto del catálogo. Los topes nil significan "sin tope".
 type NewProduct struct {
-	Code                string
-	Name                string
-	Currency            string
-	AllowsOverdraft     bool
+	Code                 string
+	Name                 string
+	Currency             string
+	AllowsOverdraft      bool
 	MaxBalanceMicros     *int64
 	MaxTransactionMicros *int64
 }
@@ -247,10 +249,10 @@ type NewProduct struct {
 func (c *Client) CreateProduct(ctx context.Context, p NewProduct) (*corev1.Product, error) {
 	var trailer metadata.MD
 	product, err := c.products.CreateProduct(ctx, &corev1.CreateProductRequest{
-		Code:                p.Code,
-		Name:                p.Name,
-		Currency:            p.Currency,
-		AllowsOverdraft:     p.AllowsOverdraft,
+		Code:                 p.Code,
+		Name:                 p.Name,
+		Currency:             p.Currency,
+		AllowsOverdraft:      p.AllowsOverdraft,
 		MaxBalanceMicros:     p.MaxBalanceMicros,
 		MaxTransactionMicros: p.MaxTransactionMicros,
 	}, grpc.Trailer(&trailer))
