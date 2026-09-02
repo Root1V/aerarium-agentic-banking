@@ -187,93 +187,13 @@ impl AuthorizationService {
         &self,
         command: &AuthorizeCommand,
     ) -> Result<AuthorizeResult, AuthorizationError> {
-        validate(command)?;
-        let hash = command_hash(command);
-
         let mut tx = self.pool.begin().await?;
-
-        // Si la clave ya existe, se devuelve la original sin volver a retener.
-        if let Some((existing, existing_hash)) =
-            find_by_key(&mut tx, &command.idempotency_key).await?
-        {
-            if existing_hash != hash {
-                return Err(AuthorizationError::IdempotencyConflict(
-                    command.idempotency_key.clone(),
-                ));
-            }
-            return Ok(AuthorizeResult { authorization: existing, replayed: true });
-        }
-
-        let payer = load_operative_account(&mut tx, command.payer_account_id).await?;
-        let payee = load_operative_account(&mut tx, command.payee_account_id).await?;
-
-        if payer.currency != command.currency || payee.currency != command.currency {
-            return Err(AuthorizationError::Invalid(format!(
-                "currency mismatch: payer {}, payee {}, requested {}",
-                payer.currency, payee.currency, command.currency
-            )));
-        }
-
-        let holds = find_holds_account(&mut tx, &command.currency).await?;
-
-        let posting = PostingRequest::new(
-            format!("auth-hold-{}", command.idempotency_key),
-            "authorization_hold",
-            vec![
-                EntryCommand::debit(payer.id, command.amount_micros, &command.currency),
-                EntryCommand::credit(holds, command.amount_micros, &command.currency),
-            ],
-        );
-        let hold = post_in_tx(&mut tx, &posting).await?;
-
-        let ttl = command.ttl_minutes.unwrap_or(DEFAULT_TTL_MINUTES);
-        let expires_at = Utc::now() + Duration::minutes(ttl);
-
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO authorizations (
-                idempotency_key, request_hash, payer_account_id, payee_account_id,
-                amount_micros, currency, hold_transaction_id, expires_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, created_at
-            "#,
-            command.idempotency_key,
-            hash,
-            payer.id,
-            payee.id,
-            command.amount_micros,
-            command.currency,
-            hold.transaction.id,
-            expires_at,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(map_db_error)?;
+        let result = authorize_in_tx(&mut tx, command).await?;
 
         // El COMMIT es donde corren los triggers diferidos: si el pagador no tenía
         // saldo, la retención Y la autorización se pierden juntas.
         tx.commit().await.map_err(map_db_error)?;
-
-        Ok(AuthorizeResult {
-            authorization: Authorization {
-                id: row.id,
-                idempotency_key: command.idempotency_key.clone(),
-                payer_account_id: payer.id,
-                payee_account_id: payee.id,
-                amount_micros: command.amount_micros,
-                currency: command.currency.clone(),
-                status: AuthorizationStatus::Authorized,
-                refunded_micros: 0,
-                hold_transaction_id: hold.transaction.id,
-                settle_transaction_id: None,
-                expires_at,
-                created_at: row.created_at,
-                settled_at: None,
-                released_at: None,
-            },
-            replayed: false,
-        })
+        Ok(result)
     }
 
     /// Efectiviza una autorización: mueve el dinero de la retención al receptor.
@@ -497,6 +417,97 @@ impl AuthorizationService {
 }
 
 // ---------------------------------------------------------------- internos
+
+/// Retiene dentro de una transacción que abre el llamador.
+///
+/// Es `pub(crate)` para que el módulo de mandatos pueda comprobar el permiso,
+/// retener y registrar el consumo **en la misma transacción**. Si el mandato se
+/// verificara aparte, entre la comprobación y la retención cabría una revocación
+/// —o una segunda autorización concurrente— y el tope dejaría de valer.
+pub(crate) async fn authorize_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &AuthorizeCommand,
+) -> Result<AuthorizeResult, AuthorizationError> {
+    validate(command)?;
+    let hash = command_hash(command);
+
+    // Si la clave ya existe, se devuelve la original sin volver a retener.
+    if let Some((existing, existing_hash)) = find_by_key(tx, &command.idempotency_key).await? {
+        if existing_hash != hash {
+            return Err(AuthorizationError::IdempotencyConflict(
+                command.idempotency_key.clone(),
+            ));
+        }
+        return Ok(AuthorizeResult { authorization: existing, replayed: true });
+    }
+
+    let payer = load_operative_account(tx, command.payer_account_id).await?;
+    let payee = load_operative_account(tx, command.payee_account_id).await?;
+
+    if payer.currency != command.currency || payee.currency != command.currency {
+        return Err(AuthorizationError::Invalid(format!(
+            "currency mismatch: payer {}, payee {}, requested {}",
+            payer.currency, payee.currency, command.currency
+        )));
+    }
+
+    let holds = find_holds_account(tx, &command.currency).await?;
+
+    let posting = PostingRequest::new(
+        format!("auth-hold-{}", command.idempotency_key),
+        "authorization_hold",
+        vec![
+            EntryCommand::debit(payer.id, command.amount_micros, &command.currency),
+            EntryCommand::credit(holds, command.amount_micros, &command.currency),
+        ],
+    );
+    let hold = post_in_tx(tx, &posting).await?;
+
+    let ttl = command.ttl_minutes.unwrap_or(DEFAULT_TTL_MINUTES);
+    let expires_at = Utc::now() + Duration::minutes(ttl);
+
+    let row = sqlx::query!(
+        r#"
+        INSERT INTO authorizations (
+            idempotency_key, request_hash, payer_account_id, payee_account_id,
+            amount_micros, currency, hold_transaction_id, expires_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, created_at
+        "#,
+        command.idempotency_key,
+        hash,
+        payer.id,
+        payee.id,
+        command.amount_micros,
+        command.currency,
+        hold.transaction.id,
+        expires_at,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(map_db_error)?;
+
+    Ok(AuthorizeResult {
+        authorization: Authorization {
+            id: row.id,
+            idempotency_key: command.idempotency_key.clone(),
+            payer_account_id: payer.id,
+            payee_account_id: payee.id,
+            amount_micros: command.amount_micros,
+            currency: command.currency.clone(),
+            status: AuthorizationStatus::Authorized,
+            refunded_micros: 0,
+            hold_transaction_id: hold.transaction.id,
+            settle_transaction_id: None,
+            expires_at,
+            created_at: row.created_at,
+            settled_at: None,
+            released_at: None,
+        },
+        replayed: false,
+    })
+}
 
 async fn release_locked(
     tx: &mut Transaction<'_, Postgres>,

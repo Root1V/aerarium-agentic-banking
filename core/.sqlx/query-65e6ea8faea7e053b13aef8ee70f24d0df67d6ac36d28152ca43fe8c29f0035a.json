@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE payment_mandates SET status = 'REVOKED', revoked_at = $2, revoked_by = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65e6ea8faea7e053b13aef8ee70f24d0df67d6ac36d28152ca43fe8c29f0035a"
+}
