@@ -31,6 +31,7 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 | 09 | [Integración Mercatus](docs/09-integracion-mercatus.md) | Riel de pago para agentes de IA: análisis del contrato, bloqueantes (unidad monetaria, estructura de cuentas) y plan |
 | 10 | [Preguntas para Mercatus](docs/10-preguntas-mercatus.md) | **Documento para compartir**: qué acepta AIBank, 24 preguntas con supuesto por defecto, y contrapropuesta de calendario |
 | 11 | [Datos de integración del sandbox](docs/11-spec-integracion-sandbox.md) | **Documento para compartir**: credenciales, endpoints con respuestas reales, 20 escenarios de prueba, límites y tabla de errores |
+| 12 | [Modelo B: iniciación de pagos](docs/12-modelo-b-iniciacion-de-pagos.md) | Respuesta a Q25: pagar sobre la cuenta propia del cliente en vez de un sub-ledger ómnibus — por qué sí, por qué no con `client_credentials`, y qué haría falta |
 
 ## Decisiones estructurales clave
 

@@ -57,6 +57,13 @@ Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
 [docs/11-spec-integracion-sandbox.md](docs/11-spec-integracion-sandbox.md).
 
+**Modelo B (Q25) — pendiente de decisión, no de código.** Mercatus propone iniciar
+pagos sobre la cuenta propia de un cliente de AIBank en vez de un sub-ledger ómnibus.
+Análisis en [docs/12](docs/12-modelo-b-iniciacion-de-pagos.md): la respuesta es sí, pero
+con mandato delegado, no con `client_credentials` sobre cuenta ajena. El core no cambia;
+sí el flujo OAuth y la comprobación de acceso. **No construir hasta que haya clientes
+propios que lo usen.**
+
 **Sigue bloqueado, y no por nosotros:**
 - **Constitución de Mercatus Technologies S.A.C. (Perú)**, en curso. Hasta que cierre no
   se puede hacer el KYB de la cuenta maestra, así que **el sandbox no lleva dinero real**.
@@ -65,6 +72,11 @@ Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 - **Jurisdicción**: Mercatus asume que AIBank opera en Perú. El plan de entrada
   ([doc 02](docs/02-regulacion-licencias.md)) todavía no fija el país ancla — hay que
   cerrarlo, porque condiciona la licencia y el proveedor.
+- **Custodia de fondos de terceros en el modelo ómnibus**: Mercatus recibe dinero de sus
+  clientes y lo mantiene como saldo de sub-ledger. Es la pregunta que su abogado tiene que
+  responder antes del KYB, y puede exigir EEDE ([docs/12 §1](docs/12-modelo-b-iniciacion-de-pagos.md)).
+- **Y el bloqueante real es nuestro**: sin licencia ni proveedor BaaS contratado, ningún
+  modelo mueve dinero real. El sandbox funciona completo; producción no depende de Mercatus.
 
 ## Deuda técnica anotada
 
