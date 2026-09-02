@@ -240,6 +240,14 @@ type authorizeRequest struct {
 	PayeeAccountID string `json:"payee_account_id"`
 	Amount         int64  `json:"amount"`
 	Currency       string `json:"currency"`
+	// MandateID selecciona el MODELO B: la cuenta pagadora es de un cliente del
+	// banco y el pago se ampara en el permiso que ese titular otorgó.
+	//
+	// Su ausencia significa modelo A: la cuenta pagadora es una sub-cuenta de la
+	// propia integración. Es un campo y no dos endpoints porque el contrato de
+	// pago es idéntico en los dos modelos — lo único que cambia es de dónde sale
+	// la autoridad para mover el dinero.
+	MandateID string `json:"mandate_id,omitempty"`
 }
 
 type authorizationResponse struct {
@@ -276,14 +284,25 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 		return
 	}
 
-	payer, ok := s.resolveOwnedAccount(w, r, claims, req.PayerAccountID)
-	if !ok {
-		return
-	}
+	// El receptor siempre tiene que ser una cuenta de la integración: un mandato
+	// autoriza a SACAR dinero de la cuenta del titular, nunca a elegir libremente
+	// dónde termina. Sin esta regla, un permiso otorgado para pagarle a un agente
+	// serviría para mandar el dinero a cualquier parte.
 	payee, ok := s.resolveOwnedAccount(w, r, claims, req.PayeeAccountID)
 	if !ok {
 		return
 	}
+
+	var payer string
+	if req.MandateID != "" {
+		payer, ok = s.resolveMandateAccount(w, r, claims, req.MandateID, req.PayerAccountID)
+	} else {
+		payer, ok = s.resolveOwnedAccount(w, r, claims, req.PayerAccountID)
+	}
+	if !ok {
+		return
+	}
+
 	if payer == payee {
 		writeError(w, http.StatusUnprocessableEntity, CodeSameAccount,
 			"pagador y receptor no pueden ser la misma cuenta")
@@ -299,10 +318,21 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 
 	// La clave del core se compone con el client_id: dos integraciones distintas
 	// que elijan la misma clave son operaciones distintas y no deben colapsar.
-	result, err := s.core.Authorize(r.Context(),
-		claims.Subject+":"+key, payer, payee, req.Amount, req.Currency, 0)
+	coreKey := claims.Subject + ":" + key
+
+	var result *coreclient.AuthorizeResult
+	var err error
+	if req.MandateID != "" {
+		// El core comprueba el permiso y retiene en la MISMA transacción: entre
+		// "tiene permiso" y "se retuvo" no cabe una revocación.
+		result, _, err = s.core.AuthorizeUnderMandate(r.Context(),
+			req.MandateID, coreKey, payer, payee, req.Amount, req.Currency)
+	} else {
+		result, err = s.core.Authorize(r.Context(),
+			coreKey, payer, payee, req.Amount, req.Currency, 0)
+	}
 	if err != nil {
-		coreError(w, err)
+		mandateError(w, err)
 		return
 	}
 
@@ -455,6 +485,79 @@ func (s *Server) resolveOwnedAccount(w http.ResponseWriter, r *http.Request, cla
 	return id, true
 }
 
+// resolveMandateAccount comprueba que el mandato ampare a esta integración y
+// devuelve la cuenta que cubre.
+//
+// El pagador que mande la plataforma tiene que COINCIDIR con el del mandato. No
+// se toma el del mandato en silencio: si la plataforma cree estar pagando desde
+// otra cuenta, es un error suyo que conviene que vea, no algo que corregir por
+// detrás.
+func (s *Server) resolveMandateAccount(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, mandateID, declaredPayer string) (string, bool) {
+	mandate, err := s.core.GetMandate(r.Context(), mandateID)
+	if err != nil {
+		mandateError(w, err)
+		return "", false
+	}
+
+	// Un mandato otorgado a otra integración no existe para esta.
+	if mandate.Grantee != claims.Subject {
+		writeError(w, http.StatusNotFound, CodeMandateNotFound, "el mandato no existe")
+		return "", false
+	}
+
+	if declaredPayer != "" {
+		declared, err := decodeID(accountPrefix, declaredPayer)
+		if err != nil || declared != mandate.AccountID {
+			writeError(w, http.StatusForbidden, CodeMandateAccountScope,
+				"el permiso no cubre la cuenta pagadora indicada")
+			return "", false
+		}
+	}
+
+	return mandate.AccountID, true
+}
+
+type mandateJSON struct {
+	MandateID       string     `json:"mandate_id"`
+	AccountID       string     `json:"account_id"`
+	Currency        string     `json:"currency"`
+	Status          string     `json:"status"`
+	MaxPerOperation *int64     `json:"max_per_operation,omitempty"`
+	MaxTotal        *int64     `json:"max_total,omitempty"`
+	Consumed        int64      `json:"consumed"`
+	Remaining       *int64     `json:"remaining,omitempty"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	RevokedAt       *time.Time `json:"revoked_at,omitempty"`
+}
+
+func toMandateJSON(m *coreclient.Mandate) mandateJSON {
+	return mandateJSON{
+		MandateID:       m.ID,
+		AccountID:       encodeID(accountPrefix, m.AccountID),
+		Currency:        m.Currency,
+		Status:          mandateStatusName(m.Status),
+		MaxPerOperation: m.MaxPerOperation,
+		MaxTotal:        m.MaxTotal,
+		Consumed:        m.ConsumedMicros,
+		Remaining:       m.RemainingMicros(),
+		ExpiresAt:       m.ExpiresAt,
+		RevokedAt:       m.RevokedAt,
+	}
+}
+
+func mandateStatusName(status corev1.MandateStatus) string {
+	switch status {
+	case corev1.MandateStatus_MANDATE_STATUS_ACTIVE:
+		return "active"
+	case corev1.MandateStatus_MANDATE_STATUS_REVOKED:
+		return "revoked"
+	case corev1.MandateStatus_MANDATE_STATUS_EXPIRED:
+		return "expired"
+	default:
+		return "unknown"
+	}
+}
+
 // resolveOwnedAuthorization carga la autorización y verifica que sus cuentas
 // pertenezcan a la integración.
 func (s *Server) resolveOwnedAuthorization(w http.ResponseWriter, r *http.Request, claims *oauth.Claims) (*coreclient.Authorization, bool) {
@@ -470,19 +573,33 @@ func (s *Server) resolveOwnedAuthorization(w http.ResponseWriter, r *http.Reques
 		return nil, false
 	}
 
-	owns, err := s.store.OwnsAccount(r.Context(), claims.Subject, auth.PayerAccountID)
-	if err != nil {
-		s.log.ErrorContext(r.Context(), "verificar propiedad de cuenta", "error", err)
-		writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
-		return nil, false
+	// La integración puede operar sobre la autorización si alguna de las dos
+	// cuentas es suya.
+	//
+	// Los dos lados y no solo el pagador: en el modelo B el pagador es la cuenta
+	// de un cliente del banco y NO le pertenece a la integración, aunque haya sido
+	// ella quien inició el pago. Exigir el pagador dejaría a la plataforma sin
+	// poder capturar lo que autorizó.
+	//
+	// Que baste el receptor no abre nada: `handleAuthorize` exige que el receptor
+	// sea siempre una cuenta de la integración, así que el receptor de una
+	// autorización identifica a quien la creó.
+	for _, account := range []string{auth.PayerAccountID, auth.PayeeAccountID} {
+		owns, err := s.store.OwnsAccount(r.Context(), claims.Subject, account)
+		if err != nil {
+			s.log.ErrorContext(r.Context(), "verificar propiedad de cuenta", "error", err)
+			writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
+			return nil, false
+		}
+		if owns {
+			return auth, true
+		}
 	}
-	if !owns {
-		// Misma respuesta que si no existiera: una autorización de otra integración
-		// no puede ni confirmarse ni negarse.
-		writeError(w, http.StatusNotFound, CodeAuthorizationMissing, "la autorización no existe")
-		return nil, false
-	}
-	return auth, true
+
+	// Misma respuesta que si no existiera: una autorización de otra integración no
+	// puede ni confirmarse ni negarse.
+	writeError(w, http.StatusNotFound, CodeAuthorizationMissing, "la autorización no existe")
+	return nil, false
 }
 
 // statusName traduce el estado del core al vocabulario del contrato.

@@ -164,7 +164,7 @@ func sign(key []byte, input string) string {
 	return encode(mac.Sum(nil))
 }
 
-func encode(b []byte) string  { return base64.RawURLEncoding.EncodeToString(b) }
+func encode(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 func decode(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
 }

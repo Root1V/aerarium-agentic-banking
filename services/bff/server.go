@@ -23,6 +23,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
+	"github.com/aibank/aibank/services/oauth"
 )
 
 // Server es la API del canal móvil.
@@ -30,6 +31,11 @@ type Server struct {
 	core   *coreclient.Client
 	auth   Authenticator
 	logger *slog.Logger
+	// consents habilita las pantallas de permiso del modelo B. Es opcional: sin
+	// él la app funciona igual, solo que sin poder otorgar ni revocar permisos a
+	// plataformas. Así el canal móvil no queda acoplado a que exista una
+	// integración de socio.
+	consents *oauth.Store
 }
 
 func NewServer(core *coreclient.Client, auth Authenticator, logger *slog.Logger) *Server {
@@ -37,6 +43,12 @@ func NewServer(core *coreclient.Client, auth Authenticator, logger *slog.Logger)
 		logger = slog.Default()
 	}
 	return &Server{core: core, auth: auth, logger: logger}
+}
+
+// WithConsents habilita la gestión de permisos delegados en la app.
+func (s *Server) WithConsents(store *oauth.Store) *Server {
+	s.consents = store
+	return s
 }
 
 // Handler arma el enrutador con la autenticación ya aplicada.
@@ -51,6 +63,17 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
+
+	// Permisos delegados (modelo B). Solo se montan si el servicio los tiene
+	// configurados: una ruta que devolvería siempre error es peor que una ruta
+	// que no existe.
+	if s.consents != nil {
+		mux.Handle("GET /v1/consent-requests/{handoff}", s.requireAuth(s.handleConsentPrompt))
+		mux.Handle("POST /v1/consent-requests/{handoff}/approve", s.requireAuth(s.handleApproveConsent))
+		mux.Handle("POST /v1/consent-requests/{handoff}/reject", s.requireAuth(s.handleRejectConsent))
+		mux.Handle("GET /v1/mandates", s.requireAuth(s.handleListMandates))
+		mux.Handle("POST /v1/mandates/{mandateID}/revoke", s.requireAuth(s.handleRevokeMandate))
+	}
 
 	// El middleware recupera el contexto de traza entrante y abre un span por
 	// petición. Desde aquí viaja al core por la metadata gRPC y, si la operación
@@ -83,7 +106,7 @@ func (s *Server) requireAuth(next func(http.ResponseWriter, *http.Request, *Prin
 type moneyJSON struct {
 	// AmountMicros es entero en micras: 1_000_000 micras = 1 unidad.
 	AmountMicros int64  `json:"amount_micros"`
-	Currency    string `json:"currency"`
+	Currency     string `json:"currency"`
 }
 
 type accountJSON struct {

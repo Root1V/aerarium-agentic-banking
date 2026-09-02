@@ -32,6 +32,7 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 | 10 | [Preguntas para Mercatus](docs/10-preguntas-mercatus.md) | **Documento para compartir**: qué acepta AIBank, 24 preguntas con supuesto por defecto, y contrapropuesta de calendario |
 | 11 | [Datos de integración del sandbox](docs/11-spec-integracion-sandbox.md) | **Documento para compartir**: credenciales, endpoints con respuestas reales, 20 escenarios de prueba, límites y tabla de errores |
 | 12 | [Modelo B: iniciación de pagos](docs/12-modelo-b-iniciacion-de-pagos.md) | Respuesta a Q25: pagar sobre la cuenta propia del cliente en vez de un sub-ledger ómnibus — por qué sí, por qué no con `client_credentials`, y qué haría falta |
+| 13 | [Especificación de los modelos A y B](docs/13-spec-modelos-a-y-b.md) | **Documento para compartir**: cómo integrarse en los dos modelos, flujo de consentimiento, 30 escenarios de prueba y qué cambia al pasar a cuentas reales |
 
 ## Decisiones estructurales clave
 

@@ -148,6 +148,33 @@ func (s *Store) Authenticate(ctx context.Context, clientID, secret string) (*Cli
 	return &client, nil
 }
 
+// FindClient devuelve los datos públicos de una integración.
+//
+// Lo usa la pantalla de consentimiento para decir QUIÉN pide el permiso, con el
+// nombre registrado y no con uno que la plataforma mande en la petición: si
+// pudiera elegir cómo se presenta en la pantalla del banco, podría hacerse pasar
+// por otra.
+func (s *Store) FindClient(ctx context.Context, clientID string) (*Client, error) {
+	var (
+		client Client
+		master sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx, `
+		SELECT client_id, name, scopes, master_account_id, active
+		  FROM oauth.clients WHERE client_id = $1
+	`, clientID).Scan(&client.ID, &client.Name, pq.Array(&client.Scopes), &master, &client.Active)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrClientNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("buscar cliente: %w", err)
+	}
+	if master.Valid {
+		client.MasterAccountID = master.String
+	}
+	return &client, nil
+}
+
 // secretMatches compara contra el secreto vigente y, si sigue en ventana, contra
 // el anterior. La comparación es de tiempo constante: una comparación normal
 // filtra por temporización cuántos caracteres del hash coincidieron.

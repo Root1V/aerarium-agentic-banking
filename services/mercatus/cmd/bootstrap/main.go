@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/clients/go/coreclient"
+	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/oauth"
 	_ "github.com/lib/pq"
 )

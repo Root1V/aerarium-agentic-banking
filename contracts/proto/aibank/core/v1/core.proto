@@ -401,3 +401,111 @@ service AuthorizationService {
   // Libera las retenciones vencidas. La invoca un proceso periódico.
   rpc ReleaseExpired(ReleaseExpiredRequest) returns (ReleaseExpiredResponse);
 }
+
+// ---------------------------------------------------------------- mandatos
+
+// Estado observable de un mandato. `EXPIRED` se deriva del reloj, igual que en
+// las autorizaciones: no se almacena.
+enum MandateStatus {
+  MANDATE_STATUS_UNSPECIFIED = 0;
+  MANDATE_STATUS_ACTIVE = 1;
+  // El titular retiró el permiso.
+  MANDATE_STATUS_REVOKED = 2;
+  MANDATE_STATUS_EXPIRED = 3;
+}
+
+enum MandateErrorReason {
+  MANDATE_ERROR_REASON_UNSPECIFIED = 0;
+  MANDATE_ERROR_REASON_INVALID = 1;
+  MANDATE_ERROR_REASON_NOT_FOUND = 2;
+  MANDATE_ERROR_REASON_REVOKED = 3;
+  MANDATE_ERROR_REASON_EXPIRED = 4;
+  // El pago cabe en el saldo pero no en lo que el titular autorizó.
+  MANDATE_ERROR_REASON_LIMIT_EXCEEDED = 5;
+  // El mandato no habilita esa cuenta como pagadora.
+  MANDATE_ERROR_REASON_ACCOUNT_NOT_COVERED = 6;
+}
+
+message Mandate {
+  string id = 1;
+  string account_id = 2;
+  // client_id de la integración autorizada.
+  string grantee = 3;
+  // Titular que otorgó el permiso.
+  string granted_by = 4;
+  string currency = 5;
+  // Topes; ausentes = sin tope por esa dimensión.
+  optional int64 max_per_operation_micros = 6;
+  optional int64 max_total_micros = 7;
+  // Comprometido hasta ahora. Derivado de las autorizaciones, no de un contador.
+  int64 consumed_micros = 8;
+  MandateStatus status = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  google.protobuf.Timestamp created_at = 11;
+  optional google.protobuf.Timestamp revoked_at = 12;
+}
+
+message GrantMandateRequest {
+  string account_id = 1;
+  string grantee = 2;
+  // Titular que se autenticó. Debe ser el dueño de la cuenta.
+  string granted_by = 3;
+  // Evidencia del flujo de consentimiento. Obligatoria: un mandato sin ella no
+  // prueba nada, y probar es lo único que justifica su existencia.
+  string consent_reference = 4;
+  optional int64 max_per_operation_micros = 5;
+  optional int64 max_total_micros = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message RevokeMandateRequest {
+  string mandate_id = 1;
+  // Quién revoca: el titular, operaciones o la propia integración.
+  string revoked_by = 2;
+}
+
+message GetMandateRequest {
+  string mandate_id = 1;
+}
+
+message FindActiveMandateRequest {
+  string account_id = 1;
+  string grantee = 2;
+}
+
+message ListMandatesRequest {
+  // Titular cuyos mandatos se listan.
+  string granted_by = 1;
+}
+
+message ListMandatesResponse {
+  repeated Mandate mandates = 1;
+}
+
+// Autoriza un pago bajo un mandato. Mismo contrato que Authorize, más el
+// mandato que lo habilita.
+message AuthorizeUnderMandateRequest {
+  string mandate_id = 1;
+  AuthorizeRequest authorization = 2;
+}
+
+message AuthorizeUnderMandateResponse {
+  Authorization authorization = 1;
+  bool replayed = 2;
+  Mandate mandate = 3;
+}
+
+service MandateService {
+  // Registra el permiso que un titular otorgó tras autenticarse.
+  rpc GrantMandate(GrantMandateRequest) returns (Mandate);
+  // Retira el permiso. Idempotente. No cancela las retenciones ya vivas.
+  rpc RevokeMandate(RevokeMandateRequest) returns (Mandate);
+  rpc GetMandate(GetMandateRequest) returns (Mandate);
+  // Permiso vivo de una integración sobre una cuenta. NOT_FOUND si no hay.
+  rpc FindActiveMandate(FindActiveMandateRequest) returns (Mandate);
+  // Mandatos de un titular, para que los vea y los revoque en su app.
+  rpc ListMandates(ListMandatesRequest) returns (ListMandatesResponse);
+  // Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
+  // transacción.
+  rpc AuthorizeUnderMandate(AuthorizeUnderMandateRequest) returns (AuthorizeUnderMandateResponse);
+}

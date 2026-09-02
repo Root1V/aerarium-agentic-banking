@@ -52,23 +52,29 @@ Análisis en [docs/09](docs/09-integracion-mercatus.md) · preguntas y respuesta
 | 4 | API REST: los siete endpoints del contrato (33 tests) | Go | feat/mercatus-api | 👀 |
 | 5 | Sandbox: OpenAPI congelado, barrendero de vencidas, alta de integración | Go/Rust | feat/mercatus-api | 👀 |
 | 6 | Reembolso parcial en la API (el modelo del core ya lo soporta) | Go | feat/mercatus-refunds | ⬜ |
+| 7 | **Modelo B**: mandato de pago con topes, vigencia y revocación (21 tests) | Rust | feat/payment-mandates | 👀 |
+| 8 | **Modelo B**: consentimiento, permiso delegado y pago bajo mandato (14 tests) | Go | feat/payment-mandates | 👀 |
+| 9 | Pantallas de consentimiento y gestión de permisos del titular | Flutter | feat/app-mandates | ⬜ |
 
 Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
 [docs/11-spec-integracion-sandbox.md](docs/11-spec-integracion-sandbox.md).
 
-**Modelo B (Q25) — pendiente de decisión, no de código.** Mercatus propone iniciar
-pagos sobre la cuenta propia de un cliente de AIBank en vez de un sub-ledger ómnibus.
-Análisis en [docs/12](docs/12-modelo-b-iniciacion-de-pagos.md): la respuesta es sí, pero
-con mandato delegado, no con `client_credentials` sobre cuenta ajena. El core no cambia;
-sí el flujo OAuth y la comprobación de acceso. **No construir hasta que haya clientes
-propios que lo usen.**
+**Los dos modelos están construidos y probados en sandbox.** El A (ómnibus) y el B
+(pago sobre la cuenta propia del cliente, con mandato delegado). Análisis en
+[docs/12](docs/12-modelo-b-iniciacion-de-pagos.md), especificación conjunta para Mercatus
+en [docs/13](docs/13-spec-modelos-a-y-b.md).
+
+Falta del modelo B **solo la interfaz**: las pantallas donde el titular ve qué le piden,
+concede y revoca. El backend está completo, así que hoy se puede ejercitar por API pero no
+con un usuario real.
 
 **Sigue bloqueado, y no por nosotros:**
 - **Constitución de Mercatus Technologies S.A.C. (Perú)**, en curso. Hasta que cierre no
   se puede hacer el KYB de la cuenta maestra, así que **el sandbox no lleva dinero real**.
 - **Estructura de cuenta ómnibus**: necesita asesoría regulatoria local y que el proveedor
-  licenciado la acepte. Bloquea el paso a producción, no la integración técnica.
+  licenciado la acepte. Bloquea el paso a producción, no la integración técnica. El modelo B
+  no depende de ella.
 - **Jurisdicción**: Mercatus asume que AIBank opera en Perú. El plan de entrada
   ([doc 02](docs/02-regulacion-licencias.md)) todavía no fija el país ancla — hay que
   cerrarlo, porque condiciona la licencia y el proveedor.

@@ -48,9 +48,9 @@ func setup(t *testing.T, maxBalance, maxTransaction *int64) (*coreclient.Client,
 
 	productCode := "SIMPLE-" + uuid.NewString()
 	_, err = client.CreateProduct(ctx, coreclient.NewProduct{
-		Code:                productCode,
-		Name:                "Cuenta simple",
-		Currency:            "USD",
+		Code:                 productCode,
+		Name:                 "Cuenta simple",
+		Currency:             "USD",
 		MaxBalanceMicros:     maxBalance,
 		MaxTransactionMicros: maxTransaction,
 	})

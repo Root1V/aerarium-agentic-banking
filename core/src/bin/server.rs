@@ -5,14 +5,18 @@
 //!   BIND_ADDR     dirección de escucha (por defecto 127.0.0.1:50051)
 
 use aibank_core::authorizations::AuthorizationService;
+use aibank_core::mandates::MandateService;
 use aibank_core::grpc::pb::{
     account_service_server::AccountServiceServer,
     authorization_service_server::AuthorizationServiceServer,
     ledger_service_server::LedgerServiceServer,
+    mandate_service_server::MandateServiceServer,
     product_service_server::ProductServiceServer,
     reconciliation_service_server::ReconciliationServiceServer,
 };
-use aibank_core::grpc::{AccountApi, AuthorizationApi, LedgerApi, ProductApi, ReconciliationApi};
+use aibank_core::grpc::{
+    AccountApi, AuthorizationApi, LedgerApi, MandateApi, ProductApi, ReconciliationApi,
+};
 use aibank_core::reconciliation::Reconciler;
 use aibank_core::{db, AccountRepository, PostingService, ProductRepository};
 use std::error::Error;
@@ -40,6 +44,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let products = ProductApi::new(ProductRepository::new(pool.clone()));
     let reconciliation = ReconciliationApi::new(Reconciler::new(pool.clone()));
     let authorizations = AuthorizationApi::new(AuthorizationService::new(pool.clone()));
+    let mandates = MandateApi::new(MandateService::new(pool.clone()));
 
     tracing::info!(%bind_addr, "core escuchando");
 
@@ -49,6 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .add_service(ProductServiceServer::new(products))
         .add_service(ReconciliationServiceServer::new(reconciliation))
         .add_service(AuthorizationServiceServer::new(authorizations))
+        .add_service(MandateServiceServer::new(mandates))
         .serve_with_shutdown(bind_addr.parse()?, async {
             let _ = tokio::signal::ctrl_c().await;
             tracing::info!("apagando");

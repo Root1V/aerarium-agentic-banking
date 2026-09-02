@@ -765,3 +765,241 @@ impl AuthorizationService for AuthorizationApi {
         }))
     }
 }
+
+// ---------------------------------------------------------------- mandatos
+
+use crate::mandates::{
+    GrantCommand, Mandate, MandateError, MandateService as MandateDomain, MandateWithUsage,
+    ObservedMandateStatus,
+};
+use pb::mandate_service_server::MandateService;
+
+fn mandate_to_status(err: &MandateError) -> (tonic::Code, pb::MandateErrorReason) {
+    use pb::MandateErrorReason as R;
+    match err {
+        MandateError::Invalid(_) => (tonic::Code::InvalidArgument, R::Invalid),
+        MandateError::NotFound(_) => (tonic::Code::NotFound, R::NotFound),
+        MandateError::AccountNotFound(_) => (tonic::Code::NotFound, R::NotFound),
+        MandateError::Revoked(_) => (tonic::Code::PermissionDenied, R::Revoked),
+        MandateError::Expired(_, _) => (tonic::Code::PermissionDenied, R::Expired),
+        MandateError::LimitExceeded(_) => (tonic::Code::FailedPrecondition, R::LimitExceeded),
+        MandateError::AccountNotCovered(_, _) => {
+            (tonic::Code::PermissionDenied, R::AccountNotCovered)
+        }
+        MandateError::Authorization(_) | MandateError::Database(_) => {
+            (tonic::Code::Unavailable, R::Unspecified)
+        }
+    }
+}
+
+/// Traduce un error de mandato a `Status`.
+///
+/// Un fallo de la autorización subyacente —fondos insuficientes, por ejemplo— se
+/// reporta con SU motivo, no con uno de mandato: el cliente tiene que poder
+/// distinguir "no te alcanza el saldo" de "no te alcanza el permiso", que son
+/// problemas distintos con soluciones distintas.
+fn mandate_status(err: MandateError) -> Status {
+    if let MandateError::Authorization(inner) = err {
+        return auth_to_status(inner);
+    }
+
+    let (code, reason) = mandate_to_status(&err);
+    let mut status = Status::new(code, err.to_string());
+    if let Ok(value) = reason.as_str_name().parse() {
+        status.metadata_mut().insert(REASON_METADATA_KEY, value);
+    }
+    status
+}
+
+fn mandate_observed_to_pb(status: ObservedMandateStatus) -> pb::MandateStatus {
+    match status {
+        ObservedMandateStatus::Active => pb::MandateStatus::Active,
+        ObservedMandateStatus::Revoked => pb::MandateStatus::Revoked,
+        ObservedMandateStatus::Expired => pb::MandateStatus::Expired,
+    }
+}
+
+fn mandate_to_pb(mandate: &Mandate, consumed_micros: i64) -> pb::Mandate {
+    pb::Mandate {
+        id: mandate.id.to_string(),
+        account_id: mandate.account_id.to_string(),
+        grantee: mandate.grantee.clone(),
+        granted_by: mandate.granted_by.to_string(),
+        currency: mandate.currency.clone(),
+        max_per_operation_micros: mandate.max_per_operation_micros,
+        max_total_micros: mandate.max_total_micros,
+        consumed_micros,
+        status: mandate_observed_to_pb(mandate.observed()) as i32,
+        expires_at: Some(to_timestamp(mandate.expires_at)),
+        created_at: Some(to_timestamp(mandate.created_at)),
+        revoked_at: mandate.revoked_at.map(to_timestamp),
+    }
+}
+
+pub struct MandateApi {
+    mandates: MandateDomain,
+}
+
+impl MandateApi {
+    pub fn new(mandates: MandateDomain) -> Self {
+        Self { mandates }
+    }
+
+    async fn with_usage(&self, mandate: Mandate) -> Result<MandateWithUsage, Status> {
+        let usage = self
+            .mandates
+            .find(mandate.id)
+            .await
+            .map_err(mandate_status)?
+            .ok_or_else(|| mandate_status(MandateError::NotFound(mandate.id)))?;
+        Ok(usage)
+    }
+}
+
+#[tonic::async_trait]
+impl MandateService for MandateApi {
+    async fn grant_mandate(
+        &self,
+        request: Request<pb::GrantMandateRequest>,
+    ) -> Result<Response<pb::Mandate>, Status> {
+        let req = request.into_inner();
+        let expires_at = req
+            .expires_at
+            .ok_or_else(|| Status::invalid_argument("expires_at is required"))?;
+
+        let command = GrantCommand {
+            account_id: parse_uuid(&req.account_id, "account_id")?,
+            grantee: req.grantee,
+            granted_by: parse_uuid(&req.granted_by, "granted_by")?,
+            consent_reference: req.consent_reference,
+            max_per_operation_micros: req.max_per_operation_micros,
+            max_total_micros: req.max_total_micros,
+            expires_at: from_timestamp(expires_at)?,
+        };
+
+        let mandate = self.mandates.grant(&command).await.map_err(mandate_status)?;
+        Ok(Response::new(mandate_to_pb(&mandate, 0)))
+    }
+
+    async fn revoke_mandate(
+        &self,
+        request: Request<pb::RevokeMandateRequest>,
+    ) -> Result<Response<pb::Mandate>, Status> {
+        let req = request.into_inner();
+        let id = parse_uuid(&req.mandate_id, "mandate_id")?;
+        if req.revoked_by.trim().is_empty() {
+            // Un permiso retirado sin constancia de quién lo retiró no sirve ante
+            // una auditoría.
+            return Err(Status::invalid_argument("revoked_by is required"));
+        }
+
+        let mandate = self
+            .mandates
+            .revoke(id, &req.revoked_by)
+            .await
+            .map_err(mandate_status)?;
+        let usage = self.with_usage(mandate).await?;
+        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+    }
+
+    async fn get_mandate(
+        &self,
+        request: Request<pb::GetMandateRequest>,
+    ) -> Result<Response<pb::Mandate>, Status> {
+        let id = parse_uuid(&request.into_inner().mandate_id, "mandate_id")?;
+        let usage = self
+            .mandates
+            .find(id)
+            .await
+            .map_err(mandate_status)?
+            .ok_or_else(|| mandate_status(MandateError::NotFound(id)))?;
+        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+    }
+
+    async fn find_active_mandate(
+        &self,
+        request: Request<pb::FindActiveMandateRequest>,
+    ) -> Result<Response<pb::Mandate>, Status> {
+        let req = request.into_inner();
+        let account_id = parse_uuid(&req.account_id, "account_id")?;
+
+        let mandate = self
+            .mandates
+            .find_active_for(account_id, &req.grantee)
+            .await
+            .map_err(mandate_status)?
+            .ok_or_else(|| Status::not_found("no active mandate for that account and grantee"))?;
+
+        let usage = self.with_usage(mandate).await?;
+        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+    }
+
+    async fn list_mandates(
+        &self,
+        request: Request<pb::ListMandatesRequest>,
+    ) -> Result<Response<pb::ListMandatesResponse>, Status> {
+        let granted_by = parse_uuid(&request.into_inner().granted_by, "granted_by")?;
+        let mandates = self
+            .mandates
+            .list_for_holder(granted_by)
+            .await
+            .map_err(mandate_status)?;
+
+        let mut out = Vec::with_capacity(mandates.len());
+        for mandate in mandates {
+            let consumed = self
+                .mandates
+                .find(mandate.id)
+                .await
+                .map_err(mandate_status)?
+                .map(|u| u.consumed_micros)
+                .unwrap_or(0);
+            out.push(mandate_to_pb(&mandate, consumed));
+        }
+        Ok(Response::new(pb::ListMandatesResponse { mandates: out }))
+    }
+
+    async fn authorize_under_mandate(
+        &self,
+        request: Request<pb::AuthorizeUnderMandateRequest>,
+    ) -> Result<Response<pb::AuthorizeUnderMandateResponse>, Status> {
+        let parent = crate::telemetry::context_from_metadata(request.metadata());
+        let req = request.into_inner();
+
+        let mandate_id = parse_uuid(&req.mandate_id, "mandate_id")?;
+        let inner = req
+            .authorization
+            .ok_or_else(|| Status::invalid_argument("authorization is required"))?;
+        let amount = inner
+            .amount
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("amount is required"))?;
+
+        let command = crate::authorizations::AuthorizeCommand {
+            idempotency_key: inner.idempotency_key,
+            payer_account_id: parse_uuid(&inner.payer_account_id, "payer_account_id")?,
+            payee_account_id: parse_uuid(&inner.payee_account_id, "payee_account_id")?,
+            amount_micros: amount.amount_micros,
+            currency: amount.currency.clone(),
+            ttl_minutes: (inner.ttl_minutes > 0).then_some(inner.ttl_minutes as i64),
+        };
+
+        let (result, usage) = self
+            .mandates
+            .authorize(mandate_id, &command)
+            .with_context(parent)
+            .await
+            .map_err(mandate_status)?;
+
+        Ok(Response::new(pb::AuthorizeUnderMandateResponse {
+            authorization: Some(authorization_to_pb(&result.authorization)),
+            replayed: result.replayed,
+            mandate: Some(mandate_to_pb(&usage.mandate, usage.consumed_micros)),
+        }))
+    }
+}
+
+fn from_timestamp(ts: prost_types::Timestamp) -> Result<chrono::DateTime<chrono::Utc>, Status> {
+    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos.max(0) as u32)
+        .ok_or_else(|| Status::invalid_argument("timestamp out of range"))
+}

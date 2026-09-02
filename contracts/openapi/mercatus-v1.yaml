@@ -22,6 +22,18 @@ info:
     Seis decimales es el máximo representable. Un importe con más precisión se
     rechaza en vez de truncarse en silencio.
 
+    ## Dos modelos de integración
+
+    | | **A — ómnibus** | **B — cuenta propia** |
+    |---|---|---|
+    | Titular de la cuenta pagadora | La plataforma | El cliente final del banco |
+    | Quién autoriza | La plataforma, con su credencial | El titular, con un mandato |
+    | Cómo se indica | Sin `mandate_id` | Con `mandate_id` |
+
+    **El contrato de pago es idéntico en los dos.** Lo único que cambia es de
+    dónde sale la autoridad para mover el dinero, y se expresa con un campo. Ver
+    `POST /v1/consent-requests` para el flujo de permiso del modelo B.
+
     ## Autorizar y después capturar
 
     `POST /v1/authorizations` reserva el dinero en la cuenta pagadora sin
@@ -59,6 +71,7 @@ tags:
   - name: Autenticación
   - name: Cuentas
   - name: Pagos
+  - name: Consentimiento
 
 paths:
   /oauth/token:
@@ -460,6 +473,143 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /v1/consent-requests:
+    post:
+      tags: [Consentimiento]
+      summary: Pide permiso al titular de una cuenta
+      operationId: createConsentRequest
+      description: |
+        Primer paso del **modelo B**. La plataforma dice cuánto necesita y para
+        qué; **no nombra la cuenta**, porque todavía no la conoce.
+
+        Quien elige la cuenta y los topes definitivos es el titular, autenticado
+        en la app del banco. Puede conceder menos de lo pedido, nunca más.
+
+        Entrega el `handoff_code` al cliente (un enlace, un QR) para que lo abra
+        en su app. La solicitud vive una hora.
+      security:
+        - bearerToken: [payments:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsentRequestInput" }
+            example:
+              currency: USD
+              max_per_operation: 5000000
+              max_total: 50000000
+              purpose: Pagos del agente de investigación de Acme S.A.
+      responses:
+        "201":
+          description: Solicitud creada, pendiente de que el titular decida.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsentRequest" }
+              example:
+                consent_request_id: 9c2f1e88-4a7b-4c2d-8e1f-0a1b2c3d4e5f
+                handoff_code: csr_kQ8vN2xR7mP4wL9tY6bH3jF5sD1gA0zC
+                status: pending
+                expires_at: "2026-09-01T20:57:00Z"
+        "400":
+          description: |
+            `malformed_request`: falta `purpose` (es lo que el titular lee antes
+            de decidir) o `currency` no es ISO-4217.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/consent-requests/{consentRequestId}:
+    get:
+      tags: [Consentimiento]
+      summary: Consulta si el titular ya decidió
+      operationId: getConsentRequest
+      description: |
+        Se consulta, no se notifica: un webhook obligaría a la plataforma a
+        exponer un endpoint y al banco a firmar y reintentar, para una decisión
+        que tarda lo que tarda una persona en mirar su teléfono.
+
+        Cuando `status` es `approved`, la respuesta trae el `mandate_id` con el
+        que se puede empezar a pagar.
+      security:
+        - bearerToken: [payments:read]
+      parameters:
+        - name: consentRequestId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Estado de la solicitud.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsentRequest" }
+              example:
+                consent_request_id: 9c2f1e88-4a7b-4c2d-8e1f-0a1b2c3d4e5f
+                handoff_code: csr_kQ8vN2xR7mP4wL9tY6bH3jF5sD1gA0zC
+                status: approved
+                expires_at: "2026-09-01T20:57:00Z"
+                mandate_id: 4a7b1c2d-9e8f-4a1b-8c2d-3e4f5a6b7c8d
+                account_id: acc_3f9e8d7c6b5a4938271605f4e3d2c1b0
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: |
+            `consent_request_not_found`. Misma respuesta si no existe o si
+            pertenece a otra integración.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/mandates/{mandateId}:
+    get:
+      tags: [Consentimiento]
+      summary: Consulta un permiso y cuánto queda de él
+      operationId: getMandate
+      description: |
+        Conviene consultarlo: saber cuánto queda permite pedir una ampliación
+        **antes** de que un pago falle delante de un usuario.
+
+        `consumed` se deriva de las autorizaciones vivas, no de un contador. Una
+        retención sin capturar ya consume el tope; liberarla o reembolsarla lo
+        devuelve.
+      security:
+        - bearerToken: [payments:read]
+      parameters:
+        - name: mandateId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: El permiso.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mandate" }
+              example:
+                mandate_id: 4a7b1c2d-9e8f-4a1b-8c2d-3e4f5a6b7c8d
+                account_id: acc_3f9e8d7c6b5a4938271605f4e3d2c1b0
+                currency: USD
+                status: active
+                max_per_operation: 5000000
+                max_total: 20000000
+                consumed: 8000000
+                remaining: 12000000
+                expires_at: "2026-10-01T20:57:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: |
+            `mandate_not_found`. Misma respuesta si no existe o si fue otorgado a
+            otra integración.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
 components:
   securitySchemes:
     bearerToken:
@@ -532,6 +682,21 @@ components:
       type: object
       required: [payer_account_id, payee_account_id, amount, currency]
       properties:
+        mandate_id:
+          type: string
+          description: |
+            **Selecciona el modelo B.** Su presencia significa que la cuenta
+            pagadora es de un cliente del banco y que el pago se ampara en el
+            permiso que ese titular otorgó.
+
+            Ausente = modelo A: la cuenta pagadora es una sub-cuenta de la propia
+            integración.
+
+            Con `mandate_id`, el `payer_account_id` debe COINCIDIR con la cuenta
+            del mandato; no se corrige en silencio. Y el receptor debe seguir
+            siendo una cuenta de la integración: un mandato autoriza a sacar
+            dinero de la cuenta del titular, nunca a elegir libremente dónde
+            termina.
         payer_account_id: { type: string }
         payee_account_id: { type: string }
         amount:
@@ -585,6 +750,77 @@ components:
             payee_account_id: { type: string }
             amount: { type: integer, format: int64 }
             currency: { type: string }
+
+    ConsentRequestInput:
+      type: object
+      required: [currency, purpose]
+      properties:
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        max_per_operation:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Tope por operación que se solicita, en millonésimas.
+        max_total:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Tope acumulado que se solicita.
+        purpose:
+          type: string
+          maxLength: 500
+          description: |
+            Para qué, en palabras que una persona entienda. **Se muestra
+            literalmente** en la pantalla de consentimiento, así que un texto
+            vago convierte la decisión del titular en una que no puede tomar
+            bien.
+
+    ConsentRequest:
+      type: object
+      required: [consent_request_id, handoff_code, status, expires_at]
+      properties:
+        consent_request_id: { type: string }
+        handoff_code:
+          type: string
+          description: |
+            Lo que el titular abre en su app. Entrégaselo en un enlace o un QR.
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        expires_at: { type: string, format: date-time }
+        mandate_id:
+          type: string
+          description: Presente solo cuando `status` es `approved`.
+        account_id:
+          type: string
+          description: |
+            La cuenta que el titular eligió. Presente solo cuando se aprobó.
+
+    Mandate:
+      type: object
+      required: [mandate_id, account_id, currency, status, consumed, expires_at]
+      properties:
+        mandate_id: { type: string }
+        account_id: { type: string }
+        currency: { type: string }
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        max_per_operation: { type: integer, format: int64 }
+        max_total: { type: integer, format: int64 }
+        consumed:
+          type: integer
+          format: int64
+          description: Comprometido hasta ahora, incluidas las retenciones vivas.
+        remaining:
+          type: integer
+          format: int64
+          description: Ausente si el mandato no tiene tope total.
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
 
     Transactions:
       type: object
