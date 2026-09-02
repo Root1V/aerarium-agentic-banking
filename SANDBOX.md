@@ -23,7 +23,17 @@ ella.
 
 ## 1. Levantarlo
 
-Requisitos: Docker con Compose v2. Nada más — ni Rust, ni Go, ni Postgres.
+Hay dos formas, y las dos sirven:
+
+- **El entorno alojado**, con una URL pública. La dirección, las credenciales y
+  la clave del simulador de titulares se entregan **por canal seguro, aparte de
+  este documento**. Con eso se puede saltar directo a la sección 3.
+- **Uno propio, en su máquina.** Es lo que describe el resto de esta sección.
+  Aislado, reiniciable de cero y sin compartir límites de tasa con nadie; para
+  desarrollar suele ser más cómodo que el alojado.
+
+Requisitos para levantarlo uno mismo: Docker con Compose v2. Nada más — ni Rust,
+ni Go, ni Postgres.
 
 ```bash
 echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
@@ -69,8 +79,9 @@ Scopes: payments:read payments:write accounts:write
 
 La base guarda su SHA-256; no hay forma de recuperarlo, solo de rotarlo. Volver a
 levantar el entorno **no** cambia el secreto: el alta detecta que la integración
-ya existe y no toca nada. Para emitir uno nuevo —el anterior sigue sirviendo 7
-días— hay que pedirlo:
+ya existe y no toca nada — pero entonces tampoco lo vuelve a imprimir, así que
+esa línea del log solo existe tras el primer arranque. Si se pierde, se emite uno
+nuevo y el anterior sigue sirviendo 7 días:
 
 ```bash
 docker compose -f platform/docker-compose.sandbox.yml run --rm \
@@ -132,6 +143,7 @@ El único cambio en el pago es un campo. Lo que cambia de verdad es lo que ocurr
 
 ```bash
 # 1. Un titular de prueba. Solo en el sandbox.
+#    En el entorno alojado esta ruta pide además: -H "X-Dev-Key: $DEV_KEY"
 HOLDER=$(curl -s -X POST http://localhost:8080/dev/holders \
   -H 'Content-Type: application/json' \
   -d '{"currency":"USD","name":"Ana Pérez","initial_balance":50000000}')
@@ -185,7 +197,7 @@ Borra el volumen y con él todas las cuentas, permisos y movimientos. El siguien
 |---|---|---|
 | Saldos | los crea la caja del entorno | entran por fondeo real |
 | `initial_balance` al abrir cuenta | permitido | **rechazado** |
-| `POST /dev/holders` | existe | **no existe**: onboarding con KYC |
+| `POST /dev/holders` | existe (con clave, si está alojado) | **no existe**: onboarding con KYC |
 | Titulares | de mentira | personas verificadas |
 | Emisor de tokens | `https://sandbox.aibank.local` | otro, y se verifica |
 

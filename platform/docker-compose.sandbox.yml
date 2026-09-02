@@ -67,8 +67,11 @@ services:
     build:
       context: ..
       dockerfile: platform/services.Dockerfile
+    # El ejecutable va en entrypoint y no en command para que `run` con
+    # argumentos —rotar un secreto, dar de alta otra integración— los añada en
+    # vez de sustituir el binario entero.
+    entrypoint: ["bootstrap"]
     command:
-      - bootstrap
       - -client-id=${SANDBOX_CLIENT_ID:-mercatus_sandbox}
       - -name=${SANDBOX_CLIENT_NAME:-Mercatus}
       - -currencies=${SANDBOX_CURRENCIES:-USD}
@@ -94,8 +97,11 @@ services:
       OAUTH_SIGNING_KEY: ${OAUTH_SIGNING_KEY:?falta OAUTH_SIGNING_KEY — ver la cabecera de este archivo}
       MERCATUS_SANDBOX: "true"
       MERCATUS_PRODUCTS: USD=AGENT-USD
+    # Publicado en todas las interfaces para el uso local. Un entorno alojado lo
+    # ata a 127.0.0.1 y deja que el proxy sea lo único expuesto:
+    #   PARTNER_PUBLISH=127.0.0.1:8081
     ports:
-      - "8081:8081"
+      - "${PARTNER_PUBLISH:-8081}:8081"
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -115,8 +121,11 @@ services:
       CORE_ADDR: core:50051
       BIND_ADDR: 0.0.0.0:8080
       ALLOW_DEV_AUTH: "true"
+      # Cierra el simulador de titulares. Vacío en local; OBLIGATORIO en cuanto
+      # el entorno sea accesible desde fuera.
+      DEV_API_KEY: ${DEV_API_KEY:-}
     ports:
-      - "8080:8080"
+      - "${HOLDER_PUBLISH:-8080}:8080"
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -151,6 +160,7 @@ services:
       PARTNER_URL: http://partner:8081
       HOLDER_URL: http://holder:8080
       CLIENT_ID: ${SANDBOX_CLIENT_ID:-mercatus_sandbox}
+      DEV_API_KEY: ${DEV_API_KEY:-}
     profiles: ["tools"]
 
 volumes:

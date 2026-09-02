@@ -1,0 +1,13 @@
+# TLS y encaminamiento del sandbox alojado.
+#
+# Caddy pide y renueva los certificados de Let's Encrypt solo, con que los dos
+# nombres apunten a esta máquina. No hay certificados que rotar a mano ni una
+# fecha de caducidad que se olvide.
+
+{$PARTNER_DOMAIN} {
+	reverse_proxy partner:8081
+}
+
+{$HOLDER_DOMAIN} {
+	reverse_proxy holder:8080
+}

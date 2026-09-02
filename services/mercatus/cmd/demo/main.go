@@ -38,6 +38,8 @@ func main() {
 		model        = flag.String("model", "b", "modelo a ejercitar: a (ómnibus) o b (cuenta del titular)")
 		amount       = flag.Int64("amount", 1000, "importe del pago, en micras")
 		currency     = flag.String("currency", "USD", "moneda")
+		devKey       = flag.String("dev-key", env("DEV_API_KEY", ""),
+			"clave del simulador de titulares, si el entorno la exige")
 	)
 	flag.Parse()
 
@@ -48,7 +50,7 @@ func main() {
 
 	demo := &demo{
 		partner:  &api{base: strings.TrimRight(*partnerURL, "/")},
-		holder:   &api{base: strings.TrimRight(*holderURL, "/")},
+		holder:   &api{base: strings.TrimRight(*holderURL, "/"), devKey: *devKey},
 		currency: strings.ToUpper(*currency),
 		amount:   *amount,
 	}
@@ -416,7 +418,10 @@ func (d *demo) showMandate(mandateID string) error {
 type api struct {
 	base  string
 	token string
-	http  http.Client
+	// devKey abre el simulador de titulares en los entornos alojados, donde esas
+	// rutas no pueden quedar al alcance de cualquiera.
+	devKey string
+	http   http.Client
 }
 
 func (a *api) json(method, path string, body, out any) error {
@@ -458,6 +463,9 @@ func (a *api) form(method, path string, values url.Values, out any) error {
 func (a *api) do(req *http.Request, out any) error {
 	if a.token != "" {
 		req.Header.Set("Authorization", "Bearer "+a.token)
+	}
+	if a.devKey != "" && strings.HasPrefix(req.URL.Path, "/dev/") {
+		req.Header.Set("X-Dev-Key", a.devKey)
 	}
 
 	resp, err := a.http.Do(req)

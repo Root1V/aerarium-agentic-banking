@@ -1,10 +1,12 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
@@ -50,8 +52,34 @@ type devHolderResponse struct {
 	Balance  int64  `json:"balance"`
 }
 
+// devGate protege las rutas del simulador con una clave compartida.
+//
+// En un sandbox en el portátil sobra: nadie más llega. En uno ALOJADO no, y la
+// diferencia no es teórica — `POST /dev/sessions` emite una sesión para el
+// customer_id que se le pida, así que sin puerta cualquiera en internet puede
+// hablar por cualquier titular de prueba, incluidos los de otro socio.
+//
+// La clave se compara en tiempo constante y no aparece en el mensaje de error:
+// un 401 que distingue "clave incorrecta" de "falta la clave" ya es una pista.
+func devGate(next http.HandlerFunc, key string, log *slog.Logger) http.HandlerFunc {
+	if key == "" {
+		return next
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		supplied := r.Header.Get("X-Dev-Key")
+		if subtle.ConstantTimeCompare([]byte(supplied), []byte(key)) != 1 {
+			log.Warn("acceso rechazado al simulador de titulares", "ruta", r.URL.Path)
+			devError(w, http.StatusUnauthorized, "falta o no coincide X-Dev-Key")
+			return
+		}
+		next(w, r)
+	}
+}
+
 func mountDevRoutes(mux *http.ServeMux, core *coreclient.Client, auth *sim.Authenticator, log *slog.Logger) {
-	mux.HandleFunc("POST /dev/holders", func(w http.ResponseWriter, r *http.Request) {
+	key := os.Getenv("DEV_API_KEY")
+
+	mux.HandleFunc("POST /dev/holders", devGate(func(w http.ResponseWriter, r *http.Request) {
 		var req devHolderRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && r.ContentLength > 0 {
 			devError(w, http.StatusBadRequest, "el cuerpo no es JSON válido")
@@ -123,11 +151,11 @@ func mountDevRoutes(mux *http.ServeMux, core *coreclient.Client, auth *sim.Authe
 			Currency:   currency,
 			Balance:    req.InitialBalance,
 		})
-	})
+	}, key, log))
 
 	// Recuperar la sesión de un titular ya creado, para reanudar una prueba sin
 	// tener que crear otra persona.
-	mux.HandleFunc("POST /dev/sessions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /dev/sessions", devGate(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			CustomerID string `json:"customer_id"`
 		}
@@ -139,9 +167,14 @@ func mountDevRoutes(mux *http.ServeMux, core *coreclient.Client, auth *sim.Authe
 			"customer_id": body.CustomerID,
 			"token":       auth.Issue(body.CustomerID, "dev-device"),
 		})
-	})
+	}, key, log))
 
-	log.Warn("rutas de sandbox montadas", "rutas", "POST /dev/holders, POST /dev/sessions")
+	log.Warn("rutas de sandbox montadas",
+		"rutas", "POST /dev/holders, POST /dev/sessions",
+		"protegidas", key != "")
+	if key == "" {
+		log.Warn("el simulador de titulares está ABIERTO: pon DEV_API_KEY si esto es accesible desde fuera")
+	}
 }
 
 func devFailed(w http.ResponseWriter, log *slog.Logger, what string, err error) {

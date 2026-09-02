@@ -259,6 +259,51 @@ docker compose -f platform/docker-compose.sandbox.yml \
 
 Guía para compartir en [SANDBOX.md](SANDBOX.md).
 
+### Publicarlo en internet
+
+Un añadido pone Caddy delante y saca los servicios de las interfaces públicas:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml \
+               -f platform/docker-compose.sandbox.public.yml up -d
+```
+
+En `platform/.env`, además de `OAUTH_SIGNING_KEY`:
+
+```
+PARTNER_DOMAIN=sandbox-api.<dominio>
+HOLDER_DOMAIN=sandbox-app.<dominio>
+DEV_API_KEY=<aleatorio>
+PARTNER_PUBLISH=127.0.0.1:8081
+HOLDER_PUBLISH=127.0.0.1:8080
+```
+
+Los dos nombres tienen que resolver a la máquina **antes** de levantarlo: Caddy
+pide los certificados al arrancar, los renueva solo y guarda su estado en un
+volumen — sin él, cada redespliegue volvería a pedirlos y Let's Encrypt limita
+cuántas veces se puede.
+
+`DEV_API_KEY` deja de ser opcional en cuanto el entorno es alcanzable desde
+fuera. Sin ella el simulador de titulares queda abierto, y `POST /dev/sessions`
+emite una sesión para el `customer_id` que se le pida: cualquiera podría hablar
+por el titular de prueba de otro socio. El binario avisa en el arranque cuando
+está sin clave.
+
+Una integración por socio, cada una con su secreto:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml run --rm \
+  bootstrap -client-id otro_socio -name "Otro Socio"
+```
+
+Una cosa a tener en cuenta antes de abrirlo a más de un socio: el límite de tasa
+es **por instancia**. Con una réplica es correcto; con dos, el límite efectivo se
+duplica y habría que moverlo a un almacén compartido.
+
+La caja del sandbox NO se agota —es una cuenta interna y esas admiten sobregiro—
+así que su saldo negativo no es un problema a vigilar: es la cuenta de cuánto
+dinero de prueba se ha emitido.
+
 ## Mandatos de pago (modelo B)
 
 El permiso que un titular le da a una plataforma para iniciar pagos desde una cuenta suya.
