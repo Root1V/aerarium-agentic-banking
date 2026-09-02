@@ -55,6 +55,7 @@ Análisis en [docs/09](docs/09-integracion-mercatus.md) · preguntas y respuesta
 | 7 | **Modelo B**: mandato de pago con topes, vigencia y revocación (21 tests) | Rust | feat/payment-mandates | 👀 |
 | 8 | **Modelo B**: consentimiento, permiso delegado y pago bajo mandato (14 tests) | Go | feat/payment-mandates | 👀 |
 | 9 | Pantallas de consentimiento y gestión de permisos del titular (22 tests) | Flutter | feat/app-mandates | 👀 |
+| 10 | Sandbox entregable: entorno completo en contenedores, canal del titular y cliente de demostración | Go/Docker | feat/sandbox-entregable | 👀 |
 
 Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
@@ -65,8 +66,10 @@ Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/12](docs/12-modelo-b-iniciacion-de-pagos.md), especificación conjunta para Mercatus
 en [docs/13](docs/13-spec-modelos-a-y-b.md).
 
-**Los dos modelos están completos**, backend y app. Lo único que falta para producción
-no es código: la licencia o el proveedor BaaS en Perú.
+**Los dos modelos están completos**, backend y app, y el sandbox se levanta entero
+con un comando ([SANDBOX.md](SANDBOX.md)) — es lo que le faltaba a Mercatus para
+escribir su cliente HTTP. Lo único que falta para producción no es código: la
+licencia o el proveedor BaaS en Perú.
 
 **Sigue bloqueado, y no por nosotros:**
 - **Constitución de Mercatus Technologies S.A.C. (Perú)**, en curso. Hasta que cierre no

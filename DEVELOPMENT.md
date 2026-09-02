@@ -230,6 +230,35 @@ confusión de algoritmo, incluido `alg: none`. Los secretos se guardan como SHA-
 los genera el banco con 256 bits de entropía — para una contraseña humana eso sería un
 error, y está anotado en el esquema para que nadie lo copie al lugar equivocado.
 
+## Sandbox completo, en un comando
+
+Para levantar el entorno como lo levanta quien integra —sin toolchains, todo en
+contenedores— hay un compose aparte:
+
+```bash
+echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
+docker compose -f platform/docker-compose.sandbox.yml up --build -d
+```
+
+Levanta las cuatro piezas que hacen falta para ejercitar los dos modelos: core,
+barrendero de retenciones, API de socio (`:8081`) y canal del titular (`:8080`).
+El alta de la integración corre sola e imprime el secreto una vez
+(`logs bootstrap`).
+
+El canal del titular es la pieza que faltaba para que el modelo B se pudiera
+probar fuera de una prueba de Go: la mitad del flujo la protagoniza una persona.
+Su binario **se niega a arrancar** sin `ALLOW_DEV_AUTH=true`, porque hasta que
+existan las passkeys lo único que sabe autenticar es el sustituto de desarrollo.
+
+El recorrido completo por HTTP, que es también el ejemplo de cliente:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml \
+  run --rm -e CLIENT_SECRET="<el secreto>" demo -model b
+```
+
+Guía para compartir en [SANDBOX.md](SANDBOX.md).
+
 ## Mandatos de pago (modelo B)
 
 El permiso que un titular le da a una plataforma para iniciar pagos desde una cuenta suya.
