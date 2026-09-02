@@ -19,7 +19,7 @@ ledger, con la contabilidad de verdad detrás.
 | `POST /v1/authorizations` | ✅ |
 | `POST /v1/authorizations/{id}/capture` | ✅ |
 | `GET /v1/authorizations/{id}` | ✅ con verificación opcional del vendedor |
-| `POST /v1/authorizations/{id}/refund` | ✅ total; el parcial existe en el modelo, falta exponerlo |
+| `POST /v1/authorizations/{id}/refund` | ✅ total y parcial |
 | `GET /v1/accounts/{id}/transactions` | ✅ paginado |
 
 **Lo que el sandbox NO tiene todavía**: dinero real. Hasta que cierre la
@@ -354,10 +354,13 @@ cd core && DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
 
 **Del nuestro:**
 
-1. Fijar el país ancla de operación. Ustedes asumen Perú; nuestro plan de
-   licencias todavía no lo cierra, y condiciona la licencia y el proveedor.
-   Conviene confirmarlo antes de avanzar con el KYB.
-2. Reembolso parcial en la API. El modelo del core ya lo soporta; falta el campo.
+1. ~~Fijar el país ancla~~ — **decidido: Perú**.
+2. ~~Reembolso parcial en la API~~ — **hecho**.
 3. PEN y EUR, según lo acordado para la segunda entrega.
 4. Fondeo y retiro. El contrato no los cubre y son la parte con más escrutinio
    regulatorio: hay que diseñarlos antes de mover dinero real.
+5. Licencia o proveedor BaaS en Perú: es el bloqueante de producción.
+
+> Este documento cubre solo el modelo A. La especificación de los dos modelos,
+> con el flujo de consentimiento del B, está en
+> [13 — Modelos A y B](13-spec-modelos-a-y-b.md).

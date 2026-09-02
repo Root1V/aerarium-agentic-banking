@@ -188,32 +188,6 @@ Dos reglas que conviene conocer:
 
 `capture`, `refund` y el `GET` funcionan exactamente igual que en el modelo A.
 
-### 3.5 Reembolso, total o parcial
-
-El cuerpo es **opcional**: sin él se devuelve todo lo pendiente, que es el caso
-normal y no cambió. Con `amount` se devuelve menos, y se puede repetir hasta
-completar el total.
-
-```bash
-curl -X POST "$BASE/v1/authorizations/$AUTH/refund" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"amount": 3000000}'
-```
-
-```json
-{
-  "authorization_id": "auth_9047...",
-  "status": "partially_refunded",
-  "refunded": 3000000,
-  "refunded_total": 3000000,
-  "refundable": 7000000,
-  "currency": "USD"
-}
-```
-
-`refundable` viene en la respuesta para que la operación de soporte no tenga que
-llevar la cuenta por su lado. Devolver más de lo que queda es
-`422 refund_exceeds_capture`.
-
 ### 3.4 Consultar el permiso
 
 ```bash
@@ -240,6 +214,32 @@ de que un pago falle delante de un usuario.
 `consumed` no es un contador que llevemos aparte — se **deriva** de las
 autorizaciones vivas del mandato. Una retención sin capturar ya consume el tope
 (el dinero está comprometido); liberarla o reembolsarla lo devuelve solo.
+
+### 3.5 Reembolso, total o parcial
+
+El cuerpo es **opcional**: sin él se devuelve todo lo pendiente, que es el caso
+normal y no cambió. Con `amount` se devuelve menos, y se puede repetir hasta
+completar el total.
+
+```bash
+curl -X POST "$BASE/v1/authorizations/$AUTH/refund" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"amount": 3000000}'
+```
+
+```json
+{
+  "authorization_id": "auth_9047...",
+  "status": "partially_refunded",
+  "refunded": 3000000,
+  "refunded_total": 3000000,
+  "refundable": 7000000,
+  "currency": "USD"
+}
+```
+
+`refundable` viene en la respuesta para que la operación de soporte no tenga que
+llevar la cuenta por su lado. Devolver más de lo que queda es
+`422 refund_exceeds_capture`.
 
 ---
 
