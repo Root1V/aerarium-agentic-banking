@@ -380,28 +380,71 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request, claims *o
 	})
 }
 
+// refundRequest permite devolver menos que el total.
+//
+// El cuerpo es OPCIONAL: sin él, o con `amount` en cero, se devuelve todo lo que
+// quede sin reembolsar. Así el reembolso total —que es el caso normal— sigue
+// siendo una llamada sin cuerpo, y los clientes escritos antes de que esto
+// existiera no cambian una línea.
+type refundRequest struct {
+	Amount int64 `json:"amount,omitempty"`
+}
+
+type refundResponse struct {
+	AuthorizationID string `json:"authorization_id"`
+	Status          string `json:"status"`
+	// Cuánto se devolvió en ESTA operación.
+	Refunded int64 `json:"refunded"`
+	// Acumulado devuelto y cuánto queda por devolver, para que la operación de
+	// soporte no tenga que llevar la cuenta por su lado.
+	RefundedTotal int64  `json:"refunded_total"`
+	Refundable    int64  `json:"refundable"`
+	Currency      string `json:"currency"`
+}
+
 func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request, claims *oauth.Claims) {
 	auth, ok := s.resolveOwnedAuthorization(w, r, claims)
 	if !ok {
 		return
 	}
 
-	// El contrato expone solo el reembolso total en esta fase. El core admite
-	// parcial; el día que se exponga, es un campo más en el cuerpo.
-	refunded, err := s.core.Refund(r.Context(), auth.ID, 0)
-	if err != nil {
-		if errors.Is(err, coreclient.ErrInvalidState) {
-			writeError(w, http.StatusConflict, CodeNothingToRefund,
-				"la autorización no tiene un cobro que devolver")
-			return
-		}
-		coreError(w, err)
+	// Un cuerpo vacío es válido: es el reembolso total de siempre.
+	var req refundRequest
+	if r.ContentLength > 0 && !decodeBody(w, r, &req) {
+		return
+	}
+	if req.Amount < 0 {
+		writeError(w, http.StatusBadRequest, CodeMalformedRequest,
+			"amount no puede ser negativo; omítelo para devolver el total pendiente")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, authorizationResponse{
+	before := auth.RefundedMicros
+	refunded, err := s.core.Refund(r.Context(), auth.ID, req.Amount)
+	if err != nil {
+		switch {
+		case errors.Is(err, coreclient.ErrInvalidState):
+			writeError(w, http.StatusConflict, CodeNothingToRefund,
+				"la autorización no tiene un cobro que devolver")
+		case errors.Is(err, coreclient.ErrInvalid):
+			// El core rechaza devolver más de lo que queda. Es 422 y no 400: la
+			// petición está bien formada, lo que no cuadra es el monto contra el
+			// estado del cobro.
+			writeError(w, http.StatusUnprocessableEntity, CodeRefundExceedsCapture,
+				"el reembolso supera lo que queda por devolver")
+		default:
+			coreError(w, err)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, refundResponse{
 		AuthorizationID: encodeID(authorizationPrefix, refunded.ID),
 		Status:          statusName(refunded.Status),
+		Refunded:        refunded.RefundedMicros - before,
+		RefundedTotal:   refunded.RefundedMicros,
+		Refundable:      refunded.AmountMicros - refunded.RefundedMicros,
+		Currency:        refunded.Currency,
 	})
 }
 

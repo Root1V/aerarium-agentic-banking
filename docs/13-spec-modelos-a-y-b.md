@@ -188,6 +188,32 @@ Dos reglas que conviene conocer:
 
 `capture`, `refund` y el `GET` funcionan exactamente igual que en el modelo A.
 
+### 3.5 Reembolso, total o parcial
+
+El cuerpo es **opcional**: sin él se devuelve todo lo pendiente, que es el caso
+normal y no cambió. Con `amount` se devuelve menos, y se puede repetir hasta
+completar el total.
+
+```bash
+curl -X POST "$BASE/v1/authorizations/$AUTH/refund" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"amount": 3000000}'
+```
+
+```json
+{
+  "authorization_id": "auth_9047...",
+  "status": "partially_refunded",
+  "refunded": 3000000,
+  "refunded_total": 3000000,
+  "refundable": 7000000,
+  "currency": "USD"
+}
+```
+
+`refundable` viene en la respuesta para que la operación de soporte no tenga que
+llevar la cuenta por su lado. Devolver más de lo que queda es
+`422 refund_exceeds_capture`.
+
 ### 3.4 Consultar el permiso
 
 ```bash
@@ -331,14 +357,13 @@ por eso su diseño no es burocracia: es la protección de las dos partes.
 
 **Nuestro:**
 
-1. **Pantallas de consentimiento en la app.** El backend está completo y probado;
-   falta la interfaz que ve el titular. Hasta entonces el modelo B se puede
-   ejercitar por API pero no con un usuario real.
-2. **Licencia o proveedor BaaS en Perú.** Bloquea producción de los dos modelos.
-3. **Reembolso parcial** en la API; el modelo del core ya lo soporta.
-4. **PEN y EUR**, según lo acordado para la segunda entrega.
-5. **Fondeo y retiro**: el contrato no los cubre y es donde vive el escrutinio
+1. **Licencia o proveedor BaaS en Perú.** Bloquea producción de los dos modelos.
+   Es el único bloqueante que queda del lado técnico.
+2. **PEN y EUR**, según lo acordado para la segunda entrega.
+3. **Fondeo y retiro**: el contrato no los cubre y es donde vive el escrutinio
    regulatorio. Hay que diseñarlos antes de mover dinero real.
+
+Las pantallas de consentimiento del titular y el reembolso parcial **ya están**.
 
 **De ustedes:**
 
