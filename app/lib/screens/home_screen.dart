@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import 'mandates_screen.dart';
 import 'transfer_screen.dart';
 
 /// Pantalla principal: saldo y últimos movimientos.
@@ -59,7 +60,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mi cuenta')),
+      appBar: AppBar(
+        title: const Text('Mi cuenta'),
+        actions: [
+          // Los permisos de pago viven en la barra y no escondidos en un menú:
+          // "¿a quién le di acceso a mi dinero?" es una pregunta que tiene que
+          // poder responderse rápido.
+          IconButton(
+            icon: const Icon(Icons.key_outlined),
+            tooltip: 'Permisos de pago',
+            onPressed: _openMandates,
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(),
@@ -72,6 +85,12 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Enviar'),
             ),
     );
+  }
+
+  void _openMandates() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => MandatesScreen(client: widget.client),
+    ));
   }
 
   Widget _buildBody() {
