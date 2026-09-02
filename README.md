@@ -7,10 +7,10 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 **La oportunidad**: el mercado de neobanca LatAm (~USD 17–18 mil millones en 2025) crece a doble dígito y quedan ~300M de adultos no/sub-bancarizados, pero la ventana de la "wallet gratuita" cerró — los rieles públicos (PIX, Bre-B, SPEI/DiMo, Yape/Plin) comoditizaron los pagos. En 2026 se gana con **crédito basado en scoring alternativo, rendimiento sobre saldos y experiencia multiproducto AI-native**, con un costo de servicio radicalmente bajo (benchmark Nubank: USD 0,80/cliente/mes contra ARPAC de USD 12,2).
 
 **La estrategia recomendada (ruta híbrida)**:
-1. **Lanzar MVP sobre BaaS en 4–6 meses (USD 150–400K de construcción)** en el país de validación — Argentina (registro PSPCP en 3–6 meses casi sin capital) o el país ancla elegido vía Pomelo/Dock.
-2. **Tramitar licencia propia en paralelo** (IP+SCD en Brasil ~USD 2,2M / compra de SOFIPO en México) y migrar al superar ~100–300K usuarios, cuando el costo cedido al BaaS supere el de mantener la licencia.
+1. **Lanzar MVP sobre BaaS en 4–6 meses (USD 150–400K de construcción)** en **Perú**, el país ancla decidido ([doc 04 §3](docs/04-plan-negocio.md)) — lo define el primer cliente institucional, no la velocidad regulatoria.
+2. **Tramitar la EEDE peruana en paralelo** (~USD 0,8M, 12–24 meses) y migrar al superar ~100–300K usuarios. Ojo: la EEDE **no permite crédito** — encenderlo exige una Financiera (~USD 4,5M), que hay que presupuestar desde ahora.
 3. **Monetizar con crédito como motor** (~50% del ingreso objetivo) — el interchange LatAm (0,5–0,9%) no sostiene el negocio solo.
-4. **Expandir con licencias ligeras** (EEDE Perú ~USD 0,8M, SEDPE Colombia ~USD 2M) replicando la plataforma multi-país.
+4. **Expandir después** a México (compra de SOFIPO) o Colombia (SEDPE ~USD 2M) replicando la plataforma multi-país.
 
 **La plataforma**: comprar la infraestructura regulada (BaaS, emisión de tarjetas, KYC, antifraude) y construir lo diferencial — la app (Flutter), el orquestador de onboarding, el **ledger propio de doble partida con reconciliación diaria** (la lección Synapse), y el **motor de scoring con datos transaccionales**. Monolito modular en Kotlin/JVM + PostgreSQL + Kafka sobre AWS/Kubernetes, con adaptadores por proveedor y por país que permiten cambiar de BaaS a licencia propia sin reescribir el producto.
 
@@ -44,8 +44,8 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 
 ## Próximos pasos sugeridos
 
-1. Decidir el país de validación (T0) — ver análisis en [doc 04 §3](docs/04-plan-negocio.md).
-2. Contactar 2–3 proveedores BaaS (Pomelo, Dock) y asesores regulatorios del país elegido para cotizaciones reales.
+1. ~~Decidir el país de validación~~ — **decidido: Perú** ([doc 04 §3](docs/04-plan-negocio.md)).
+2. Contactar proveedores BaaS con cobertura en Perú y un asesor regulatorio ante la SBS para cotizaciones reales. **Es el bloqueante de producción**: sin esto, ningún modelo de integración mueve dinero real.
 3. Iniciar la Fase 0 del [roadmap](docs/07-roadmap-desarrollo.md): fundaciones técnicas + expediente regulatorio.
 
 ---

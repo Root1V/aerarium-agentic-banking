@@ -140,7 +140,11 @@ Fuentes: [Ozone API](https://ozoneapi.com/blog/the-status-of-open-finance-in-lat
 - **Ualá**: PSP en Argentina, luego **compró entidades licenciadas** (Wilobank AR, ABC Capital MX) para saltar la fila regulatoria.
 - **Global66**: mosaico de licencias ligeras — SEDPE (CO), EEDE (PE), emisor (CL) — y evalúa una licencia bancaria internacional ([LatamFintech](https://www.latamfintech.co/articles/fintech-chilena-global66-busca-una-licencia-bancaria-internacional-para-expandir-sus-servicios-financieros-en-multiples-paises)).
 
-**Secuencia recomendada para AIBank:**
+**Secuencia DECIDIDA para AIBank** (la decisión y sus consecuencias, en [doc 04 §3](04-plan-negocio.md)):
+
+0. **Perú es el país ancla.** Arrancar sobre BaaS mientras se tramita la **EEDE** ante la SBS (~USD 0,8M, 12–24 meses), y presupuestar desde ya la **Financiera** (~USD 4,5M) como la licencia que habilita el crédito, que la EEDE no permite.
+
+Lo que sigue se conserva como análisis de alternativas, no como plan vigente:
 
 1. **Validar en Argentina (PSPCP, 3–6 meses, casi sin capital) o Brasil vía BaaS.** Brasil es el mercado más grande y con mejor infraestructura (PIX, open finance), pero exige más capital desde 2026.
 2. **Solicitar licencia propia en Brasil (IP + SCD) en paralelo al lanzamiento BaaS** — el trámite de ~1 año se amortiza con el tamaño del mercado; presentar antes de que la transición de capital 2026–2028 encarezca el ticket.
