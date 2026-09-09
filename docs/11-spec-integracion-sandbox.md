@@ -33,7 +33,7 @@ producción sí.
 
 | | |
 |---|---|
-| **Base URL del sandbox** | la que se les comunique al entregar credenciales |
+| **Base URL del sandbox** | `http://localhost:8081` levantándolo con Docker ([SANDBOX.md](../SANDBOX.md)); la de un entorno alojado se comunica al entregar credenciales |
 | **Emisor de tokens** | `https://sandbox.aibank.local` (claim `iss`) |
 | **Moneda habilitada** | USD. PEN y EUR en la segunda entrega, según lo acordado |
 | **Salud del servicio** | `GET /health` → `{"status":"ok","sandbox":true}` |
@@ -303,42 +303,22 @@ cambia el resultado.
 
 ## 8. Levantar el entorno en local
 
-Por si quieren correrlo del lado de ustedes mientras integran.
+Todo el sandbox —core, barrendero, API de socio y canal del titular— con un
+comando y sin más requisito que Docker:
 
 ```bash
-docker compose -f platform/docker-compose.yml up -d
+echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
+docker compose -f platform/docker-compose.sandbox.yml up --build -d
 ```
+
+El alta de la integración corre sola e imprime el secreto una vez:
 
 ```bash
-cd core && DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
-  cargo run --bin aibank-core-server
+docker compose -f platform/docker-compose.sandbox.yml logs bootstrap
 ```
 
-Alta de la integración y de las cuentas internas. Imprime el secreto una vez:
-
-```bash
-go run ./services/mercatus/cmd/bootstrap -client-id mercatus_sandbox -currencies USD
-```
-
-Con lo que imprime el comando anterior:
-
-```bash
-DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank?sslmode=disable" \
-CORE_ADDR=127.0.0.1:50051 BIND_ADDR=127.0.0.1:8081 \
-OAUTH_ISSUER="https://sandbox.aibank.local" \
-OAUTH_SIGNING_KEY="$(head -c 32 /dev/urandom | base64)" \
-MERCATUS_SANDBOX=true MERCATUS_PRODUCTS="USD=AGENT-USD" \
-MERCATUS_SANDBOX_CASH="<el que imprimió bootstrap>" \
-go run ./services/mercatus/cmd/mercatus
-```
-
-El barrendero de retenciones vencidas, que es lo que hace real el vencimiento de
-15 minutos:
-
-```bash
-cd core && DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
-  cargo run --bin aibank-authorization-sweeper
-```
+Paso a paso, rotación de secreto, recorrido de demostración y reinicio de cero en
+[SANDBOX.md](../SANDBOX.md).
 
 ---
 

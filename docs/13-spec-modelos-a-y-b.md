@@ -66,6 +66,31 @@ También son comunes:
 
 Contrato completo en [`contracts/openapi/mercatus-v1.yaml`](../contracts/openapi/mercatus-v1.yaml).
 
+### Cómo conseguir un entorno donde probar
+
+El sandbox se levanta **entero con un comando** —core, barrendero, API de socio y
+canal del titular— y no necesita más que Docker: ni Rust, ni Go, ni Postgres
+instalados.
+
+```bash
+echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
+docker compose -f platform/docker-compose.sandbox.yml up --build -d
+```
+
+Paso a paso, credenciales y reinicio en [SANDBOX.md](../SANDBOX.md).
+
+Hay un recorrido completo por HTTP que narra el camino entero del modelo B y sirve
+de punto de partida para su cliente:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml \
+  run --rm -e CLIENT_SECRET="<el secreto>" demo -model b
+```
+
+Las cuatro piezas hacen falta. En particular el **barrendero**: es lo que libera
+las retenciones vencidas, y sin él los 15 minutos de vigencia serían una promesa
+que nada cumple.
+
 ---
 
 ## 2. Modelo A — cuenta ómnibus
@@ -363,7 +388,8 @@ por eso su diseño no es burocracia: es la protección de las dos partes.
 3. **Fondeo y retiro**: el contrato no los cubre y es donde vive el escrutinio
    regulatorio. Hay que diseñarlos antes de mover dinero real.
 
-Las pantallas de consentimiento del titular y el reembolso parcial **ya están**.
+Las pantallas de consentimiento del titular, el reembolso parcial y el sandbox
+levantable en un comando **ya están**.
 
 **De ustedes:**
 

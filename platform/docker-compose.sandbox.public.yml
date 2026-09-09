@@ -1,0 +1,43 @@
+# Añadido para publicar el sandbox en internet con TLS.
+#
+#   docker compose -f platform/docker-compose.sandbox.yml \
+#                  -f platform/docker-compose.sandbox.public.yml up -d
+#
+# En platform/.env hacen falta, además de OAUTH_SIGNING_KEY:
+#
+#   PARTNER_DOMAIN=sandbox-api.<dominio>
+#   HOLDER_DOMAIN=sandbox-app.<dominio>
+#   DEV_API_KEY=<aleatorio>          # cierra el simulador de titulares
+#   PARTNER_PUBLISH=127.0.0.1:8081   # solo el proxy queda expuesto
+#   HOLDER_PUBLISH=127.0.0.1:8080
+#
+# Los dos nombres tienen que resolver a esta máquina ANTES de levantarlo: Caddy
+# pide los certificados al arrancar y una validación fallida deja el servicio
+# reintentando.
+#
+# Este entorno sigue sin llevar dinero real. Que esté en internet no lo cambia:
+# los saldos los crea su propia caja y el emisor de tokens es el de sandbox.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PARTNER_DOMAIN: ${PARTNER_DOMAIN:?falta PARTNER_DOMAIN}
+      HOLDER_DOMAIN: ${HOLDER_DOMAIN:?falta HOLDER_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados sobreviven a un redespliegue. Sin esto, cada `up`
+      # volvería a pedirlos y Let's Encrypt limita cuántas veces se puede.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - partner
+      - holder
+
+volumes:
+  caddy_data:
+  caddy_config:

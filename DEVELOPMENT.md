@@ -230,6 +230,80 @@ confusión de algoritmo, incluido `alg: none`. Los secretos se guardan como SHA-
 los genera el banco con 256 bits de entropía — para una contraseña humana eso sería un
 error, y está anotado en el esquema para que nadie lo copie al lugar equivocado.
 
+## Sandbox completo, en un comando
+
+Para levantar el entorno como lo levanta quien integra —sin toolchains, todo en
+contenedores— hay un compose aparte:
+
+```bash
+echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
+docker compose -f platform/docker-compose.sandbox.yml up --build -d
+```
+
+Levanta las cuatro piezas que hacen falta para ejercitar los dos modelos: core,
+barrendero de retenciones, API de socio (`:8081`) y canal del titular (`:8080`).
+El alta de la integración corre sola e imprime el secreto una vez
+(`logs bootstrap`).
+
+El canal del titular es la pieza que faltaba para que el modelo B se pudiera
+probar fuera de una prueba de Go: la mitad del flujo la protagoniza una persona.
+Su binario **se niega a arrancar** sin `ALLOW_DEV_AUTH=true`, porque hasta que
+existan las passkeys lo único que sabe autenticar es el sustituto de desarrollo.
+
+El recorrido completo por HTTP, que es también el ejemplo de cliente:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml \
+  run --rm -e CLIENT_SECRET="<el secreto>" demo -model b
+```
+
+Guía para compartir en [SANDBOX.md](SANDBOX.md).
+
+### Publicarlo en internet
+
+Un añadido pone Caddy delante y saca los servicios de las interfaces públicas:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml \
+               -f platform/docker-compose.sandbox.public.yml up -d
+```
+
+En `platform/.env`, además de `OAUTH_SIGNING_KEY`:
+
+```
+PARTNER_DOMAIN=sandbox-api.<dominio>
+HOLDER_DOMAIN=sandbox-app.<dominio>
+DEV_API_KEY=<aleatorio>
+PARTNER_PUBLISH=127.0.0.1:8081
+HOLDER_PUBLISH=127.0.0.1:8080
+```
+
+Los dos nombres tienen que resolver a la máquina **antes** de levantarlo: Caddy
+pide los certificados al arrancar, los renueva solo y guarda su estado en un
+volumen — sin él, cada redespliegue volvería a pedirlos y Let's Encrypt limita
+cuántas veces se puede.
+
+`DEV_API_KEY` deja de ser opcional en cuanto el entorno es alcanzable desde
+fuera. Sin ella el simulador de titulares queda abierto, y `POST /dev/sessions`
+emite una sesión para el `customer_id` que se le pida: cualquiera podría hablar
+por el titular de prueba de otro socio. El binario avisa en el arranque cuando
+está sin clave.
+
+Una integración por socio, cada una con su secreto:
+
+```bash
+docker compose -f platform/docker-compose.sandbox.yml run --rm \
+  bootstrap -client-id otro_socio -name "Otro Socio"
+```
+
+Una cosa a tener en cuenta antes de abrirlo a más de un socio: el límite de tasa
+es **por instancia**. Con una réplica es correcto; con dos, el límite efectivo se
+duplica y habría que moverlo a un almacén compartido.
+
+La caja del sandbox NO se agota —es una cuenta interna y esas admiten sobregiro—
+así que su saldo negativo no es un problema a vigilar: es la cuenta de cuánto
+dinero de prueba se ha emitido.
+
 ## Mandatos de pago (modelo B)
 
 El permiso que un titular le da a una plataforma para iniciar pagos desde una cuenta suya.

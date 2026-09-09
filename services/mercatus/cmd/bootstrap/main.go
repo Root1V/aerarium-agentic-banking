@@ -117,6 +117,20 @@ func run(clientID, name, currencies string, sandbox, rotate bool) error {
 		}
 	}
 
+	// Volver a levantar el entorno no puede tumbar el alta. En el sandbox esto
+	// corre en cada arranque, y fallar porque la integración ya existe obligaría
+	// a borrar la base para reiniciar — que es justo cuando se pierde el secreto
+	// que ya estaba en uso del otro lado.
+	if _, err := store.FindClient(ctx, clientID); err == nil {
+		fmt.Printf("MERCATUS_PRODUCTS=%s\n", strings.Join(products, ","))
+		fmt.Println()
+		fmt.Printf("La integración %q ya estaba dada de alta; su secreto no cambió.\n", clientID)
+		fmt.Println("Para emitir uno nuevo (el anterior sigue sirviendo 7 días): -rotate")
+		return nil
+	} else if !errors.Is(err, oauth.ErrClientNotFound) {
+		return fmt.Errorf("consultar integración: %w", err)
+	}
+
 	secret, err := store.Register(ctx, clientID, nameOr(name, clientID), []string{
 		oauth.ScopePaymentsRead, oauth.ScopePaymentsWrite, oauth.ScopeAccountsWrite,
 	})

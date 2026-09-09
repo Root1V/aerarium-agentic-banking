@@ -1,0 +1,167 @@
+# Sandbox de AIBank, completo y en un solo comando.
+#
+#   docker compose -f platform/docker-compose.sandbox.yml up --build -d
+#
+# Existe porque un socio no puede integrar contra nuestras pruebas. Levanta las
+# CUATRO piezas que hacen falta para ejercitar los dos modelos de verdad:
+#
+#   core      el ledger y las autorizaciones
+#   sweeper   libera las retenciones vencidas — sin él los 15 minutos son mentira
+#   partner   la API de socio (modelo A y B)   → http://localhost:8081
+#   holder    el canal del titular (modelo B)  → http://localhost:8080
+#
+# Se necesita una clave de firma. No hay valor por defecto a propósito: un
+# entorno que arranca con una clave que está escrita en un archivo público es un
+# entorno cuyos tokens puede fabricar cualquiera.
+#
+#   echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
+#
+# Este entorno NO lleva dinero real y su emisor de tokens es otro: un token de
+# aquí es rechazado en producción, y al revés.
+#
+# Las imágenes están nombradas para que este mismo archivo sirva SIN el código
+# fuente: publicándolas en un registro, quien integra hace `pull` en vez de
+# `build` y no necesita nada más que este archivo.
+#
+#   AIBANK_IMAGE_PREFIX=ghcr.io/<org> AIBANK_IMAGE_TAG=2026.09 docker compose ... pull
+
+name: aibank-sandbox
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aibank
+      POSTGRES_PASSWORD: aibank_sandbox
+      POSTGRES_DB: aibank
+    # Sin puerto publicado: nada de fuera necesita hablar con la base, y
+    # publicarlo solo añadiría una puerta que defender.
+    volumes:
+      - sandbox_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aibank"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-core:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/core.Dockerfile
+    environment:
+      DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank
+      BIND_ADDR: 0.0.0.0:50051
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Alta de la integración y de las cuentas internas que el riel necesita.
+  # Corre hasta completarse y vuelve a intentarlo mientras el core arranca.
+  #
+  # El secreto se imprime UNA vez, aquí:
+  #   docker compose -f platform/docker-compose.sandbox.yml logs bootstrap
+  bootstrap:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-services:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/services.Dockerfile
+    # El ejecutable va en entrypoint y no en command para que `run` con
+    # argumentos —rotar un secreto, dar de alta otra integración— los añada en
+    # vez de sustituir el binario entero.
+    entrypoint: ["bootstrap"]
+    command:
+      - -client-id=${SANDBOX_CLIENT_ID:-mercatus_sandbox}
+      - -name=${SANDBOX_CLIENT_NAME:-Mercatus}
+      - -currencies=${SANDBOX_CURRENCIES:-USD}
+    environment:
+      DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank?sslmode=disable
+      CORE_ADDR: core:50051
+    depends_on:
+      core:
+        condition: service_started
+    restart: on-failure
+
+  partner:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-services:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/services.Dockerfile
+    command: ["mercatus"]
+    environment:
+      DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank?sslmode=disable
+      CORE_ADDR: core:50051
+      BIND_ADDR: 0.0.0.0:8081
+      OAUTH_ISSUER: https://sandbox.aibank.local
+      OAUTH_SIGNING_KEY: ${OAUTH_SIGNING_KEY:?falta OAUTH_SIGNING_KEY — ver la cabecera de este archivo}
+      MERCATUS_SANDBOX: "true"
+      MERCATUS_PRODUCTS: USD=AGENT-USD
+    # Publicado en todas las interfaces para el uso local. Un entorno alojado lo
+    # ata a 127.0.0.1 y deja que el proxy sea lo único expuesto:
+    #   PARTNER_PUBLISH=127.0.0.1:8081
+    ports:
+      - "${PARTNER_PUBLISH:-8081}:8081"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # El lado humano del modelo B. Arranca con el autenticador de juguete, que es
+  # lo único que hay hasta que estén las passkeys: por eso hay que pedirlo
+  # explícitamente y por eso el binario se niega a arrancar sin la variable.
+  holder:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-services:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/services.Dockerfile
+    command: ["bff"]
+    environment:
+      DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank?sslmode=disable
+      CORE_ADDR: core:50051
+      BIND_ADDR: 0.0.0.0:8080
+      ALLOW_DEV_AUTH: "true"
+      # Cierra el simulador de titulares. Vacío en local; OBLIGATORIO en cuanto
+      # el entorno sea accesible desde fuera.
+      DEV_API_KEY: ${DEV_API_KEY:-}
+    ports:
+      - "${HOLDER_PUBLISH:-8080}:8080"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Sin esto, una retención que nadie captura inmoviliza el dinero para siempre.
+  sweeper:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-core:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/core.Dockerfile
+    command: ["aibank-authorization-sweeper"]
+    environment:
+      DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank
+      SWEEP_INTERVAL_S: "30"
+    depends_on:
+      core:
+        condition: service_started
+    restart: unless-stopped
+
+  # Recorrido completo por HTTP. No arranca con el entorno; se invoca:
+  #
+  #   docker compose -f platform/docker-compose.sandbox.yml \
+  #     run --rm -e CLIENT_SECRET=... demo -model b
+  demo:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-services:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/services.Dockerfile
+    entrypoint: ["demo"]
+    environment:
+      PARTNER_URL: http://partner:8081
+      HOLDER_URL: http://holder:8080
+      CLIENT_ID: ${SANDBOX_CLIENT_ID:-mercatus_sandbox}
+      DEV_API_KEY: ${DEV_API_KEY:-}
+    profiles: ["tools"]
+
+volumes:
+  sandbox_pgdata:

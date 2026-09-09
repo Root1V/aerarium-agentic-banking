@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -76,10 +77,16 @@ func run(log *slog.Logger) error {
 	}
 	defer core.Close()
 
+	sandbox := os.Getenv("MERCATUS_SANDBOX") == "true"
+	cashAccount, err := sandboxCashAccount(ctx, core, sandbox)
+	if err != nil {
+		return err
+	}
+
 	server := mercatus.NewServer(core, oauth.NewServer(store, issuer, log), store, mercatus.Config{
-		Sandbox:              os.Getenv("MERCATUS_SANDBOX") == "true",
+		Sandbox:              sandbox,
 		ProductByCurrency:    productsFromEnv(),
-		SandboxCashAccountID: os.Getenv("MERCATUS_SANDBOX_CASH"),
+		SandboxCashAccountID: cashAccount,
 	}, log)
 
 	addr := env("BIND_ADDR", "127.0.0.1:8081")
@@ -126,6 +133,31 @@ func decodeKey(name string) ([]byte, error) {
 		return nil, errors.New(name + " no es base64 válido")
 	}
 	return key, nil
+}
+
+// sandboxCashAccount resuelve la caja que financia los saldos de prueba.
+//
+// El identificador se puede fijar con MERCATUS_SANDBOX_CASH, pero lo normal es
+// no tenerlo: lo genera el alta de la integración, y obligar a copiarlo a mano
+// convierte levantar el entorno en dos pasos encadenados. Por eso, si falta, se
+// busca por código —el que crea el bootstrap— y se falla en el arranque si no
+// está: un sandbox que acepta abrir cuentas y luego no puede acreditarles saldo
+// es peor que uno que no arranca.
+func sandboxCashAccount(ctx context.Context, core *coreclient.Client, sandbox bool) (string, error) {
+	if id := os.Getenv("MERCATUS_SANDBOX_CASH"); id != "" {
+		return id, nil
+	}
+	if !sandbox {
+		return "", nil
+	}
+
+	code := env("MERCATUS_SANDBOX_CASH_CODE", "SANDBOX-CASH-USD")
+	account, err := core.GetAccount(ctx, code)
+	if err != nil {
+		return "", fmt.Errorf("buscar la caja del sandbox %q: %w "+
+			"(¿corriste el alta de la integración?)", code, err)
+	}
+	return account.Id, nil
 }
 
 // productsFromEnv lee el mapa de moneda a producto de MERCATUS_PRODUCTS, con el
