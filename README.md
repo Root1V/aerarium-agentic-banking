@@ -1,4 +1,46 @@
-# AIBank — Plan completo para un neobanco en Latinoamérica
+# Aerarium — Agentic Banking Core
+
+*Production-grade banking core for agentic commerce — the embryo of a bank where AI agents
+are first-class account holders. Append-only double-entry ledger in micro-units (10⁻⁶) so a
+$0.001 agent call actually settles, hold→capture authorizations, and consent-backed payment
+mandates that prove a human agreed. Rust core, Go partner API and mobile BFF, Flutter app,
+Python credit scoring, TypeScript back office. One-command self-hosted sandbox. No BaaS lock-in.*
+
+The *aerarium* was Rome's treasury — where the state kept what it owned and what it owed,
+under the temple of Saturn, with the Senate auditing the books. This is that institution
+rebuilt for a world where the account holder is a machine: an agent that discovers a service,
+pays a tenth of a cent for one call, and has to be told **no** the moment it goes past what
+its owner authorized.
+
+Not a wallet sitting on someone else's bank. The ledger is here and it is the source of truth:
+double-entry, append-only, with the invariants enforced by PostgreSQL triggers instead of by
+application code that a future service can forget to call. Corrections are reversing entries,
+never UPDATEs — the lesson Synapse taught the industry at its customers' expense.
+
+> **Naming note**: [`mercatus`](https://github.com/Root1V/mercatus-agentic-payments) — the
+> market — is the counterpart repo, where agents discover and pay for services. `aerarium` is
+> the treasury they pay from. Same story, two sides of the counter.
+>
+> **Language note**: this header is in English; the research, specifications and design
+> documents below are in Spanish, the language they were written and negotiated in.
+
+## Why "embryo" and not "demo"
+
+Everything a bank needs to open its doors is built and tested — **369 tests across five
+languages** — but a bank is not software: it is a licence plus software. What exists here is
+the part that takes years to get right and that nobody can buy off the shelf.
+
+**Built and green**: double-entry ledger with regulatory limits, hold→capture authorizations
+with expiry and sweeping, delegated payment mandates with caps and revocation, OAuth2 with
+secret rotation, card authorization/capture/reversal, resumable KYC onboarding, daily
+reconciliation, explainable credit scoring, mobile app, back office with an append-only audit
+trail, and end-to-end tracing that survives the async hop through the outbox.
+
+**Deliberately absent**: an e-money licence or a BaaS provider in Peru, the anchor market.
+Until that closes, no model moves real money — and that is a contract to sign, not code to
+write.
+
+---
 
 Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral — negocio + plataforma tecnológica — para lanzar un neobanco multi-país en LatAm.
 
