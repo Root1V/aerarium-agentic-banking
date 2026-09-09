@@ -297,3 +297,107 @@ service ReconciliationService {
   // Dispara la conciliación interna bajo demanda.
   rpc RunInternalCheck(RunInternalCheckRequest) returns (RunInternalCheckResponse);
 }
+
+// ---------------------------------------------------------------- autorizaciones
+
+// Estado de una autorización tal como se le reporta a quien consulta.
+//
+// `EXPIRED` no es un estado almacenado sino uno derivado: es lo que significa una
+// retención viva cuya fecha ya pasó. Guardarlo obligaría a escribir en la base
+// cada vez que el reloj avanza.
+enum AuthorizationStatus {
+  AUTHORIZATION_STATUS_UNSPECIFIED = 0;
+  // Dinero retenido, todavía no entregado al receptor.
+  AUTHORIZATION_STATUS_AUTHORIZED = 1;
+  // Liquidada: el dinero está en la cuenta del receptor.
+  AUTHORIZATION_STATUS_CAPTURED = 2;
+  AUTHORIZATION_STATUS_PARTIALLY_REFUNDED = 3;
+  AUTHORIZATION_STATUS_REFUNDED = 4;
+  // La retención se devolvió al pagador sin cobrar.
+  AUTHORIZATION_STATUS_RELEASED = 5;
+  // Vigencia terminada y todavía sin barrer. No se puede capturar.
+  AUTHORIZATION_STATUS_EXPIRED = 6;
+}
+
+// Motivo de un rechazo sobre una autorización. Viaja en `x-aibank-reason`.
+enum AuthorizationErrorReason {
+  AUTHORIZATION_ERROR_REASON_UNSPECIFIED = 0;
+  AUTHORIZATION_ERROR_REASON_INVALID = 1;
+  AUTHORIZATION_ERROR_REASON_IDEMPOTENCY_CONFLICT = 2;
+  AUTHORIZATION_ERROR_REASON_NOT_FOUND = 3;
+  AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_FOUND = 4;
+  // La cuenta existe pero está congelada o cerrada.
+  AUTHORIZATION_ERROR_REASON_ACCOUNT_NOT_OPERATIVE = 5;
+  AUTHORIZATION_ERROR_REASON_EXPIRED = 6;
+  // La operación no aplica al estado actual (reembolsar sin capturar, por ejemplo).
+  AUTHORIZATION_ERROR_REASON_INVALID_STATE = 7;
+  AUTHORIZATION_ERROR_REASON_INSUFFICIENT_FUNDS = 8;
+  AUTHORIZATION_ERROR_REASON_CURRENCY_MISMATCH = 9;
+}
+
+message Authorization {
+  string id = 1;
+  string idempotency_key = 2;
+  string payer_account_id = 3;
+  string payee_account_id = 4;
+  Money amount = 5;
+  AuthorizationStatus status = 6;
+  // Cuánto se devolvió ya. Cero mientras no haya reembolso.
+  int64 refunded_micros = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+  // Presente solo si se capturó.
+  optional google.protobuf.Timestamp settled_at = 10;
+  optional google.protobuf.Timestamp released_at = 11;
+}
+
+message AuthorizeRequest {
+  string idempotency_key = 1;
+  string payer_account_id = 2;
+  string payee_account_id = 3;
+  Money amount = 4;
+  // Vigencia. 0 = valor por defecto del servidor (15 minutos).
+  int32 ttl_minutes = 5;
+}
+
+message AuthorizeResponse {
+  Authorization authorization = 1;
+  // true si la clave ya existía y se devolvió la autorización original.
+  bool replayed = 2;
+}
+
+message CaptureRequest {
+  string authorization_id = 1;
+}
+
+message RefundRequest {
+  string authorization_id = 1;
+  // 0 = reembolso total de lo que quede sin devolver.
+  int64 amount_micros = 2;
+}
+
+message GetAuthorizationRequest {
+  string authorization_id = 1;
+}
+
+message ReleaseExpiredRequest {
+  // Máximo de autorizaciones a liberar en esta pasada. 0 = valor por defecto.
+  int32 limit = 1;
+}
+
+message ReleaseExpiredResponse {
+  repeated string authorization_ids = 1;
+}
+
+service AuthorizationService {
+  // Retiene el monto en la cuenta pagadora. Idempotente por `idempotency_key`.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+  // Liquida la retención al receptor. Idempotente por naturaleza: capturar dos
+  // veces devuelve la misma captura, con el mismo `settled_at`.
+  rpc Capture(CaptureRequest) returns (Authorization);
+  // Devuelve dinero ya capturado al pagador.
+  rpc Refund(RefundRequest) returns (Authorization);
+  rpc GetAuthorization(GetAuthorizationRequest) returns (Authorization);
+  // Libera las retenciones vencidas. La invoca un proceso periódico.
+  rpc ReleaseExpired(ReleaseExpiredRequest) returns (ReleaseExpiredResponse);
+}

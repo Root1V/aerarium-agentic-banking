@@ -82,6 +82,24 @@ impl Ctx {
         (cash.id, customer.id)
     }
 
+    /// Cuenta de retención de autorizaciones para una moneda.
+    ///
+    /// PASIVO: el dinero retenido salió del saldo disponible del pagador pero
+    /// sigue siendo del cliente. Tipificarla como activo diría que ya es del
+    /// banco, que es falso hasta que se capture.
+    pub async fn holds_account(&self, currency: &str) -> Uuid {
+        use aibank_core::authorizations::HOLDS_ACCOUNT_PREFIX;
+        let code = format!("{HOLDS_ACCOUNT_PREFIX}{currency}");
+        if let Some(existing) = self.accounts.find_by_code(&code).await.expect("find holds") {
+            return existing.id;
+        }
+        self.accounts
+            .create_internal(&code, "Retenciones de autorizaciones", AccountType::Liability, currency)
+            .await
+            .expect("create holds account")
+            .id
+    }
+
     /// Cuenta de cliente adicional sobre el mismo producto.
     pub async fn customer_account(&self, product: &Product) -> Uuid {
         self.accounts

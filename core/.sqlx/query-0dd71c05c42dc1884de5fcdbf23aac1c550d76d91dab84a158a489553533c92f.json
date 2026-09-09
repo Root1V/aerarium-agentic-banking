@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE authorizations\n               SET status = 'CAPTURED', settle_transaction_id = $2, settled_at = $3\n             WHERE id = $1\n            RETURNING settled_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "settled_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "0dd71c05c42dc1884de5fcdbf23aac1c550d76d91dab84a158a489553533c92f"
+}

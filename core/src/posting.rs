@@ -23,51 +23,69 @@ impl PostingService {
     }
 
     pub async fn post(&self, request: &PostingRequest) -> Result<PostingResult, PostingError> {
-        validate(request)?;
-        let hash = request_hash(request);
-
         let mut tx = self.pool.begin().await.map_err(PostingError::from_db)?;
-
-        let result = match insert_transaction(&mut tx, request, &hash)
-            .await
-            .map_err(PostingError::from_db)?
-        {
-            Some(transaction) => {
-                insert_entries(&mut tx, transaction.id, &request.entries)
-                    .await
-                    .map_err(PostingError::from_db)?;
-
-                // El evento se encola en ESTA misma transacción: si el COMMIT falla
-                // (desbalance, sobregiro, tope), el evento desaparece con los asientos.
-                // Nunca hay asiento sin evento ni evento sin asiento.
-                emit_posted_event(&mut tx, &transaction, request)
-                    .await
-                    .map_err(PostingError::from_db)?;
-
-                PostingResult { transaction, replayed: false }
-            }
-            None => {
-                // La clave ya existe. `ON CONFLICT DO NOTHING` espera a que la transacción
-                // concurrente dueña de la clave termine, así que aquí ya es visible.
-                let (transaction, existing_hash) = find_by_key(&mut tx, &request.idempotency_key)
-                    .await
-                    .map_err(PostingError::from_db)?
-                    .ok_or_else(|| {
-                        PostingError::Database(sqlx::Error::Protocol(
-                            "idempotency key vanished after conflict; concurrent rollback".into(),
-                        ))
-                    })?;
-                if existing_hash != hash {
-                    return Err(PostingError::IdempotencyConflict(request.idempotency_key.clone()));
-                }
-                PostingResult { transaction, replayed: true }
-            }
-        };
+        let result = post_in_tx(&mut tx, request).await?;
 
         // Aquí se evalúan los triggers diferidos: desbalance, sobregiro y topes del
         // producto abortan el COMMIT.
         tx.commit().await.map_err(PostingError::from_db)?;
         Ok(result)
+    }
+}
+
+/// Asienta dentro de una transacción que abre el llamador.
+///
+/// Existe para las operaciones que tienen estado propio además del asiento —una
+/// autorización, por ejemplo— y necesitan que ese estado y el movimiento de dinero
+/// se confirmen o se pierdan juntos. Escribirlos en dos transacciones dejaría una
+/// ventana donde el dinero se movió y el estado dice que no, y esa ventana se
+/// materializa exactamente cuando el proceso muere en el medio.
+///
+/// **Los triggers diferidos del esquema no se evalúan aquí, sino en el COMMIT del
+/// llamador.** Es decir: fondos insuficientes y topes del producto NO aparecen como
+/// error de esta función, sino del `commit()`. Por eso el llamador tiene que pasar
+/// también el error del commit por [`PostingError::from_db`].
+pub async fn post_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    request: &PostingRequest,
+) -> Result<PostingResult, PostingError> {
+    validate(request)?;
+    let hash = request_hash(request);
+
+    match insert_transaction(tx, request, &hash)
+        .await
+        .map_err(PostingError::from_db)?
+    {
+        Some(transaction) => {
+            insert_entries(tx, transaction.id, &request.entries)
+                .await
+                .map_err(PostingError::from_db)?;
+
+            // El evento se encola en ESTA misma transacción: si el COMMIT falla
+            // (desbalance, sobregiro, tope), el evento desaparece con los asientos.
+            // Nunca hay asiento sin evento ni evento sin asiento.
+            emit_posted_event(tx, &transaction, request)
+                .await
+                .map_err(PostingError::from_db)?;
+
+            Ok(PostingResult { transaction, replayed: false })
+        }
+        None => {
+            // La clave ya existe. `ON CONFLICT DO NOTHING` espera a que la transacción
+            // concurrente dueña de la clave termine, así que aquí ya es visible.
+            let (transaction, existing_hash) = find_by_key(tx, &request.idempotency_key)
+                .await
+                .map_err(PostingError::from_db)?
+                .ok_or_else(|| {
+                    PostingError::Database(sqlx::Error::Protocol(
+                        "idempotency key vanished after conflict; concurrent rollback".into(),
+                    ))
+                })?;
+            if existing_hash != hash {
+                return Err(PostingError::IdempotencyConflict(request.idempotency_key.clone()));
+            }
+            Ok(PostingResult { transaction, replayed: true })
+        }
     }
 }
 

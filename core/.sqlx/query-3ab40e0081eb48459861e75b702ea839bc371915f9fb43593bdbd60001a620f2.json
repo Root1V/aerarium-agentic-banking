@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, idempotency_key, request_hash, payer_account_id, payee_account_id,\n               amount_micros, currency, status AS \"status: AuthorizationStatus\",\n               refunded_micros, hold_transaction_id, settle_transaction_id, expires_at,\n               created_at, settled_at, released_at\n          FROM authorizations\n         WHERE idempotency_key = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "idempotency_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "payer_account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "payee_account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "amount_micros",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "status: AuthorizationStatus",
+        "type_info": {
+          "Custom": {
+            "name": "authorization_status",
+            "kind": {
+              "Enum": [
+                "AUTHORIZED",
+                "CAPTURED",
+                "PARTIALLY_REFUNDED",
+                "REFUNDED",
+                "RELEASED"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "refunded_micros",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "hold_transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "settle_transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "settled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "released_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3ab40e0081eb48459861e75b702ea839bc371915f9fb43593bdbd60001a620f2"
+}

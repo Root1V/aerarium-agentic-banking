@@ -542,3 +542,226 @@ impl ReconciliationService for ReconciliationApi {
         }))
     }
 }
+
+// ---------------------------------------------------------------- autorizaciones
+
+use crate::authorizations::{
+    Authorization, AuthorizationError, AuthorizationService as AuthorizationDomain,
+    AuthorizeCommand, ObservedStatus,
+};
+use pb::authorization_service_server::AuthorizationService;
+
+/// Traduce un error de autorización a un `Status` gRPC.
+///
+/// El código distingue lo que el llamador puede corregir de lo que no, y la
+/// metadata lleva el motivo exacto: la capa REST de un socio necesita mapear cada
+/// caso a un código HTTP distinto, y hacerlo interpretando el mensaje sería
+/// frágil.
+fn auth_to_status(err: AuthorizationError) -> Status {
+    use pb::AuthorizationErrorReason as R;
+
+    let (code, reason) = match &err {
+        AuthorizationError::Invalid(msg) if msg.contains("currency mismatch") => {
+            (tonic::Code::InvalidArgument, R::CurrencyMismatch)
+        }
+        AuthorizationError::Invalid(_) => (tonic::Code::InvalidArgument, R::Invalid),
+        AuthorizationError::IdempotencyConflict(_) => {
+            (tonic::Code::Aborted, R::IdempotencyConflict)
+        }
+        AuthorizationError::NotFound(_) => (tonic::Code::NotFound, R::NotFound),
+        AuthorizationError::AccountNotFound(_) => (tonic::Code::NotFound, R::AccountNotFound),
+        AuthorizationError::AccountNotOperative(_, _) => {
+            (tonic::Code::FailedPrecondition, R::AccountNotOperative)
+        }
+        AuthorizationError::Expired(_, _) => (tonic::Code::FailedPrecondition, R::Expired),
+        AuthorizationError::InvalidState(_, _, _) => {
+            (tonic::Code::FailedPrecondition, R::InvalidState)
+        }
+        AuthorizationError::InsufficientFunds(_) => {
+            (tonic::Code::FailedPrecondition, R::InsufficientFunds)
+        }
+        // Falta la cuenta de retención de esa moneda: es un fallo de configuración
+        // del banco, no del llamador. No lo resuelve reintentando ni cambiando la
+        // petición, así que se reporta como interno.
+        AuthorizationError::MissingHoldsAccount(_) => (tonic::Code::Internal, R::Unspecified),
+        AuthorizationError::Posting(inner) => return to_status(clone_posting_error(inner)),
+        AuthorizationError::Database(_) => (tonic::Code::Unavailable, R::Unspecified),
+    };
+
+    let mut status = Status::new(code, err.to_string());
+    if let Ok(value) = reason.as_str_name().parse() {
+        status.metadata_mut().insert(REASON_METADATA_KEY, value);
+    }
+    status
+}
+
+/// `PostingError` no es `Clone` (envuelve `sqlx::Error`); para reusar el mapeo
+/// existente basta con reconstruir la variante equivalente a partir del mensaje.
+fn clone_posting_error(err: &PostingError) -> PostingError {
+    let msg = err.to_string();
+    match err {
+        PostingError::Invalid(_) => PostingError::Invalid(msg),
+        PostingError::IdempotencyConflict(k) => PostingError::IdempotencyConflict(k.clone()),
+        PostingError::InsufficientFunds(_) => PostingError::InsufficientFunds(msg),
+        PostingError::BalanceCapExceeded(_) => PostingError::BalanceCapExceeded(msg),
+        PostingError::TransactionCapExceeded(_) => PostingError::TransactionCapExceeded(msg),
+        PostingError::Conflict(_) => PostingError::Conflict(msg),
+        PostingError::Database(_) => PostingError::Database(sqlx::Error::Protocol(msg)),
+    }
+}
+
+fn observed_to_pb(status: ObservedStatus) -> pb::AuthorizationStatus {
+    match status {
+        ObservedStatus::Authorized => pb::AuthorizationStatus::Authorized,
+        ObservedStatus::Captured => pb::AuthorizationStatus::Captured,
+        ObservedStatus::PartiallyRefunded => pb::AuthorizationStatus::PartiallyRefunded,
+        ObservedStatus::Refunded => pb::AuthorizationStatus::Refunded,
+        ObservedStatus::Released => pb::AuthorizationStatus::Released,
+        ObservedStatus::Expired => pb::AuthorizationStatus::Expired,
+    }
+}
+
+/// El estado que sale por el contrato es el OBSERVADO, no el almacenado: una
+/// retención cuya fecha pasó se reporta vencida aunque el barrendero todavía no
+/// la haya liberado.
+fn authorization_to_pb(auth: &Authorization) -> pb::Authorization {
+    pb::Authorization {
+        id: auth.id.to_string(),
+        idempotency_key: auth.idempotency_key.clone(),
+        payer_account_id: auth.payer_account_id.to_string(),
+        payee_account_id: auth.payee_account_id.to_string(),
+        amount: Some(pb::Money {
+            amount_micros: auth.amount_micros,
+            currency: auth.currency.clone(),
+        }),
+        status: observed_to_pb(auth.observed()) as i32,
+        refunded_micros: auth.refunded_micros,
+        expires_at: Some(to_timestamp(auth.expires_at)),
+        created_at: Some(to_timestamp(auth.created_at)),
+        settled_at: auth.settled_at.map(to_timestamp),
+        released_at: auth.released_at.map(to_timestamp),
+    }
+}
+
+pub struct AuthorizationApi {
+    authorizations: AuthorizationDomain,
+}
+
+impl AuthorizationApi {
+    pub fn new(authorizations: AuthorizationDomain) -> Self {
+        Self { authorizations }
+    }
+}
+
+#[tonic::async_trait]
+impl AuthorizationService for AuthorizationApi {
+    async fn authorize(
+        &self,
+        request: Request<pb::AuthorizeRequest>,
+    ) -> Result<Response<pb::AuthorizeResponse>, Status> {
+        let parent = crate::telemetry::context_from_metadata(request.metadata());
+        let req = request.into_inner();
+
+        let amount = req
+            .amount
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("amount is required"))?;
+
+        let command = AuthorizeCommand {
+            idempotency_key: req.idempotency_key,
+            payer_account_id: parse_uuid(&req.payer_account_id, "payer_account_id")?,
+            payee_account_id: parse_uuid(&req.payee_account_id, "payee_account_id")?,
+            amount_micros: amount.amount_micros,
+            currency: amount.currency.clone(),
+            ttl_minutes: (req.ttl_minutes > 0).then_some(req.ttl_minutes as i64),
+        };
+
+        let result = self
+            .authorizations
+            .authorize(&command)
+            .with_context(parent)
+            .await
+            .map_err(auth_to_status)?;
+
+        Ok(Response::new(pb::AuthorizeResponse {
+            authorization: Some(authorization_to_pb(&result.authorization)),
+            replayed: result.replayed,
+        }))
+    }
+
+    async fn capture(
+        &self,
+        request: Request<pb::CaptureRequest>,
+    ) -> Result<Response<pb::Authorization>, Status> {
+        let parent = crate::telemetry::context_from_metadata(request.metadata());
+        let id = parse_uuid(&request.into_inner().authorization_id, "authorization_id")?;
+
+        let auth = self
+            .authorizations
+            .capture(id)
+            .with_context(parent)
+            .await
+            .map_err(auth_to_status)?;
+
+        Ok(Response::new(authorization_to_pb(&auth)))
+    }
+
+    async fn refund(
+        &self,
+        request: Request<pb::RefundRequest>,
+    ) -> Result<Response<pb::Authorization>, Status> {
+        let parent = crate::telemetry::context_from_metadata(request.metadata());
+        let req = request.into_inner();
+        let id = parse_uuid(&req.authorization_id, "authorization_id")?;
+        let amount = (req.amount_micros > 0).then_some(req.amount_micros);
+
+        let auth = self
+            .authorizations
+            .refund(id, amount)
+            .with_context(parent)
+            .await
+            .map_err(auth_to_status)?;
+
+        Ok(Response::new(authorization_to_pb(&auth)))
+    }
+
+    async fn get_authorization(
+        &self,
+        request: Request<pb::GetAuthorizationRequest>,
+    ) -> Result<Response<pb::Authorization>, Status> {
+        let id = parse_uuid(&request.into_inner().authorization_id, "authorization_id")?;
+
+        let auth = self
+            .authorizations
+            .find(id)
+            .await
+            .map_err(auth_to_status)?
+            .ok_or_else(|| auth_to_status(AuthorizationError::NotFound(id)))?;
+
+        Ok(Response::new(authorization_to_pb(&auth)))
+    }
+
+    async fn release_expired(
+        &self,
+        request: Request<pb::ReleaseExpiredRequest>,
+    ) -> Result<Response<pb::ReleaseExpiredResponse>, Status> {
+        const DEFAULT_LIMIT: i32 = 200;
+        const MAX_LIMIT: i32 = 1000;
+
+        let limit = match request.into_inner().limit {
+            0 => DEFAULT_LIMIT,
+            n if n < 0 => return Err(Status::invalid_argument("limit must not be negative")),
+            n => n.min(MAX_LIMIT),
+        };
+
+        let ids = self
+            .authorizations
+            .release_expired(limit as i64)
+            .await
+            .map_err(auth_to_status)?;
+
+        Ok(Response::new(pb::ReleaseExpiredResponse {
+            authorization_ids: ids.into_iter().map(|id| id.to_string()).collect(),
+        }))
+    }
+}
