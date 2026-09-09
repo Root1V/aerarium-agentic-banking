@@ -37,10 +37,38 @@ Análisis de opciones (detalle regulatorio en [doc 02 §7](02-regulacion-licenci
 | **Colombia primero** | Bre-B recién lanzado nivela el campo de pagos; open finance obligatorio 2026; SEDPE ~USD 2M | SEDPE no permite crédito; Nequi/DaviPlata dominan wallets |
 | **Brasil primero** | Mercado más grande; infra madura (PIX, open finance); licencia IP+SCD ~USD 2,2M en 9–18 meses permite crédito propio | Competencia máxima (Nubank, Inter, C6, PicPay); requiere portugués y capital mayor desde la reforma 2026–2028 |
 
-**Recomendación**: **estrategia de dos tiempos.**
-- **T0 (validación)**: lanzar en **Argentina** vía PSPCP propio (o país equivalente vía BaaS con Pomelo) — es el camino más barato y rápido a producto real con usuarios reales.
-- **T1 (monetización)**: entrada a **México comprando una SOFIPO** (crédito + captación en el mercado con más espacio) o a **Brasil con IP+SCD** si el equipo tiene capacidad de operar en portugués. La decisión se toma con los datos de T0.
-- **Perú y Colombia** como tercera ola con licencias ligeras (EEDE ~USD 0,8M / SEDPE ~USD 2M), aprovechando la interoperabilidad regional emergente (Yape→Nequi).
+### DECIDIDO — país ancla: **Perú**
+
+La recomendación original de este documento era Argentina primero por velocidad
+regulatoria, con Perú en tercera ola. **La decisión tomada es Perú como país ancla**, y
+el motivo pesa más que la comparación de trámites: el primer cliente institucional
+—Mercatus, el riel de pago para agentes de IA ([doc 09](09-integracion-mercatus.md))— se
+está constituyendo en Perú y asume que operamos ahí. Un cliente con volumen real y un
+caso de uso definido vale más que seis meses de ventaja regulatoria en un mercado sin
+demanda comprometida.
+
+**Lo que hay que aceptar por elegir Perú**, y conviene tenerlo escrito:
+
+| Consecuencia | Detalle |
+|---|---|
+| **El crédito no entra con la licencia de entrada** | La EEDE (Ley 29985, ~USD 0,8M, 12–24 meses) permite dinero electrónico y wallet, **no otorgar crédito** — y el crédito es el motor de ingresos de este plan (§1) |
+| **Trámite más largo que Argentina** | 12–24 meses contra 3–6 del PSPCP argentino. Obliga a arrancar sobre BaaS mientras se tramita |
+| **Sin open finance obligatorio** | Perú no tiene mandato integral ([doc 02 §6](02-regulacion-licencias.md)). Menos datos de terceros para scoring, y sin marco de iniciación de pagos — ver [doc 12](12-modelo-b-iniciacion-de-pagos.md) |
+| **Rieles dominados** | Yape y Plin ya resolvieron el pago entre personas. La entrada no puede ser "otra wallet" |
+
+**Secuencia que se deriva:**
+
+- **T0 — Perú sobre BaaS**, en paralelo al expediente EEDE ante la SBS. Producto real con
+  usuarios reales sin esperar la licencia.
+- **T1 — EEDE propia** para dejar de ceder margen al proveedor y controlar la cuenta.
+- **T2 — Financiera (~USD 4,5M, 24+ meses)** cuando el crédito sea el motor: es la
+  licencia que lo permite. Es un salto grande y hay que presupuestarlo desde ahora, no
+  descubrirlo al necesitarlo.
+- **T3 — expansión** a México (compra de SOFIPO) o Colombia (SEDPE), con la plataforma ya
+  probada multi-país.
+
+El análisis comparativo de arriba se conserva: si la relación con Mercatus no prospera,
+Argentina vuelve a ser la mejor opción por velocidad y hay que poder retomarla.
 
 ## 4. Unit economics objetivo
 

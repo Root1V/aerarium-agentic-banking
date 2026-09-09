@@ -41,29 +41,42 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 ## Integración Mercatus (riel de pago para agentes de IA)
 
-Análisis y bloqueantes en [docs/09-integracion-mercatus.md](docs/09-integracion-mercatus.md).
-Las tres primeras no dependen de los bloqueantes y son deuda propia que había que pagar igual.
+Análisis en [docs/09](docs/09-integracion-mercatus.md) · preguntas y respuestas en
+[docs/10](docs/10-preguntas-mercatus.md) · datos para integrar en [docs/11](docs/11-spec-integracion-sandbox.md).
 
 | # | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|---|
 | 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | 👀 |
-| 2 | Autenticación OAuth2 con scopes (hoy solo hay un puerto con sustituto) | Go/Rust | feat/oauth2 | ⬜ |
-| 3 | Primitiva de autorización en el core (retención → captura, con expiración) | Rust | feat/authorizations | ⬜ |
-| 4 | API REST de Mercatus: los cinco endpoints del contrato | Go | feat/mercatus-api | ⬜ |
-| 5 | Sandbox: entorno separado, saldos configurables, rate limiting | Go | feat/sandbox | ⬜ |
-| 6 | Reembolsos (fase 2 del propio contrato) | Go | feat/mercatus-refunds | ⬜ |
+| 2 | OAuth2 client_credentials con scopes y rotación de secreto (26 tests) | Go | feat/oauth2 | 👀 |
+| 3 | Primitiva de autorización en el core: retención → captura, vencimiento y liberación (25 tests) | Rust | feat/authorizations | 👀 |
+| 4 | API REST: los siete endpoints del contrato (33 tests) | Go | feat/mercatus-api | 👀 |
+| 5 | Sandbox: OpenAPI congelado, barrendero de vencidas, alta de integración | Go/Rust | feat/mercatus-api | 👀 |
+| 6 | Reembolso parcial en la API (el modelo del core ya lo soporta) | Go | feat/mercatus-refunds | ⬜ |
 
-**Bloqueado, requiere respuesta de Mercatus** — cuestionario en
-[docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) (24 preguntas, cada una con
-supuesto por defecto para no detener el desarrollo):
-- **Q1–Q5 (P0)**: estructura de cuenta ómnibus y fondeo. Sin esto no se abre ninguna
-  cuenta; necesita además asesoría regulatoria y que el proveedor BaaS lo acepte.
-- **Calendario**: la fecha comprometida (2026-09-02) es inalcanzable. Contrapropuesta de
-  cuatro entregas, con OpenAPI congelado + servidor de respuestas fijas en 3 días.
-- **Q8–Q10 (P1)**: expiración de autorizaciones, idempotencia de `capture` y semántica de
-  `recipient_mismatch`/`amount_mismatch`. Cambian la forma de la API: cerrar antes de que
-  Mercatus escriba el cliente.
-- **Q16 (P1)**: volumen esperado, para publicar un rate limiting real.
+Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
+[docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
+[docs/11-spec-integracion-sandbox.md](docs/11-spec-integracion-sandbox.md).
+
+**Modelo B (Q25) — pendiente de decisión, no de código.** Mercatus propone iniciar
+pagos sobre la cuenta propia de un cliente de AIBank en vez de un sub-ledger ómnibus.
+Análisis en [docs/12](docs/12-modelo-b-iniciacion-de-pagos.md): la respuesta es sí, pero
+con mandato delegado, no con `client_credentials` sobre cuenta ajena. El core no cambia;
+sí el flujo OAuth y la comprobación de acceso. **No construir hasta que haya clientes
+propios que lo usen.**
+
+**Sigue bloqueado, y no por nosotros:**
+- **Constitución de Mercatus Technologies S.A.C. (Perú)**, en curso. Hasta que cierre no
+  se puede hacer el KYB de la cuenta maestra, así que **el sandbox no lleva dinero real**.
+- **Estructura de cuenta ómnibus**: necesita asesoría regulatoria local y que el proveedor
+  licenciado la acepte. Bloquea el paso a producción, no la integración técnica.
+- **Jurisdicción**: Mercatus asume que AIBank opera en Perú. El plan de entrada
+  ([doc 02](docs/02-regulacion-licencias.md)) todavía no fija el país ancla — hay que
+  cerrarlo, porque condiciona la licencia y el proveedor.
+- **Custodia de fondos de terceros en el modelo ómnibus**: Mercatus recibe dinero de sus
+  clientes y lo mantiene como saldo de sub-ledger. Es la pregunta que su abogado tiene que
+  responder antes del KYB, y puede exigir EEDE ([docs/12 §1](docs/12-modelo-b-iniciacion-de-pagos.md)).
+- **Y el bloqueante real es nuestro**: sin licencia ni proveedor BaaS contratado, ningún
+  modelo mueve dinero real. El sandbox funciona completo; producción no depende de Mercatus.
 
 ## Deuda técnica anotada
 
@@ -72,6 +85,9 @@ supuesto por defecto para no detener el desarrollo):
   al hacer pruebas de carga.
 - La deriva de saldo se detecta recorriendo todos los asientos. Sirve al volumen
   actual; al crecer habrá que conciliar por ventanas con saldos de corte.
+- El límite de tasa de la API de socio es POR INSTANCIA. Con más de una réplica el
+  límite efectivo se multiplica; hay que moverlo a un almacén compartido antes de
+  escalar horizontalmente.
 
 ## Backlog (post-sprint 6)
 

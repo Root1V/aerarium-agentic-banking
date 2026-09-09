@@ -190,29 +190,38 @@ func GrantScopes(client *Client, requested []string) ([]string, error) {
 
 // ---------------------------------------------------------------- sub-cuentas
 
+// FindAccount busca la sub-cuenta de un agente en una moneda.
+func (s *Store) FindAccount(ctx context.Context, clientID, ownerReference, currency string) (SubAccount, bool, error) {
+	var sub SubAccount
+	err := s.db.QueryRowContext(ctx, `
+		SELECT account_id, owner_reference, currency, display_name, created_at
+		  FROM oauth.client_accounts
+		 WHERE client_id = $1 AND owner_reference = $2 AND currency = $3
+	`, clientID, ownerReference, currency).Scan(
+		&sub.AccountID, &sub.OwnerReference, &sub.Currency, &sub.DisplayName, &sub.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SubAccount{}, false, nil
+	}
+	if err != nil {
+		return SubAccount{}, false, fmt.Errorf("buscar sub-cuenta: %w", err)
+	}
+	return sub, true, nil
+}
+
 // LinkAccount asocia una cuenta del ledger a un agente del socio.
 //
 // Idempotente por `(client_id, owner_reference, currency)`: si el socio reintenta
 // tras un timeout, recupera la cuenta que ya existe en vez de abrir una segunda y
 // partir el saldo del agente en dos.
 func (s *Store) LinkAccount(ctx context.Context, clientID string, sub SubAccount) (SubAccount, bool, error) {
-	var existing SubAccount
-	err := s.db.QueryRowContext(ctx, `
-		SELECT account_id, owner_reference, currency, display_name, created_at
-		  FROM oauth.client_accounts
-		 WHERE client_id = $1 AND owner_reference = $2 AND currency = $3
-	`, clientID, sub.OwnerReference, sub.Currency).Scan(
-		&existing.AccountID, &existing.OwnerReference, &existing.Currency,
-		&existing.DisplayName, &existing.CreatedAt,
-	)
-	if err == nil {
+	if existing, found, err := s.FindAccount(ctx, clientID, sub.OwnerReference, sub.Currency); err != nil {
+		return SubAccount{}, false, err
+	} else if found {
 		return existing, true, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return SubAccount{}, false, fmt.Errorf("buscar sub-cuenta: %w", err)
-	}
 
-	_, err = s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO oauth.client_accounts (client_id, account_id, owner_reference, currency, display_name)
 		VALUES ($1, $2, $3, $4, $5)
 	`, clientID, sub.AccountID, sub.OwnerReference, sub.Currency, sub.DisplayName)

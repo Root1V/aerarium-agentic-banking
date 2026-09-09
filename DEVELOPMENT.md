@@ -209,6 +209,45 @@ no pueden intervenir, con la barrera en el camino de ejecución).
 
 Sin dependencias: elimina toda fuente de no determinismo en una decisión auditable.
 
+## API de socio (riel de pago para agentes)
+
+Es el canal de SOCIO, hermano del BFF y separado de él: el BFF sirve a una persona con
+sesión de dispositivo, este a una plataforma con credencial de máquina que actúa por
+muchas cuentas. Juntarlos filtraría las reglas de autorización de uno en el otro.
+
+```bash
+cd services && go test ./oauth/ ./mercatus/     # requieren core + Postgres arriba
+
+# Alta de una integración: imprime el secreto UNA vez.
+go run ./services/mercatus/cmd/bootstrap -client-id mercatus_sandbox -currencies USD
+```
+
+Contrato congelado en [`contracts/openapi/mercatus-v1.yaml`](contracts/openapi/mercatus-v1.yaml);
+datos para integrar en [docs/11](docs/11-spec-integracion-sandbox.md).
+
+El JWT está escrito a mano y el algoritmo NUNCA se lee del token: es lo que cierra la
+confusión de algoritmo, incluido `alg: none`. Los secretos se guardan como SHA-256 porque
+los genera el banco con 256 bits de entropía — para una contraseña humana eso sería un
+error, y está anotado en el esquema para que nadie lo copie al lugar equivocado.
+
+## Autorizaciones y su barrendero
+
+Retener ahora, mover el dinero después. Vive en el core y no en un adaptador porque
+pagador y receptor son dos cuentas del banco: capturar es una sola transacción de ledger
+y tiene que confirmarse junto con el cambio de estado.
+
+```bash
+cd core && SQLX_OFFLINE=true cargo test --test authorizations
+
+# Sin este proceso, una retención que nadie captura inmoviliza el dinero para siempre.
+DATABASE_URL="postgres://aibank:aibank_dev@localhost:5434/aibank" \
+  cargo run --bin aibank-authorization-sweeper
+```
+
+"Vencida" es un estado DERIVADO, no almacenado: guardarlo obligaría a escribir en la base
+cada vez que el reloj avanza. Una retención pasada de fecha se reporta vencida y rechaza
+la captura aunque el barrendero no haya pasado todavía.
+
 ## Convenciones
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
