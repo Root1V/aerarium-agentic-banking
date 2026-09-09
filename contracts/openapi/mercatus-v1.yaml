@@ -439,11 +439,15 @@ paths:
       summary: Devuelve al pagador un cobro ya liquidado
       operationId: refundAuthorization
       description: |
-        Reembolso **total** sobre una captura. No lo ejercita el flujo de pago
-        normal; lo necesita la operación de soporte.
+        Total o parcial. No lo ejercita el flujo de pago normal; lo necesita la
+        operación de soporte.
 
-        Repetirlo es inofensivo: devuelve el estado ya reembolsado sin mover dinero
-        una segunda vez.
+        **El cuerpo es opcional.** Sin él —o con `amount` en cero— se devuelve
+        todo lo que quede sin reembolsar, que es el caso normal. Un cliente
+        escrito antes de que existiera el parcial sigue funcionando igual.
+
+        Se puede devolver en varias veces hasta completar el total. Mientras
+        quede algo por devolver, el estado es `partially_refunded`.
       security:
         - bearerToken: [payments:write]
       parameters:
@@ -451,15 +455,35 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  description: |
+                    Cuánto devolver, en millonésimas. Omitido o cero devuelve todo
+                    lo pendiente.
+            example:
+              amount: 3000000
       responses:
         "200":
-          description: Reembolsada.
+          description: Reembolsada, total o parcialmente.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Authorization" }
+              schema: { $ref: "#/components/schemas/Refund" }
               example:
                 authorization_id: auth_9c2f1e8843a24b5c9d0e1f2a3b4c5d6e
-                status: refunded
+                status: partially_refunded
+                refunded: 3000000
+                refunded_total: 3000000
+                refundable: 7000000
+                currency: USD
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/AuthorizationNotFound" }
@@ -750,6 +774,28 @@ components:
             payee_account_id: { type: string }
             amount: { type: integer, format: int64 }
             currency: { type: string }
+
+    Refund:
+      type: object
+      required: [authorization_id, status, refunded, refunded_total, refundable, currency]
+      properties:
+        authorization_id: { type: string }
+        status: { $ref: "#/components/schemas/AuthorizationStatus" }
+        refunded:
+          type: integer
+          format: int64
+          description: Cuánto se devolvió en ESTA operación.
+        refunded_total:
+          type: integer
+          format: int64
+          description: Acumulado devuelto sobre esta autorización.
+        refundable:
+          type: integer
+          format: int64
+          description: |
+            Cuánto queda por devolver. Viene en la respuesta para que la
+            operación de soporte no tenga que llevar la cuenta por su lado.
+        currency: { type: string }
 
     ConsentRequestInput:
       type: object

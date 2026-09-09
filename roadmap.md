@@ -51,10 +51,10 @@ Análisis en [docs/09](docs/09-integracion-mercatus.md) · preguntas y respuesta
 | 3 | Primitiva de autorización en el core: retención → captura, vencimiento y liberación (25 tests) | Rust | feat/authorizations | 👀 |
 | 4 | API REST: los siete endpoints del contrato (33 tests) | Go | feat/mercatus-api | 👀 |
 | 5 | Sandbox: OpenAPI congelado, barrendero de vencidas, alta de integración | Go/Rust | feat/mercatus-api | 👀 |
-| 6 | Reembolso parcial en la API (el modelo del core ya lo soporta) | Go | feat/mercatus-refunds | ⬜ |
+| 6 | Reembolso parcial y total en la API (7 tests) | Go | feat/mercatus-refunds | 👀 |
 | 7 | **Modelo B**: mandato de pago con topes, vigencia y revocación (21 tests) | Rust | feat/payment-mandates | 👀 |
 | 8 | **Modelo B**: consentimiento, permiso delegado y pago bajo mandato (14 tests) | Go | feat/payment-mandates | 👀 |
-| 9 | Pantallas de consentimiento y gestión de permisos del titular | Flutter | feat/app-mandates | ⬜ |
+| 9 | Pantallas de consentimiento y gestión de permisos del titular (22 tests) | Flutter | feat/app-mandates | 👀 |
 
 Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
@@ -65,9 +65,8 @@ Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/12](docs/12-modelo-b-iniciacion-de-pagos.md), especificación conjunta para Mercatus
 en [docs/13](docs/13-spec-modelos-a-y-b.md).
 
-Falta del modelo B **solo la interfaz**: las pantallas donde el titular ve qué le piden,
-concede y revoca. El backend está completo, así que hoy se puede ejercitar por API pero no
-con un usuario real.
+**Los dos modelos están completos**, backend y app. Lo único que falta para producción
+no es código: la licencia o el proveedor BaaS en Perú.
 
 **Sigue bloqueado, y no por nosotros:**
 - **Constitución de Mercatus Technologies S.A.C. (Perú)**, en curso. Hasta que cierre no

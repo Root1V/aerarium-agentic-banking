@@ -28,6 +28,7 @@ const (
 	CodeSameAccount          = "same_account"
 	CodeRateLimited          = "rate_limited"
 	CodeNothingToRefund      = "nothing_to_refund"
+	CodeRefundExceedsCapture = "refund_exceeds_capture"
 	CodeServerError          = "server_error"
 	CodeServiceUnavailable   = "service_unavailable"
 
