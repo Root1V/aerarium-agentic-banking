@@ -87,6 +87,34 @@ class BffClient {
         ));
   }
 
+  /// Para respuestas 204, donde no hay cuerpo que interpretar.
+  Future<void> _postNoContent(String path) async {
+    final uri = baseUrl.replace(path: path);
+    try {
+      final response = await _http
+          .post(uri, headers: _headers())
+          .timeout(_timeout);
+      if (response.statusCode >= 200 && response.statusCode < 300) return;
+      if (response.statusCode == 401) {
+        throw ApiError(ApiErrorCode.unauthenticated, 'HTTP 401');
+      }
+      throw ApiError.fromResponse(_codeOf(response.body), 'HTTP ${response.statusCode}');
+    } on ApiError {
+      rethrow;
+    } catch (e) {
+      throw ApiError(ApiErrorCode.network, e.toString());
+    }
+  }
+
+  static String? _codeOf(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded['code'] as String? : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Map<String, String> _headers() => {'Authorization': 'Bearer ${_token()}'};
 
   Future<Map<String, dynamic>> _send(
@@ -124,5 +152,60 @@ class BffClient {
       return throw ApiError(ApiErrorCode.unauthenticated, detail);
     }
     throw ApiError.fromResponse(code, detail);
+  }
+}
+
+/// Permisos delegados: lo que el titular puede ver, conceder y retirar.
+extension MandateApi on BffClient {
+  /// Lee lo que una plataforma está pidiendo.
+  Future<ConsentPrompt> consentPrompt(String handoffCode) async {
+    final json = await _get('/v1/consent-requests/$handoffCode', const {});
+    return ConsentPrompt.fromJson(json);
+  }
+
+  /// Concede el permiso.
+  ///
+  /// Los topes son los que fija LA PERSONA, no los que pidió la plataforma:
+  /// puede conceder menos. El servidor rechaza conceder más.
+  Future<Mandate> approveConsent(
+    String handoffCode, {
+    required String accountId,
+    required int expiresInDays,
+    int? maxPerOperationMicros,
+    int? maxTotalMicros,
+  }) async {
+    final json = await _post(
+      '/v1/consent-requests/$handoffCode/approve',
+      headers: const {},
+      body: {
+        'account_id': accountId,
+        'expires_in_days': expiresInDays,
+        if (maxPerOperationMicros != null)
+          'max_per_operation': maxPerOperationMicros,
+        if (maxTotalMicros != null) 'max_total': maxTotalMicros,
+      },
+    );
+    return Mandate.fromJson(json);
+  }
+
+  /// Rechaza la solicitud sin conceder nada.
+  Future<void> rejectConsent(String handoffCode) async {
+    await _postNoContent('/v1/consent-requests/$handoffCode/reject');
+  }
+
+  /// Permisos que el titular tiene otorgados.
+  Future<List<Mandate>> mandates() async {
+    final json = await _get('/v1/mandates', const {});
+    final list = json['mandates'] as List<dynamic>? ?? const [];
+    return list
+        .map((m) => Mandate.fromJson(m as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  /// Retira un permiso.
+  Future<Mandate> revokeMandate(String mandateId) async {
+    final json = await _post('/v1/mandates/$mandateId/revoke',
+        headers: const {}, body: const {});
+    return Mandate.fromJson(json);
   }
 }
