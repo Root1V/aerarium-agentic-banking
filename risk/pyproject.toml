@@ -1,0 +1,23 @@
+[project]
+name = "aibank-risk"
+version = "0.1.0"
+description = "Motor de riesgo crediticio de AIBank"
+requires-python = ">=3.12"
+# Sin dependencias: una tarjeta de puntuación es aritmética y biblioteca estándar.
+# Menos dependencias es menos superficie que auditar en un sistema financiero, y
+# elimina toda fuente de no determinismo en una decisión que debe ser reproducible.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

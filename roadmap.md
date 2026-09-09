@@ -36,8 +36,34 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Scoring crediticio con datos transaccionales, explicable y auditable | Python | feat/credit-scoring | ⬜ |
+| Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | 👀 |
 | Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
+
+## Integración Mercatus (riel de pago para agentes de IA)
+
+Análisis y bloqueantes en [docs/09-integracion-mercatus.md](docs/09-integracion-mercatus.md).
+Las tres primeras no dependen de los bloqueantes y son deuda propia que había que pagar igual.
+
+| # | Feature | Lenguaje | Rama | Estado |
+|---|---|---|---|---|
+| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | ⬜ |
+| 2 | Autenticación OAuth2 con scopes (hoy solo hay un puerto con sustituto) | Go/Rust | feat/oauth2 | ⬜ |
+| 3 | Primitiva de autorización en el core (retención → captura, con expiración) | Rust | feat/authorizations | ⬜ |
+| 4 | API REST de Mercatus: los cinco endpoints del contrato | Go | feat/mercatus-api | ⬜ |
+| 5 | Sandbox: entorno separado, saldos configurables, rate limiting | Go | feat/sandbox | ⬜ |
+| 6 | Reembolsos (fase 2 del propio contrato) | Go | feat/mercatus-refunds | ⬜ |
+
+**Bloqueado, requiere respuesta de Mercatus** — cuestionario en
+[docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) (24 preguntas, cada una con
+supuesto por defecto para no detener el desarrollo):
+- **Q1–Q5 (P0)**: estructura de cuenta ómnibus y fondeo. Sin esto no se abre ninguna
+  cuenta; necesita además asesoría regulatoria y que el proveedor BaaS lo acepte.
+- **Calendario**: la fecha comprometida (2026-09-02) es inalcanzable. Contrapropuesta de
+  cuatro entregas, con OpenAPI congelado + servidor de respuestas fijas en 3 días.
+- **Q8–Q10 (P1)**: expiración de autorizaciones, idempotencia de `capture` y semántica de
+  `recipient_mismatch`/`amount_mismatch`. Cambian la forma de la API: cerrar antes de que
+  Mercatus escriba el cliente.
+- **Q16 (P1)**: volumen esperado, para publicar un rate limiting real.
 
 ## Deuda técnica anotada
 
