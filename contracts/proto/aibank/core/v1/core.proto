@@ -4,7 +4,7 @@
 // Un cambio incompatible aquí rompe la compilación de ambos lados, no la producción.
 //
 // Reglas del contrato:
-//   - El dinero SIEMPRE viaja como entero en unidades menores (centavos) + moneda.
+//   - El dinero SIEMPRE viaja como entero en micras (millonésimas, 10^-6) + moneda.
 //     Nunca punto flotante, nunca decimales en texto.
 //   - Toda escritura lleva idempotency_key: los rieles y las redes de tarjetas
 //     reintentan, y el efecto debe ocurrir exactamente una vez.
@@ -22,10 +22,18 @@ option go_package = "github.com/aibank/aibank/clients/go/corev1;corev1";
 
 // ---------------------------------------------------------------- tipos base
 
-// Importe monetario. `amount_minor` es siempre positivo en los asientos: el signo
-// lo aporta la dirección contable.
+// Importe monetario en MICRAS: millonésimas (10^-6) de la unidad mayor.
+// 1 USD = 1_000_000; 1 centavo = 10_000; $0,001 = 1_000.
+//
+// La escala es 6 y no 2 porque el banco liquida pagos entre agentes de software,
+// donde un precio de $0,001 por llamada es lo normal: en centavos ese importe no
+// existe. La app le sigue mostrando dos decimales a una persona — la escala es de
+// almacenamiento, no de presentación.
+//
+// `amount_micros` es siempre positivo en los asientos: el signo lo aporta la
+// dirección contable.
 message Money {
-  int64 amount_minor = 1;
+  int64 amount_micros = 1;
   string currency = 2; // ISO-4217, 3 letras
 }
 
@@ -202,8 +210,8 @@ message Product {
   string currency = 4;
   bool allows_overdraft = 5;
   // Topes regulatorios; ausentes = sin tope.
-  optional int64 max_balance_minor = 6;
-  optional int64 max_transaction_minor = 7;
+  optional int64 max_balance_micros = 6;
+  optional int64 max_transaction_micros = 7;
   bool active = 8;
 }
 
@@ -212,8 +220,8 @@ message CreateProductRequest {
   string name = 2;
   string currency = 3;
   bool allows_overdraft = 4;
-  optional int64 max_balance_minor = 5;
-  optional int64 max_transaction_minor = 6;
+  optional int64 max_balance_micros = 5;
+  optional int64 max_transaction_micros = 6;
 }
 
 message GetProductRequest {
@@ -247,9 +255,9 @@ message Finding {
   FindingKind kind = 3;
   string account_id = 4;
   string reference = 5;
-  // Lo que debería ser y lo que hay, en unidades menores.
-  int64 expected_minor = 6;
-  int64 actual_minor = 7;
+  // Lo que debería ser y lo que hay, en micras.
+  int64 expected_micros = 6;
+  int64 actual_micros = 7;
   string currency = 8;
   string detail = 9;
   google.protobuf.Timestamp created_at = 10;

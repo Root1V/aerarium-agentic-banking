@@ -39,8 +39,8 @@ pub struct Finding {
     pub kind: FindingKind,
     pub account_id: Option<Uuid>,
     pub reference: Option<String>,
-    pub expected_minor: Option<i64>,
-    pub actual_minor: Option<i64>,
+    pub expected_micros: Option<i64>,
+    pub actual_micros: Option<i64>,
     pub currency: Option<String>,
     pub detail: String,
     pub created_at: Option<DateTime<Utc>>,
@@ -52,7 +52,7 @@ pub struct ExternalMovement {
     /// Clave de idempotencia con la que el adaptador asentó (o debió asentar)
     /// este movimiento. Es el punto de cruce entre ambos registros.
     pub idempotency_key: String,
-    pub amount_minor: i64,
+    pub amount_micros: i64,
     pub currency: String,
     /// Referencia legible del proveedor, para el informe.
     pub reference: String,
@@ -116,7 +116,7 @@ impl Reconciler {
 
         let ledger = sqlx::query!(
             r#"
-            SELECT t.idempotency_key, e.amount_minor, e.currency
+            SELECT t.idempotency_key, e.amount_micros, e.currency
             FROM ledger_entries e
             JOIN ledger_transactions t ON t.id = e.transaction_id
             WHERE e.account_id = $1
@@ -146,8 +146,8 @@ impl Reconciler {
                     kind: FindingKind::MissingInLedger,
                     account_id: Some(account_id),
                     reference: Some(movement.reference.clone()),
-                    expected_minor: Some(movement.amount_minor),
-                    actual_minor: None,
+                    expected_micros: Some(movement.amount_micros),
+                    actual_micros: None,
                     currency: Some(movement.currency.clone()),
                     detail: format!(
                         "el proveedor reporta {} y no hay asiento: posible notificación perdida",
@@ -155,14 +155,14 @@ impl Reconciler {
                     ),
                     created_at: None,
                 }),
-                Some(row) if row.amount_minor != movement.amount_minor => findings.push(Finding {
+                Some(row) if row.amount_micros != movement.amount_micros => findings.push(Finding {
                     id: 0,
                     run_id: None,
                     kind: FindingKind::AmountMismatch,
                     account_id: Some(account_id),
                     reference: Some(movement.reference.clone()),
-                    expected_minor: Some(movement.amount_minor),
-                    actual_minor: Some(row.amount_minor),
+                    expected_micros: Some(movement.amount_micros),
+                    actual_micros: Some(row.amount_micros),
                     currency: Some(movement.currency.clone()),
                     detail: format!("importes distintos para {}", movement.reference),
                     created_at: None,
@@ -179,8 +179,8 @@ impl Reconciler {
                     kind: FindingKind::MissingAtProvider,
                     account_id: Some(account_id),
                     reference: Some(row.idempotency_key.clone()),
-                    expected_minor: None,
-                    actual_minor: Some(row.amount_minor),
+                    expected_micros: None,
+                    actual_micros: Some(row.amount_micros),
                     currency: Some(row.currency.clone()),
                     detail: format!(
                         "hay asiento para {} y el proveedor no lo reporta: posible acreditación sin respaldo",
@@ -212,7 +212,7 @@ impl Reconciler {
         // porque la cuenta conserva saldo y sus asientos más recientes son viejos.
         let rows = sqlx::query!(
             r#"
-            SELECT t.idempotency_key, e.amount_minor, e.currency, t.posted_at
+            SELECT t.idempotency_key, e.amount_micros, e.currency, t.posted_at
             FROM ledger_entries e
             JOIN ledger_transactions t ON t.id = e.transaction_id
             WHERE e.account_id = $1 AND t.posted_at < $2
@@ -227,12 +227,12 @@ impl Reconciler {
         // Solo importa si la cuenta conserva saldo: si quedó en cero, todo lo que
         // entró ya salió y no hay nada detenido.
         let balance = sqlx::query!(
-            r#"SELECT balance_minor as "balance_minor!" FROM account_balances WHERE account_id = $1"#,
+            r#"SELECT balance_micros as "balance_micros!" FROM account_balances WHERE account_id = $1"#,
             suspense_account_id,
         )
         .fetch_one(&self.pool)
         .await?
-        .balance_minor;
+        .balance_micros;
 
         let mut findings = Vec::new();
         if balance != 0 && !rows.is_empty() {
@@ -243,8 +243,8 @@ impl Reconciler {
                 kind: FindingKind::StaleSuspense,
                 account_id: Some(suspense_account_id),
                 reference: Some(oldest.idempotency_key.clone()),
-                expected_minor: Some(0),
-                actual_minor: Some(balance),
+                expected_micros: Some(0),
+                actual_micros: Some(balance),
                 currency: Some(oldest.currency.clone()),
                 detail: format!(
                     "hay {} en la cuenta desde {}: requiere resolución manual",
@@ -263,7 +263,7 @@ impl Reconciler {
         let rows = sqlx::query!(
             r#"
             SELECT id, run_id, kind as "kind: FindingKind", account_id, reference,
-                   expected_minor, actual_minor, currency, detail, created_at
+                   expected_micros, actual_micros, currency, detail, created_at
             FROM reconciliation_findings
             WHERE resolved_at IS NULL
             ORDER BY id DESC
@@ -282,8 +282,8 @@ impl Reconciler {
                 kind: r.kind,
                 account_id: r.account_id,
                 reference: r.reference,
-                expected_minor: r.expected_minor,
-                actual_minor: r.actual_minor,
+                expected_micros: r.expected_micros,
+                actual_micros: r.actual_micros,
                 currency: r.currency,
                 detail: r.detail,
                 created_at: Some(r.created_at),
@@ -332,15 +332,15 @@ impl Reconciler {
         let rows = sqlx::query!(
             r#"
             SELECT b.account_id,
-                   b.balance_minor as "materialized!",
-                   p.projected_minor as "projected!",
+                   b.balance_micros as "materialized!",
+                   p.projected_micros as "projected!",
                    b.entry_count as "counted!",
                    p.projected_entries as "projected_entries!",
                    a.currency
             FROM account_balances b
             JOIN account_balance_projection p ON p.account_id = b.account_id
             JOIN accounts a ON a.id = b.account_id
-            WHERE b.balance_minor <> p.projected_minor
+            WHERE b.balance_micros <> p.projected_micros
                OR b.entry_count <> p.projected_entries
             "#
         )
@@ -355,8 +355,8 @@ impl Reconciler {
                 kind: FindingKind::BalanceDrift,
                 account_id: Some(r.account_id),
                 reference: None,
-                expected_minor: Some(r.projected),
-                actual_minor: Some(r.materialized),
+                expected_micros: Some(r.projected),
+                actual_micros: Some(r.materialized),
                 currency: Some(r.currency),
                 detail: format!(
                     "saldo materializado {} contra {} de los asientos ({} vs {} movimientos)",
@@ -382,15 +382,15 @@ impl Reconciler {
             sqlx::query!(
                 r#"
                 INSERT INTO reconciliation_findings
-                    (run_id, kind, account_id, reference, expected_minor, actual_minor, currency, detail)
+                    (run_id, kind, account_id, reference, expected_micros, actual_micros, currency, detail)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 "#,
                 run_id,
                 finding.kind as FindingKind,
                 finding.account_id,
                 finding.reference,
-                finding.expected_minor,
-                finding.actual_minor,
+                finding.expected_micros,
+                finding.actual_micros,
                 finding.currency,
                 finding.detail,
             )

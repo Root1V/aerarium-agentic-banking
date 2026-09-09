@@ -82,17 +82,17 @@ func (p *Processor) Card(_ context.Context, cardID string) (*cards.Card, error) 
 type Purchase struct {
 	NetworkTransactionID string
 	CardID               string
-	AmountMinor          int64
+	AmountMicros          int64
 	Currency             string
 	MerchantName         string
 }
 
 // NewPurchase inicia una compra.
-func NewPurchase(cardID string, amountMinor int64, currency, merchant string) Purchase {
+func NewPurchase(cardID string, amountMicros int64, currency, merchant string) Purchase {
 	return Purchase{
 		NetworkTransactionID: "net-" + uuid.NewString(),
 		CardID:               cardID,
-		AmountMinor:          amountMinor,
+		AmountMicros:          amountMicros,
 		Currency:             currency,
 		MerchantName:         merchant,
 	}
@@ -103,20 +103,20 @@ func (p Purchase) Authorization() cards.AuthorizationRequest {
 	return cards.AuthorizationRequest{
 		NetworkTransactionID: p.NetworkTransactionID,
 		CardID:               p.CardID,
-		AmountMinor:          p.AmountMinor,
+		AmountMicros:          p.AmountMicros,
 		Currency:             p.Currency,
 		MerchantName:         p.MerchantName,
 		RequestedAt:          time.Now().UTC(),
 	}
 }
 
-// Clearing es el cobro efectivo. `finalAmountMinor` puede diferir del autorizado:
+// Clearing es el cobro efectivo. `finalAmountMicros` puede diferir del autorizado:
 // así se reproducen la propina del restaurante o la carga de combustible.
-func (p Purchase) Clearing(finalAmountMinor int64) cards.ClearingNotification {
+func (p Purchase) Clearing(finalAmountMicros int64) cards.ClearingNotification {
 	return cards.ClearingNotification{
 		NetworkTransactionID: p.NetworkTransactionID,
 		ClearingID:           "clr-" + uuid.NewString(),
-		FinalAmountMinor:     finalAmountMinor,
+		FinalAmountMicros:     finalAmountMicros,
 		Currency:             p.Currency,
 		SettledAt:            time.Now().UTC(),
 	}

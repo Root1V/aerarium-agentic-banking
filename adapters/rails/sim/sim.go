@@ -154,11 +154,11 @@ func (r *Rail) wait(ctx context.Context) error {
 // ---------------------------------------------------------------- entrantes
 
 // EmitCredit construye la notificación de una acreditación entrante.
-func EmitCredit(toAlias string, amountMinor int64, currency, sender string) rails.InboundCredit {
+func EmitCredit(toAlias string, amountMicros int64, currency, sender string) rails.InboundCredit {
 	return rails.InboundCredit{
 		RailTransactionID: "rail-" + uuid.NewString(),
 		ToAlias:           toAlias,
-		AmountMinor:       amountMinor,
+		AmountMicros:       amountMicros,
 		Currency:          currency,
 		SenderName:        sender,
 		OccurredAt:        time.Now().UTC(),

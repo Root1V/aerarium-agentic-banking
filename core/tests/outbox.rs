@@ -8,7 +8,7 @@
 //! 5. El relay publica en orden, marca lo publicado y no republica.
 //! 6. Si el publicador falla, el evento queda pendiente y se reintenta.
 
-#![allow(clippy::inconsistent_digit_grouping)] // 100_00 = 100.00 en centavos
+#![allow(clippy::inconsistent_digit_grouping)] // 100_000000 = 100,00 en micras (10^-6)
 
 mod common;
 
@@ -97,7 +97,7 @@ async fn un_posting_exitoso_encola_su_evento_con_los_saldos_resultantes(pool: Pg
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 250_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 250_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
 
@@ -114,8 +114,8 @@ async fn un_posting_exitoso_encola_su_evento_con_los_saldos_resultantes(pool: Pg
         .iter()
         .find(|e| e.account_id == customer.to_string())
         .expect("el evento incluye el asiento del cliente");
-    assert_eq!(customer_entry.balance_after_minor, 250_00, "el evento lleva el saldo resultante");
-    assert_eq!(customer_entry.amount.as_ref().unwrap().amount_minor, 250_00);
+    assert_eq!(customer_entry.balance_after_micros, 250_000000, "el evento lleva el saldo resultante");
+    assert_eq!(customer_entry.amount.as_ref().unwrap().amount_micros, 250_000000);
     assert_eq!(customer_entry.amount.as_ref().unwrap().currency, "USD");
 }
 
@@ -128,14 +128,14 @@ async fn una_transaccion_rechazada_no_deja_evento(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 100_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 100_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
 
     // El rechazo ocurre en el COMMIT (trigger diferido de sobregiro): si el evento
     // se hubiera publicado antes, ya sería irreversible.
     let key = format!("wd-{}", Uuid::new_v4());
-    let result = ctx.posting.post(&withdrawal(cash, customer, 500_00, &key)).await;
+    let result = ctx.posting.post(&withdrawal(cash, customer, 500_000000, &key)).await;
     assert!(matches!(result, Err(PostingError::InsufficientFunds(_))));
 
     assert_eq!(
@@ -154,8 +154,8 @@ async fn un_replay_idempotente_no_emite_un_segundo_evento(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
     let key = format!("rep-{}", Uuid::new_v4());
 
-    let first = ctx.posting.post(&deposit(cash, customer, 40_00, &key)).await.unwrap();
-    let second = ctx.posting.post(&deposit(cash, customer, 40_00, &key)).await.unwrap();
+    let first = ctx.posting.post(&deposit(cash, customer, 40_000000, &key)).await.unwrap();
+    let second = ctx.posting.post(&deposit(cash, customer, 40_000000, &key)).await.unwrap();
     assert!(second.replayed);
 
     let events = events_of(&ctx, first.transaction.id).await;
@@ -172,7 +172,7 @@ async fn el_relay_publica_marca_y_no_republica(pool: PgPool) {
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 60_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 60_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
 
@@ -211,7 +211,7 @@ async fn el_relay_respeta_el_orden_de_emision(pool: PgPool) {
     let relay = Relay::new(ctx.pool.clone(), Box::new(SharedPublisher(Arc::clone(&spy))));
 
     let mut expected = Vec::new();
-    for amount in [10_00, 20_00, 30_00] {
+    for amount in [10_000000, 20_000000, 30_000000] {
         let r = ctx
             .posting
             .post(&deposit(cash, customer, amount, &format!("dep-{}", Uuid::new_v4())))
@@ -244,7 +244,7 @@ async fn si_el_bus_falla_el_evento_queda_pendiente_y_se_reintenta(pool: PgPool) 
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 90_00, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(cash, customer, 90_000000, &format!("dep-{}", Uuid::new_v4())))
         .await
         .unwrap();
 

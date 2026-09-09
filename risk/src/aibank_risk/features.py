@@ -28,20 +28,20 @@ class Direction(str, Enum):
 class Movement:
     """Un movimiento de la cuenta.
 
-    Los importes son enteros en unidades menores, igual que en el ledger: en un
-    motor de crédito un centavo mal redondeado se multiplica por toda la cartera.
+    Los importes son enteros en micras, igual que en el ledger: en un motor de
+    crédito un redondeo mal hecho se multiplica por toda la cartera.
     """
 
     occurred_at: datetime
     direction: Direction
-    amount_minor: int
+    amount_micros: int
     #: Contraparte, para medir con cuánta gente distinta opera.
     counterparty: str = ""
     #: Naturaleza del movimiento tal como la asentó el core.
     kind: str = ""
 
     def __post_init__(self) -> None:
-        if self.amount_minor <= 0:
+        if self.amount_micros <= 0:
             raise ValueError("los importes de un movimiento son positivos")
 
 
@@ -55,8 +55,8 @@ class Features:
 
     #: Antigüedad de la relación, en meses completos.
     months_of_history: int
-    #: Ingreso mensual promedio observado, en unidades menores.
-    average_monthly_inflow_minor: int
+    #: Ingreso mensual promedio observado, en micras.
+    average_monthly_inflow_micros: int
     #: Regularidad del ingreso: 1.0 = idéntico todos los meses, 0.0 = errático.
     inflow_regularity: float
     #: Si se detecta un ingreso recurrente compatible con una nómina.
@@ -99,7 +99,7 @@ def extract(
     if not in_window:
         return Features(
             months_of_history=0,
-            average_monthly_inflow_minor=0,
+            average_monthly_inflow_micros=0,
             inflow_regularity=0.0,
             has_recurring_income=False,
             outflow_to_inflow_ratio=0.0,
@@ -118,12 +118,12 @@ def extract(
     outflows = [m for m in in_window if m.direction is Direction.OUT]
 
     monthly = _monthly_totals(inflows, as_of=as_of, observed_days=observed_days)
-    total_inflow = sum(m.amount_minor for m in inflows)
-    total_outflow = sum(m.amount_minor for m in outflows)
+    total_inflow = sum(m.amount_micros for m in inflows)
+    total_outflow = sum(m.amount_micros for m in outflows)
 
     return Features(
         months_of_history=months,
-        average_monthly_inflow_minor=int(statistics.fmean(monthly)) if monthly else 0,
+        average_monthly_inflow_micros=int(statistics.fmean(monthly)) if monthly else 0,
         inflow_regularity=_regularity(monthly),
         has_recurring_income=_detect_recurring_income(inflows),
         # Sin ingresos el cociente no significa nada; se reporta 0 en vez de
@@ -148,7 +148,7 @@ def _monthly_totals(movements: list[Movement], *, as_of: date, observed_days: in
         bucket_end = end - timedelta(days=DAYS_PER_MONTH * index)
         bucket_start = bucket_end - timedelta(days=DAYS_PER_MONTH)
         totals.append(
-            sum(m.amount_minor for m in movements if bucket_start <= m.occurred_at < bucket_end)
+            sum(m.amount_micros for m in movements if bucket_start <= m.occurred_at < bucket_end)
         )
     return totals
 
@@ -200,7 +200,7 @@ def _detect_recurring_income(inflows: list[Movement]) -> bool:
     for movements in by_counterparty.values():
         if len(movements) < 3:
             continue
-        amounts = [m.amount_minor for m in movements]
+        amounts = [m.amount_micros for m in movements]
         mean = statistics.fmean(amounts)
         if mean == 0:
             continue

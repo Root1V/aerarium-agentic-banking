@@ -142,8 +142,8 @@ func TestAltaAprobadaAbreLaCuenta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("consultar saldo: %v", err)
 	}
-	if balance.AmountMinor != 0 {
-		t.Errorf("la cuenta nueva debe nacer en cero, saldo = %d", balance.AmountMinor)
+	if balance.AmountMicros != 0 {
+		t.Errorf("la cuenta nueva debe nacer en cero, saldo = %d", balance.AmountMicros)
 	}
 }
 

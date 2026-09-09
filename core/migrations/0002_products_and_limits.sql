@@ -25,13 +25,13 @@ CREATE TABLE products (
     kind                  product_kind NOT NULL,
     currency              CHAR(3) NOT NULL,
     allows_overdraft      BOOLEAN NOT NULL DEFAULT FALSE,
-    max_balance_minor     BIGINT,
-    max_transaction_minor BIGINT,
+    max_balance_micros     BIGINT,
+    max_transaction_micros BIGINT,
     active                BOOLEAN NOT NULL DEFAULT TRUE,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT positive_caps CHECK (
-        (max_balance_minor IS NULL OR max_balance_minor > 0) AND
-        (max_transaction_minor IS NULL OR max_transaction_minor > 0)
+        (max_balance_micros IS NULL OR max_balance_micros > 0) AND
+        (max_transaction_micros IS NULL OR max_transaction_micros > 0)
     )
 );
 
@@ -50,7 +50,7 @@ DROP VIEW account_balances;
 
 CREATE TABLE account_balances (
     account_id    UUID PRIMARY KEY REFERENCES accounts (id),
-    balance_minor BIGINT NOT NULL DEFAULT 0,
+    balance_micros BIGINT NOT NULL DEFAULT 0,
     entry_count   BIGINT NOT NULL DEFAULT 0,
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -76,15 +76,15 @@ BEGIN
 
     delta := CASE
         WHEN acc_type IN ('ASSET', 'EXPENSE') THEN
-            CASE WHEN NEW.direction = 'DEBIT' THEN NEW.amount_minor ELSE -NEW.amount_minor END
+            CASE WHEN NEW.direction = 'DEBIT' THEN NEW.amount_micros ELSE -NEW.amount_micros END
         ELSE
-            CASE WHEN NEW.direction = 'CREDIT' THEN NEW.amount_minor ELSE -NEW.amount_minor END
+            CASE WHEN NEW.direction = 'CREDIT' THEN NEW.amount_micros ELSE -NEW.amount_micros END
     END;
 
     -- Este UPDATE toma lock de la fila de saldo: dos movimientos sobre la misma
     -- cuenta se serializan aquí, que es lo que hace fiable el control de sobregiro.
     UPDATE account_balances
-       SET balance_minor = balance_minor + delta,
+       SET balance_micros = balance_micros + delta,
            entry_count   = entry_count + 1,
            updated_at    = now()
      WHERE account_id = NEW.account_id;
@@ -108,7 +108,7 @@ DECLARE
     prod RECORD;
 BEGIN
     SELECT allows_overdraft, product_id INTO acc FROM accounts WHERE id = NEW.account_id;
-    SELECT balance_minor INTO bal FROM account_balances WHERE account_id = NEW.account_id;
+    SELECT balance_micros INTO bal FROM account_balances WHERE account_id = NEW.account_id;
 
     IF NOT acc.allows_overdraft AND bal < 0 THEN
         RAISE EXCEPTION 'insufficient funds: account % would end at %', NEW.account_id, bal
@@ -116,19 +116,19 @@ BEGIN
     END IF;
 
     IF acc.product_id IS NOT NULL THEN
-        SELECT max_balance_minor, max_transaction_minor INTO prod
+        SELECT max_balance_micros, max_transaction_micros INTO prod
         FROM products WHERE id = acc.product_id;
 
-        IF prod.max_balance_minor IS NOT NULL AND bal > prod.max_balance_minor THEN
+        IF prod.max_balance_micros IS NOT NULL AND bal > prod.max_balance_micros THEN
             RAISE EXCEPTION 'balance cap exceeded: account % would end at %, cap %',
-                NEW.account_id, bal, prod.max_balance_minor
+                NEW.account_id, bal, prod.max_balance_micros
                 USING ERRCODE = 'AB002';
         END IF;
 
-        IF prod.max_transaction_minor IS NOT NULL
-           AND NEW.amount_minor > prod.max_transaction_minor THEN
+        IF prod.max_transaction_micros IS NOT NULL
+           AND NEW.amount_micros > prod.max_transaction_micros THEN
             RAISE EXCEPTION 'transaction cap exceeded: account % amount %, cap %',
-                NEW.account_id, NEW.amount_minor, prod.max_transaction_minor
+                NEW.account_id, NEW.amount_micros, prod.max_transaction_micros
                 USING ERRCODE = 'AB003';
         END IF;
     END IF;
@@ -150,9 +150,9 @@ CREATE VIEW account_balance_projection AS
 SELECT
     a.id AS account_id,
     CASE WHEN a.type IN ('ASSET', 'EXPENSE')
-         THEN COALESCE(SUM(CASE WHEN e.direction = 'DEBIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
-         ELSE COALESCE(SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
-    END::BIGINT AS projected_minor,
+         THEN COALESCE(SUM(CASE WHEN e.direction = 'DEBIT' THEN e.amount_micros ELSE -e.amount_micros END), 0)
+         ELSE COALESCE(SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount_micros ELSE -e.amount_micros END), 0)
+    END::BIGINT AS projected_micros,
     COUNT(e.id)::BIGINT AS projected_entries
 FROM accounts a
 LEFT JOIN ledger_entries e ON e.account_id = a.id

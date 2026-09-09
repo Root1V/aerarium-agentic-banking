@@ -46,7 +46,7 @@ CREATE TABLE ledger_transactions (
 );
 
 -- -----------------------------------------------------------------------------
--- Asientos (2+ por transacción). Montos SIEMPRE en unidades menores (centavos),
+-- Asientos (2+ por transacción). Montos SIEMPRE en micras (10^-6, ver core/src/money.rs),
 -- enteros positivos; la dirección va en `direction`. Nunca floats.
 -- -----------------------------------------------------------------------------
 CREATE TABLE ledger_entries (
@@ -54,7 +54,7 @@ CREATE TABLE ledger_entries (
     transaction_id UUID NOT NULL REFERENCES ledger_transactions (id),
     account_id     UUID NOT NULL REFERENCES accounts (id),
     direction      entry_direction NOT NULL,
-    amount_minor   BIGINT NOT NULL CHECK (amount_minor > 0),
+    amount_micros   BIGINT NOT NULL CHECK (amount_micros > 0),
     currency       CHAR(3) NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -119,7 +119,7 @@ BEGIN
         FROM ledger_entries
         WHERE transaction_id = NEW.transaction_id
         GROUP BY currency
-        HAVING SUM(CASE WHEN direction = 'DEBIT' THEN amount_minor ELSE -amount_minor END) <> 0
+        HAVING SUM(CASE WHEN direction = 'DEBIT' THEN amount_micros ELSE -amount_micros END) <> 0
     ) x;
     IF unbalanced > 0 THEN
         RAISE EXCEPTION 'transaction % is unbalanced', NEW.transaction_id;
@@ -154,11 +154,11 @@ SELECT
     a.currency,
     a.status,
     -- SUM() sobre bigint devuelve NUMERIC en Postgres; el saldo es bigint por definición
-    -- (unidades menores), así que se castea explícitamente en vez de coercionarlo al leer.
+    -- (micras), así que se castea explícitamente en vez de coercionarlo al leer.
     CASE WHEN a.type IN ('ASSET', 'EXPENSE')
-         THEN COALESCE(SUM(CASE WHEN e.direction = 'DEBIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
-         ELSE COALESCE(SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount_minor ELSE -e.amount_minor END), 0)
-    END::BIGINT AS balance_minor
+         THEN COALESCE(SUM(CASE WHEN e.direction = 'DEBIT' THEN e.amount_micros ELSE -e.amount_micros END), 0)
+         ELSE COALESCE(SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount_micros ELSE -e.amount_micros END), 0)
+    END::BIGINT AS balance_micros
 FROM accounts a
 LEFT JOIN ledger_entries e ON e.account_id = a.id
 GROUP BY a.id;

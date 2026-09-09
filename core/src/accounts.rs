@@ -134,18 +134,18 @@ impl AccountRepository {
     /// Saldo materializado (lectura rápida, mantenido transaccionalmente).
     pub async fn balance(&self, account_id: Uuid) -> Result<Balance, sqlx::Error> {
         let row = sqlx::query!(
-            "SELECT balance_minor, entry_count FROM account_balances WHERE account_id = $1",
+            "SELECT balance_micros, entry_count FROM account_balances WHERE account_id = $1",
             account_id,
         )
         .fetch_optional(&self.pool)
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
-        Ok(Balance { balance_minor: row.balance_minor, entry_count: row.entry_count })
+        Ok(Balance { balance_micros: row.balance_micros, entry_count: row.entry_count })
     }
 
-    pub async fn balance_minor(&self, account_id: Uuid) -> Result<i64, sqlx::Error> {
-        Ok(self.balance(account_id).await?.balance_minor)
+    pub async fn balance_micros(&self, account_id: Uuid) -> Result<i64, sqlx::Error> {
+        Ok(self.balance(account_id).await?.balance_micros)
     }
 
     /// Extracto de movimientos, del más reciente al más antiguo.
@@ -163,7 +163,7 @@ impl AccountRepository {
             r#"
             SELECT e.id, e.transaction_id,
                    e.direction as "direction: Direction",
-                   e.amount_minor, e.currency,
+                   e.amount_micros, e.currency,
                    t.kind, t.description, t.posted_at
             FROM ledger_entries e
             JOIN ledger_transactions t ON t.id = e.transaction_id
@@ -184,7 +184,7 @@ impl AccountRepository {
                 id: r.id,
                 transaction_id: r.transaction_id,
                 direction: r.direction,
-                amount_minor: r.amount_minor,
+                amount_micros: r.amount_micros,
                 currency: r.currency,
                 kind: r.kind,
                 description: r.description,
@@ -198,7 +198,7 @@ impl AccountRepository {
     pub async fn projected_balance(&self, account_id: Uuid) -> Result<Balance, sqlx::Error> {
         let row = sqlx::query!(
             r#"
-            SELECT projected_minor as "projected_minor!", projected_entries as "projected_entries!"
+            SELECT projected_micros as "projected_micros!", projected_entries as "projected_entries!"
             FROM account_balance_projection WHERE account_id = $1
             "#,
             account_id,
@@ -207,7 +207,7 @@ impl AccountRepository {
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
-        Ok(Balance { balance_minor: row.projected_minor, entry_count: row.projected_entries })
+        Ok(Balance { balance_micros: row.projected_micros, entry_count: row.projected_entries })
     }
 
     #[allow(clippy::too_many_arguments)]

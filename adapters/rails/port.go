@@ -37,7 +37,7 @@ type SendRequest struct {
 	// que un reenvío por timeout mande el dinero dos veces.
 	TransferID  string
 	Alias       string
-	AmountMinor int64
+	AmountMicros int64
 	Currency    string
 	Reference   string
 }
@@ -57,7 +57,7 @@ type SendReceipt struct {
 type InboundCredit struct {
 	RailTransactionID string
 	ToAlias           string
-	AmountMinor       int64
+	AmountMicros       int64
 	Currency          string
 	SenderName        string
 	OccurredAt        time.Time

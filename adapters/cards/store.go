@@ -24,13 +24,13 @@ type Authorization struct {
 	NetworkTransactionID string
 	CardID               string
 	AccountID            string
-	AmountMinor          int64
+	AmountMicros          int64
 	Currency             string
 	MerchantName         string
 	Status               string
 	HoldTransactionID    string
-	ClearedAmountMinor   int64
-	OverageMinor         int64
+	ClearedAmountMicros   int64
+	OverageMicros         int64
 	AuthorizedAt         time.Time
 }
 
@@ -55,11 +55,11 @@ func (s *Store) Migrate(ctx context.Context) error {
 func (s *Store) reserve(ctx context.Context, auth Authorization) (created bool, existing *Authorization, err error) {
 	result, err := s.db.ExecContext(ctx, `
 		INSERT INTO cards.authorizations
-			(network_transaction_id, card_id, account_id, amount_minor, currency,
+			(network_transaction_id, card_id, account_id, amount_micros, currency,
 			 merchant_name, status)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
 		ON CONFLICT (network_transaction_id) DO NOTHING`,
-		auth.NetworkTransactionID, auth.CardID, auth.AccountID, auth.AmountMinor,
+		auth.NetworkTransactionID, auth.CardID, auth.AccountID, auth.AmountMicros,
 		auth.Currency, auth.MerchantName, statusHeld)
 	if err != nil {
 		return false, nil, fmt.Errorf("reservar autorización: %w", err)
@@ -82,15 +82,15 @@ func (s *Store) reserve(ctx context.Context, auth Authorization) (created bool, 
 
 func (s *Store) Get(ctx context.Context, networkTransactionID string) (*Authorization, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT network_transaction_id, card_id, account_id::text, amount_minor, currency,
+		SELECT network_transaction_id, card_id, account_id::text, amount_micros, currency,
 		       COALESCE(merchant_name,''), status, COALESCE(hold_transaction_id::text,''),
-		       COALESCE(cleared_amount_minor, 0), overage_minor, authorized_at
+		       COALESCE(cleared_amount_micros, 0), overage_micros, authorized_at
 		FROM cards.authorizations WHERE network_transaction_id = $1`, networkTransactionID)
 
 	var a Authorization
-	err := row.Scan(&a.NetworkTransactionID, &a.CardID, &a.AccountID, &a.AmountMinor,
+	err := row.Scan(&a.NetworkTransactionID, &a.CardID, &a.AccountID, &a.AmountMicros,
 		&a.Currency, &a.MerchantName, &a.Status, &a.HoldTransactionID,
-		&a.ClearedAmountMinor, &a.OverageMinor, &a.AuthorizedAt)
+		&a.ClearedAmountMicros, &a.OverageMicros, &a.AuthorizedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUnknownAuthorization
 	}
@@ -125,7 +125,7 @@ func (s *Store) drop(ctx context.Context, networkTransactionID string) error {
 func (s *Store) markCleared(ctx context.Context, networkTransactionID string, finalAmount, overage int64) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE cards.authorizations
-		SET status = $2, cleared_amount_minor = $3, overage_minor = $4, resolved_at = now()
+		SET status = $2, cleared_amount_micros = $3, overage_micros = $4, resolved_at = now()
 		WHERE network_transaction_id = $1`,
 		networkTransactionID, statusCleared, finalAmount, overage)
 	if err != nil {
@@ -150,9 +150,9 @@ func (s *Store) markReversed(ctx context.Context, networkTransactionID string) e
 // la red debe liberarse. Es la cola que alimenta ese proceso.
 func (s *Store) HeldOlderThan(ctx context.Context, age time.Duration) ([]Authorization, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT network_transaction_id, card_id, account_id::text, amount_minor, currency,
+		SELECT network_transaction_id, card_id, account_id::text, amount_micros, currency,
 		       COALESCE(merchant_name,''), status, COALESCE(hold_transaction_id::text,''),
-		       COALESCE(cleared_amount_minor, 0), overage_minor, authorized_at
+		       COALESCE(cleared_amount_micros, 0), overage_micros, authorized_at
 		FROM cards.authorizations
 		WHERE status = 'held' AND authorized_at < now() - $1::interval
 		ORDER BY authorized_at`, fmt.Sprintf("%d seconds", int(age.Seconds())))
@@ -164,9 +164,9 @@ func (s *Store) HeldOlderThan(ctx context.Context, age time.Duration) ([]Authori
 	var out []Authorization
 	for rows.Next() {
 		var a Authorization
-		if err := rows.Scan(&a.NetworkTransactionID, &a.CardID, &a.AccountID, &a.AmountMinor,
+		if err := rows.Scan(&a.NetworkTransactionID, &a.CardID, &a.AccountID, &a.AmountMicros,
 			&a.Currency, &a.MerchantName, &a.Status, &a.HoldTransactionID,
-			&a.ClearedAmountMinor, &a.OverageMinor, &a.AuthorizedAt); err != nil {
+			&a.ClearedAmountMicros, &a.OverageMicros, &a.AuthorizedAt); err != nil {
 			return nil, fmt.Errorf("leer retención: %w", err)
 		}
 		out = append(out, a)

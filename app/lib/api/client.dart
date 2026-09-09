@@ -43,7 +43,7 @@ class BffClient {
     required String idempotencyKey,
     required String fromAccountId,
     required String toAccountId,
-    required int amountMinor,
+    required int amountMicros,
     required String currency,
     String description = '',
   }) async {
@@ -53,7 +53,7 @@ class BffClient {
       body: {
         'from_account_id': fromAccountId,
         'to_account_id': toAccountId,
-        'amount_minor': amountMinor,
+        'amount_micros': amountMicros,
         'currency': currency,
         'description': description,
       },

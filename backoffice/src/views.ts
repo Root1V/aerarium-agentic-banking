@@ -6,7 +6,7 @@
  * dependencias es menos superficie que auditar en un sistema financiero.
  */
 
-import { formatMinor, type Finding, type FindingKind } from './core-client.ts';
+import { formatMicros, type Finding, type FindingKind } from './core-client.ts';
 import { can, type Operator } from './auth.ts';
 
 /** Escapa texto antes de insertarlo en HTML. */
@@ -65,8 +65,8 @@ export function renderFindings(findings: readonly Finding[], operator: Operator)
   <td>${escapeHtml(f.id)}</td>
   <td class="kind">${escapeHtml(KIND_LABELS[f.kind] ?? f.kind)}</td>
   <td>${escapeHtml(f.reference)}</td>
-  <td class="num">${escapeHtml(formatMinor(f.expectedMinor, f.currency))}</td>
-  <td class="num">${escapeHtml(formatMinor(f.actualMinor, f.currency))}</td>
+  <td class="num">${escapeHtml(formatMicros(f.expectedMicros, f.currency))}</td>
+  <td class="num">${escapeHtml(formatMicros(f.actualMicros, f.currency))}</td>
   <td>${escapeHtml(f.detail)}</td>
 </tr>`,
     )

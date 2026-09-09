@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT e.id, e.transaction_id,\n                   e.direction as \"direction: Direction\",\n                   e.amount_minor, e.currency,\n                   t.kind, t.description, t.posted_at\n            FROM ledger_entries e\n            JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND ($2::bigint IS NULL OR e.id < $2)\n            ORDER BY e.id DESC\n            LIMIT $3\n            ",
+  "query": "\n            SELECT e.id, e.transaction_id,\n                   e.direction as \"direction: Direction\",\n                   e.amount_micros, e.currency,\n                   t.kind, t.description, t.posted_at\n            FROM ledger_entries e\n            JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND ($2::bigint IS NULL OR e.id < $2)\n            ORDER BY e.id DESC\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 3,
-        "name": "amount_minor",
+        "name": "amount_micros",
         "type_info": "Int8"
       },
       {
@@ -72,5 +72,5 @@
       false
     ]
   },
-  "hash": "9723e83bc15154c1234ecdfc9cec404b0e595e04a31425b8ef7dd8faeb182dea"
+  "hash": "438c40f169beb70566ebaa5ea5d660a7c152a0c048b8a93169fba7b0b05862f7"
 }

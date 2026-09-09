@@ -38,17 +38,17 @@ const (
 
 // Asiento tal como quedó registrado, con el saldo resultante de la cuenta.
 //
-// `balance_after_minor` se incluye deliberadamente: permite que un consumidor
+// `balance_after_micros` se incluye deliberadamente: permite que un consumidor
 // notifique "recibiste $X, tu saldo es $Y" sin volver a consultar el core, y
 // evita que dos eventos concurrentes lean saldos en desorden.
 type PostedEntry struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	AccountId         string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	Direction         corev1.Direction       `protobuf:"varint,2,opt,name=direction,proto3,enum=aibank.core.v1.Direction" json:"direction,omitempty"`
-	Amount            *corev1.Money          `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	BalanceAfterMinor int64                  `protobuf:"varint,4,opt,name=balance_after_minor,json=balanceAfterMinor,proto3" json:"balance_after_minor,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	AccountId          string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Direction          corev1.Direction       `protobuf:"varint,2,opt,name=direction,proto3,enum=aibank.core.v1.Direction" json:"direction,omitempty"`
+	Amount             *corev1.Money          `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	BalanceAfterMicros int64                  `protobuf:"varint,4,opt,name=balance_after_micros,json=balanceAfterMicros,proto3" json:"balance_after_micros,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PostedEntry) Reset() {
@@ -102,9 +102,9 @@ func (x *PostedEntry) GetAmount() *corev1.Money {
 	return nil
 }
 
-func (x *PostedEntry) GetBalanceAfterMinor() int64 {
+func (x *PostedEntry) GetBalanceAfterMicros() int64 {
 	if x != nil {
-		return x.BalanceAfterMinor
+		return x.BalanceAfterMicros
 	}
 	return 0
 }
@@ -201,13 +201,13 @@ var File_aibank_events_v1_events_proto protoreflect.FileDescriptor
 
 const file_aibank_events_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x1daibank/events/v1/events.proto\x12\x10aibank.events.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19aibank/core/v1/core.proto\"\xc4\x01\n" +
+	"\x1daibank/events/v1/events.proto\x12\x10aibank.events.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19aibank/core/v1/core.proto\"\xc6\x01\n" +
 	"\vPostedEntry\x12\x1d\n" +
 	"\n" +
 	"account_id\x18\x01 \x01(\tR\taccountId\x127\n" +
 	"\tdirection\x18\x02 \x01(\x0e2\x19.aibank.core.v1.DirectionR\tdirection\x12-\n" +
-	"\x06amount\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x12.\n" +
-	"\x13balance_after_minor\x18\x04 \x01(\x03R\x11balanceAfterMinor\"\x8a\x02\n" +
+	"\x06amount\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x120\n" +
+	"\x14balance_after_micros\x18\x04 \x01(\x03R\x12balanceAfterMicros\"\x8a\x02\n" +
 	"\x17LedgerTransactionPosted\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12'\n" +

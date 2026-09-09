@@ -31,9 +31,9 @@ export interface Finding {
   kind: FindingKind;
   accountId: string;
   reference: string;
-  /** Enteros en unidades menores: el dinero nunca viaja como decimal. */
-  expectedMinor: bigint;
-  actualMinor: bigint;
+  /** Enteros en micras (10^-6): el dinero nunca viaja como decimal. */
+  expectedMicros: bigint;
+  actualMicros: bigint;
   currency: string;
   detail: string;
 }
@@ -93,8 +93,8 @@ export function connectCore(address: string): CoreClient {
         kind: f.kind as FindingKind,
         accountId: f.accountId ?? '',
         reference: f.reference ?? '',
-        expectedMinor: BigInt(f.expectedMinor ?? 0),
-        actualMinor: BigInt(f.actualMinor ?? 0),
+        expectedMicros: BigInt(f.expectedMicros ?? 0),
+        actualMicros: BigInt(f.actualMicros ?? 0),
         currency: f.currency ?? '',
         detail: f.detail ?? '',
       }));
@@ -118,12 +118,27 @@ export function connectCore(address: string): CoreClient {
   };
 }
 
-/** Formatea un importe en unidades menores. Aritmética entera, sin flotantes. */
-export function formatMinor(amountMinor: bigint, currency: string): string {
-  const negative = amountMinor < 0n;
-  const absolute = negative ? -amountMinor : amountMinor;
-  const units = absolute / 100n;
-  const cents = absolute % 100n;
+/** Micras por unidad mayor: 1 USD = 1.000.000 micras. */
+const MICROS_PER_UNIT = 1_000_000n;
+
+/**
+ * Formatea un importe en micras. Aritmética entera con `bigint`, sin flotantes.
+ *
+ * Dos decimales, salvo que el importe tenga fracción de centavo: ahí se muestran
+ * los que hagan falta hasta seis. En una consola de conciliación esto no es un
+ * detalle estético — una diferencia de 3.000 micras mostrada como "0,00" es una
+ * alerta que se lee como si no hubiera nada que investigar.
+ */
+export function formatMicros(amountMicros: bigint, currency: string): string {
+  const negative = amountMicros < 0n;
+  const absolute = negative ? -amountMicros : amountMicros;
+  const units = absolute / MICROS_PER_UNIT;
+  const fraction = absolute % MICROS_PER_UNIT;
+
+  const digits = fraction.toString().padStart(6, '0');
+  let end = digits.length;
+  while (end > 2 && digits[end - 1] === '0') end--;
+
   const sign = negative ? '-' : '';
-  return `${sign}${units.toString()},${cents.toString().padStart(2, '0')} ${currency}`;
+  return `${sign}${units.toString()},${digits.slice(0, end)} ${currency}`;
 }

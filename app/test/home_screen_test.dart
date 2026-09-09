@@ -13,11 +13,11 @@ BffClient clientReturning(http.Response response) => BffClient(
       httpClient: MockClient((_) async => response),
     );
 
-http.Response homeResponse({required int balanceMinor, required List<Map<String, dynamic>> movements}) =>
+http.Response homeResponse({required int balanceMicros, required List<Map<String, dynamic>> movements}) =>
     http.Response(
       jsonEncode({
         'account': {'id': 'acc-1', 'name': 'Cuenta simple', 'currency': 'USD'},
-        'balance': {'amount_minor': balanceMinor, 'currency': 'USD'},
+        'balance': {'amount_micros': balanceMicros, 'currency': 'USD'},
         'movements': movements,
       }),
       200,
@@ -25,7 +25,7 @@ http.Response homeResponse({required int balanceMinor, required List<Map<String,
 
 Map<String, dynamic> movement({
   required String id,
-  required int amountMinor,
+  required int amountMicros,
   required int sign,
   String kind = 'p2p_transfer',
   String description = '',
@@ -33,7 +33,7 @@ Map<String, dynamic> movement({
     {
       'id': id,
       'cursor': id,
-      'amount': {'amount_minor': amountMinor, 'currency': 'USD'},
+      'amount': {'amount_micros': amountMicros, 'currency': 'USD'},
       'sign': sign,
       'kind': kind,
       'description': description,
@@ -42,7 +42,7 @@ Map<String, dynamic> movement({
 
 void main() {
   testWidgets('muestra el saldo formateado', (tester) async {
-    final client = clientReturning(homeResponse(balanceMinor: 152575, movements: []));
+    final client = clientReturning(homeResponse(balanceMicros: 1525750000, movements: []));
 
     await tester.pumpWidget(
       MaterialApp(home: HomeScreen(client: client, accountId: 'acc-1')),
@@ -53,9 +53,9 @@ void main() {
   });
 
   testWidgets('distingue lo que entra de lo que sale', (tester) async {
-    final client = clientReturning(homeResponse(balanceMinor: 10000, movements: [
-      movement(id: 'm1', amountMinor: 5000, sign: 1, kind: 'deposit'),
-      movement(id: 'm2', amountMinor: 2500, sign: -1),
+    final client = clientReturning(homeResponse(balanceMicros: 100000000, movements: [
+      movement(id: 'm1', amountMicros: 50000000, sign: 1, kind: 'deposit'),
+      movement(id: 'm2', amountMicros: 25000000, sign: -1),
     ]));
 
     await tester.pumpWidget(
@@ -72,7 +72,7 @@ void main() {
   });
 
   testWidgets('sin movimientos muestra un mensaje, no una lista vacía', (tester) async {
-    final client = clientReturning(homeResponse(balanceMinor: 0, movements: []));
+    final client = clientReturning(homeResponse(balanceMicros: 0, movements: []));
 
     await tester.pumpWidget(
       MaterialApp(home: HomeScreen(client: client, accountId: 'acc-1')),

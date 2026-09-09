@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, run_id, kind as \"kind: FindingKind\", account_id, reference,\n                   expected_minor, actual_minor, currency, detail, created_at\n            FROM reconciliation_findings\n            WHERE resolved_at IS NULL\n            ORDER BY id DESC\n            LIMIT $1\n            ",
+  "query": "\n            SELECT id, run_id, kind as \"kind: FindingKind\", account_id, reference,\n                   expected_micros, actual_micros, currency, detail, created_at\n            FROM reconciliation_findings\n            WHERE resolved_at IS NULL\n            ORDER BY id DESC\n            LIMIT $1\n            ",
   "describe": {
     "columns": [
       {
@@ -43,12 +43,12 @@
       },
       {
         "ordinal": 5,
-        "name": "expected_minor",
+        "name": "expected_micros",
         "type_info": "Int8"
       },
       {
         "ordinal": 6,
-        "name": "actual_minor",
+        "name": "actual_micros",
         "type_info": "Int8"
       },
       {
@@ -85,5 +85,5 @@
       false
     ]
   },
-  "hash": "96acc9a50d714c39d7e0cd4a66be7127cac1f5f598965fb648a41f43cbd46ebd"
+  "hash": "eed8f259971ecaa06bdf951cdffb404b16d5f8a02de8d1d73f7a6e87694f3fec"
 }

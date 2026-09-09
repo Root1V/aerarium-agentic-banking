@@ -52,7 +52,7 @@ class Movement {
 
   /// Importe con su signo, listo para mostrar.
   Money get signedAmount =>
-      sign < 0 ? Money(-amount.amountMinor, amount.currency) : amount;
+      sign < 0 ? Money(-amount.amountMicros, amount.currency) : amount;
 
   /// Etiqueta legible del tipo de movimiento.
   String get label => switch (kind) {

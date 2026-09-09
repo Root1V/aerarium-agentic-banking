@@ -16,7 +16,7 @@ import pg from 'pg';
 import { AuditLog } from '../src/audit.ts';
 import { createServer } from '../src/server.ts';
 import { SimAuthenticator } from '../src/sim/authenticator.ts';
-import { formatMinor, type CoreClient, type Finding } from '../src/core-client.ts';
+import { formatMicros, type CoreClient, type Finding } from '../src/core-client.ts';
 import { CoreUnavailableError, FindingNotFoundError } from '../src/core-client.ts';
 import { escapeHtml } from '../src/views.ts';
 
@@ -33,8 +33,8 @@ class FakeCore implements CoreClient {
       kind: 'FINDING_KIND_BALANCE_DRIFT',
       accountId: 'acc-1',
       reference: 'ref-1',
-      expectedMinor: 20000n,
-      actualMinor: 25000n,
+      expectedMicros: 200000000n,
+      actualMicros: 250000000n,
       currency: 'USD',
       detail: 'saldo materializado 25000 contra 20000 de los asientos',
     },
@@ -298,9 +298,18 @@ describe('resolución', () => {
 
 describe('presentación', () => {
   it('el dinero se formatea con aritmética entera', () => {
-    assert.equal(formatMinor(25000n, 'USD'), '250,00 USD');
-    assert.equal(formatMinor(5n, 'USD'), '0,05 USD');
-    assert.equal(formatMinor(-12345n, 'PEN'), '-123,45 PEN');
+    assert.equal(formatMicros(250000000n, 'USD'), '250,00 USD');
+    assert.equal(formatMicros(50000n, 'USD'), '0,05 USD');
+    assert.equal(formatMicros(-123450000n, 'PEN'), '-123,45 PEN');
+  });
+
+  // Una diferencia de conciliación por debajo del centavo tiene que verse. Si se
+  // formateara a dos decimales fijos aparecería como "0,00" y el operador leería
+  // la alerta como si no hubiera nada que investigar.
+  it('una diferencia menor a un centavo no se muestra como cero', () => {
+    assert.equal(formatMicros(3000n, 'USD'), '0,003 USD');
+    assert.equal(formatMicros(1n, 'USD'), '0,000001 USD');
+    assert.equal(formatMicros(10001n, 'USD'), '0,010001 USD');
   });
 
   // El detalle de un hallazgo viene del core y podría contener texto arbitrario.
@@ -319,8 +328,8 @@ describe('presentación', () => {
         kind: 'FINDING_KIND_AMOUNT_MISMATCH',
         accountId: 'acc-9',
         reference: '<img src=x onerror=alert(1)>',
-        expectedMinor: 100n,
-        actualMinor: 200n,
+        expectedMicros: 1000000n,
+        actualMicros: 2000000n,
         currency: 'USD',
         detail: 'referencia sospechosa',
       },

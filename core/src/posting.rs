@@ -85,10 +85,10 @@ fn validate(request: &PostingRequest) -> Result<(), PostingError> {
     }
 
     for entry in &request.entries {
-        if entry.amount_minor <= 0 {
+        if entry.amount_micros <= 0 {
             return Err(PostingError::Invalid(format!(
                 "amounts must be positive, got {}",
-                entry.amount_minor
+                entry.amount_micros
             )));
         }
         if entry.currency.len() != 3 {
@@ -102,8 +102,8 @@ fn validate(request: &PostingRequest) -> Result<(), PostingError> {
     let mut net_by_currency: BTreeMap<&str, i128> = BTreeMap::new();
     for entry in &request.entries {
         let signed = match entry.direction {
-            Direction::Debit => entry.amount_minor as i128,
-            Direction::Credit => -(entry.amount_minor as i128),
+            Direction::Debit => entry.amount_micros as i128,
+            Direction::Credit => -(entry.amount_micros as i128),
         };
         *net_by_currency.entry(entry.currency.as_str()).or_default() += signed;
     }
@@ -126,7 +126,7 @@ fn request_hash(request: &PostingRequest) -> String {
         .map(|e| {
             format!(
                 "{}:{:?}:{}:{}",
-                e.account_id, e.direction, e.amount_minor, e.currency
+                e.account_id, e.direction, e.amount_micros, e.currency
             )
         })
         .collect();
@@ -182,18 +182,18 @@ async fn insert_entries(
     // fila, y un orden global fijo evita deadlocks entre transferencias cruzadas
     // (A→B y B→A simultáneas bloquearían en orden inverso sin esto).
     let mut ordered: Vec<&EntryCommand> = entries.iter().collect();
-    ordered.sort_by_key(|e| (e.account_id, e.direction as i32, e.amount_minor));
+    ordered.sort_by_key(|e| (e.account_id, e.direction as i32, e.amount_micros));
 
     for entry in ordered {
         sqlx::query!(
             r#"
-            INSERT INTO ledger_entries (transaction_id, account_id, direction, amount_minor, currency)
+            INSERT INTO ledger_entries (transaction_id, account_id, direction, amount_micros, currency)
             VALUES ($1, $2, $3, $4, $5)
             "#,
             transaction_id,
             entry.account_id,
             entry.direction as Direction,
-            entry.amount_minor,
+            entry.amount_micros,
             entry.currency,
         )
         .execute(&mut **tx)
@@ -217,7 +217,7 @@ async fn emit_posted_event(
     let mut entries = Vec::with_capacity(request.entries.len());
     for entry in &request.entries {
         let balance = sqlx::query!(
-            "SELECT balance_minor FROM account_balances WHERE account_id = $1",
+            "SELECT balance_micros FROM account_balances WHERE account_id = $1",
             entry.account_id,
         )
         .fetch_one(&mut **tx)
@@ -230,10 +230,10 @@ async fn emit_posted_event(
                 Direction::Credit => 2, // DIRECTION_CREDIT
             },
             amount: Some(crate::grpc::pb::Money {
-                amount_minor: entry.amount_minor,
+                amount_micros: entry.amount_micros,
                 currency: entry.currency.clone(),
             }),
-            balance_after_minor: balance.balance_minor,
+            balance_after_micros: balance.balance_micros,
         });
     }
 

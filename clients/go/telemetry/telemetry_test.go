@@ -68,7 +68,7 @@ func TestLosDatosPersonalesYSecretosNoSeRegistran(t *testing.T) {
 func TestLosIdentificadoresDeNegocioSiSeRegistran(t *testing.T) {
 	for _, key := range []string{
 		"transaction_id", "account_id", "idempotency_key",
-		"amount_minor", "currency", "kind", "network_transaction_id",
+		"amount_micros", "currency", "kind", "network_transaction_id",
 	} {
 		if !telemetry.IsSafeAttribute(key) {
 			t.Errorf("%q debería poder registrarse: sin identificadores no hay traza útil", key)
@@ -80,7 +80,7 @@ func TestElFiltroDescartaSoloLoProhibido(t *testing.T) {
 	filtered := telemetry.SafeAttributes(
 		attribute.String("transaction_id", "tx-1"),
 		attribute.String("document_number", "12345678"),
-		attribute.Int64("amount_minor", 12000),
+		attribute.Int64("amount_micros", 12000),
 		attribute.String("password", "hunter2"),
 	)
 

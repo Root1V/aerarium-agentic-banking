@@ -126,12 +126,12 @@ def score(features: Features) -> Score:
 
     # Monto del ingreso: importa, pero menos que su constancia.
     inflow_points = _band(
-        features.average_monthly_inflow_minor,
-        [(300_000, 180), (150_000, 140), (80_000, 100), (30_000, 55), (0, 0)],
+        features.average_monthly_inflow_micros,
+        [(3_000_000_000, 180), (1_500_000_000, 140), (800_000_000, 100), (300_000_000, 55), (0, 0)],
     )
     contributions.append(
         Contribution(
-            "average_monthly_inflow_minor",
+            "average_monthly_inflow_micros",
             inflow_points,
             180,
             "El ingreso mensual que observamos en tu cuenta es bajo",
@@ -140,7 +140,7 @@ def score(features: Features) -> Score:
 
     # Cuánto se gasta de lo que entra: gastar todo no deja margen para pagar.
     ratio = features.outflow_to_inflow_ratio
-    if ratio == 0.0 and features.average_monthly_inflow_minor == 0:
+    if ratio == 0.0 and features.average_monthly_inflow_micros == 0:
         margin_points = 0
     elif ratio <= 0.7:
         margin_points = 120

@@ -46,7 +46,7 @@ Las tres primeras no dependen de los bloqueantes y son deuda propia que había q
 
 | # | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|---|
-| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | ⬜ |
+| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | 👀 |
 | 2 | Autenticación OAuth2 con scopes (hoy solo hay un puerto con sustituto) | Go/Rust | feat/oauth2 | ⬜ |
 | 3 | Primitiva de autorización en el core (retención → captura, con expiración) | Rust | feat/authorizations | ⬜ |
 | 4 | API REST de Mercatus: los cinco endpoints del contrato | Go | feat/mercatus-api | ⬜ |

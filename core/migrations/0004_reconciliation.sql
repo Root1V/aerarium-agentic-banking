@@ -50,9 +50,9 @@ CREATE TABLE reconciliation_findings (
     account_id     UUID REFERENCES accounts (id),
     -- Referencia externa (clave de idempotencia, id de la red) cuando aplica.
     reference      TEXT,
-    -- Lo que debería ser y lo que hay. Siempre en unidades menores.
-    expected_minor BIGINT,
-    actual_minor   BIGINT,
+    -- Lo que debería ser y lo que hay. Siempre en micras (10^-6).
+    expected_micros BIGINT,
+    actual_micros   BIGINT,
     currency       CHAR(3),
     detail         TEXT NOT NULL,
     -- Una diferencia se resuelve con una decisión humana o un asiento de ajuste;

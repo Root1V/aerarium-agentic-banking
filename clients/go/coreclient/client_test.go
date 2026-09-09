@@ -51,8 +51,8 @@ func setup(t *testing.T, maxBalance, maxTransaction *int64) (*coreclient.Client,
 		Code:                productCode,
 		Name:                "Cuenta simple",
 		Currency:            "USD",
-		MaxBalanceMinor:     maxBalance,
-		MaxTransactionMinor: maxTransaction,
+		MaxBalanceMicros:     maxBalance,
+		MaxTransactionMicros: maxTransaction,
 	})
 	if err != nil {
 		if coreclient.Retryable(err) {
@@ -93,31 +93,31 @@ func fundedAccounts(t *testing.T, c *coreclient.Client, ctx context.Context, pro
 
 func TestDepositoYSaldoCruzanElContrato(t *testing.T) {
 	client, ctx, productCode := setup(t, nil, nil)
-	_, customer := fundedAccounts(t, client, ctx, productCode, 150_00)
+	_, customer := fundedAccounts(t, client, ctx, productCode, 150_000000)
 
 	balance, err := client.GetBalance(ctx, customer)
 	if err != nil {
 		t.Fatalf("consultar saldo: %v", err)
 	}
 
-	if balance.AmountMinor != 150_00 {
-		t.Errorf("saldo = %d, se esperaba 15000", balance.AmountMinor)
+	if balance.AmountMicros != 150_000000 {
+		t.Errorf("saldo = %d, se esperaba 15000", balance.AmountMicros)
 	}
 	if balance.Currency != "USD" {
 		t.Errorf("moneda = %q, se esperaba USD", balance.Currency)
 	}
 	if !balance.Consistent() {
-		t.Errorf("saldo materializado %d != proyección %d", balance.AmountMinor, balance.ProjectedMinor)
+		t.Errorf("saldo materializado %d != proyección %d", balance.AmountMicros, balance.ProjectedMicros)
 	}
 }
 
 func TestFondosInsuficientesLlegaComoErrorTipado(t *testing.T) {
 	client, ctx, productCode := setup(t, nil, nil)
-	cash, customer := fundedAccounts(t, client, ctx, productCode, 100_00)
+	cash, customer := fundedAccounts(t, client, ctx, productCode, 100_000000)
 
 	_, err := client.Post(ctx, "wd-"+uuid.NewString(), "withdrawal", []coreclient.Entry{
-		coreclient.Debit(customer, 150_00, "USD"),
-		coreclient.Credit(cash, 150_00, "USD"),
+		coreclient.Debit(customer, 150_000000, "USD"),
+		coreclient.Credit(cash, 150_000000, "USD"),
 	}, "retiro mayor al saldo")
 
 	if !errors.Is(err, coreclient.ErrInsufficientFunds) {
@@ -129,13 +129,13 @@ func TestFondosInsuficientesLlegaComoErrorTipado(t *testing.T) {
 }
 
 func TestTopesDelProductoLleganComoErroresDistintos(t *testing.T) {
-	balanceCap := int64(500_00)
+	balanceCap := int64(500_000000)
 	client, ctx, productCode := setup(t, &balanceCap, nil)
-	cash, customer := fundedAccounts(t, client, ctx, productCode, 400_00)
+	cash, customer := fundedAccounts(t, client, ctx, productCode, 400_000000)
 
 	_, err := client.Post(ctx, "dep-"+uuid.NewString(), "deposit", []coreclient.Entry{
-		coreclient.Debit(cash, 200_00, "USD"),
-		coreclient.Credit(customer, 200_00, "USD"),
+		coreclient.Debit(cash, 200_000000, "USD"),
+		coreclient.Credit(customer, 200_000000, "USD"),
 	}, "supera el tope de saldo")
 
 	if !errors.Is(err, coreclient.ErrBalanceCapExceeded) {
@@ -147,13 +147,13 @@ func TestTopesDelProductoLleganComoErroresDistintos(t *testing.T) {
 }
 
 func TestTopePorOperacion(t *testing.T) {
-	txCap := int64(100_00)
+	txCap := int64(100_000000)
 	client, ctx, productCode := setup(t, nil, &txCap)
 	cash, customer := fundedAccounts(t, client, ctx, productCode, 0)
 
 	_, err := client.Post(ctx, "dep-"+uuid.NewString(), "deposit", []coreclient.Entry{
-		coreclient.Debit(cash, 250_00, "USD"),
-		coreclient.Credit(customer, 250_00, "USD"),
+		coreclient.Debit(cash, 250_000000, "USD"),
+		coreclient.Credit(customer, 250_000000, "USD"),
 	}, "supera el tope por operación")
 
 	if !errors.Is(err, coreclient.ErrTransactionCapExceeded) {
@@ -166,8 +166,8 @@ func TestSolicitudDesbalanceadaEsRechazada(t *testing.T) {
 	cash, customer := fundedAccounts(t, client, ctx, productCode, 0)
 
 	_, err := client.Post(ctx, "bad-"+uuid.NewString(), "deposit", []coreclient.Entry{
-		coreclient.Debit(cash, 100_00, "USD"),
-		coreclient.Credit(customer, 99_00, "USD"),
+		coreclient.Debit(cash, 100_000000, "USD"),
+		coreclient.Credit(customer, 99_000000, "USD"),
 	}, "desbalanceada")
 
 	if !errors.Is(err, coreclient.ErrInvalid) {
@@ -183,8 +183,8 @@ func TestReenvioConLaMismaClaveNoDuplicaElAbono(t *testing.T) {
 
 	key := "webhook-" + uuid.NewString()
 	entries := []coreclient.Entry{
-		coreclient.Debit(cash, 75_00, "USD"),
-		coreclient.Credit(customer, 75_00, "USD"),
+		coreclient.Debit(cash, 75_000000, "USD"),
+		coreclient.Credit(customer, 75_000000, "USD"),
 	}
 
 	first, err := client.Post(ctx, key, "deposit", entries, "acreditación del riel")
@@ -210,8 +210,8 @@ func TestReenvioConLaMismaClaveNoDuplicaElAbono(t *testing.T) {
 	if err != nil {
 		t.Fatalf("consultar saldo: %v", err)
 	}
-	if balance.AmountMinor != 75_00 {
-		t.Errorf("saldo = %d, se esperaba 7500: el reenvío duplicó el abono", balance.AmountMinor)
+	if balance.AmountMicros != 75_000000 {
+		t.Errorf("saldo = %d, se esperaba 7500: el reenvío duplicó el abono", balance.AmountMicros)
 	}
 }
 
@@ -221,16 +221,16 @@ func TestMismaClaveConMontoDistintoEsConflicto(t *testing.T) {
 
 	key := "conf-" + uuid.NewString()
 	_, err := client.Post(ctx, key, "deposit", []coreclient.Entry{
-		coreclient.Debit(cash, 20_00, "USD"),
-		coreclient.Credit(customer, 20_00, "USD"),
+		coreclient.Debit(cash, 20_000000, "USD"),
+		coreclient.Credit(customer, 20_000000, "USD"),
 	}, "")
 	if err != nil {
 		t.Fatalf("primer envío: %v", err)
 	}
 
 	_, err = client.Post(ctx, key, "deposit", []coreclient.Entry{
-		coreclient.Debit(cash, 99_00, "USD"),
-		coreclient.Credit(customer, 99_00, "USD"),
+		coreclient.Debit(cash, 99_000000, "USD"),
+		coreclient.Credit(customer, 99_000000, "USD"),
 	}, "")
 	if !errors.Is(err, coreclient.ErrIdempotencyConflict) {
 		t.Fatalf("se esperaba ErrIdempotencyConflict, se obtuvo %v", err)
@@ -256,8 +256,8 @@ func TestReintentosConcurrentesDelMismoWebhookAcreditanUnaVez(t *testing.T) {
 			defer wg.Done()
 			<-start
 			results[i], errs[i] = client.Post(ctx, key, "deposit", []coreclient.Entry{
-				coreclient.Debit(cash, 33_00, "USD"),
-				coreclient.Credit(customer, 33_00, "USD"),
+				coreclient.Debit(cash, 33_000000, "USD"),
+				coreclient.Credit(customer, 33_000000, "USD"),
 			}, fmt.Sprintf("reintento %d", i))
 		}(i)
 	}
@@ -285,8 +285,8 @@ func TestReintentosConcurrentesDelMismoWebhookAcreditanUnaVez(t *testing.T) {
 	if err != nil {
 		t.Fatalf("consultar saldo: %v", err)
 	}
-	if balance.AmountMinor != 33_00 {
-		t.Errorf("saldo = %d, se esperaba 3300 pese a %d reintentos simultáneos", balance.AmountMinor, attempts)
+	if balance.AmountMicros != 33_000000 {
+		t.Errorf("saldo = %d, se esperaba 3300 pese a %d reintentos simultáneos", balance.AmountMicros, attempts)
 	}
 }
 

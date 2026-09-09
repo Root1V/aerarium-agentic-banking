@@ -62,7 +62,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 12550,
+        amountMicros: 125500000,
         currency: 'USD',
       );
       expect(controller.status, TransferStatus.failed);
@@ -85,7 +85,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
       await controller.retry();
@@ -102,7 +102,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
       final first = controller.idempotencyKey;
@@ -110,7 +110,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 200,
+        amountMicros: 200,
         currency: 'USD',
       );
 
@@ -126,7 +126,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
       controller.reset();
@@ -143,7 +143,7 @@ void main() {
         await controller.send(
           fromAccountId: 'origen',
           toAccountId: 'destino',
-          amountMinor: 100,
+          amountMicros: 100,
           currency: 'USD',
         );
       }
@@ -161,7 +161,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 999999,
+        amountMicros: 999999,
         currency: 'USD',
       );
 
@@ -180,7 +180,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
 
@@ -197,7 +197,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
 
@@ -215,7 +215,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
 
@@ -225,20 +225,20 @@ void main() {
   });
 
   group('petición', () {
-    test('el monto viaja como entero en unidades menores', () async {
+    test('el monto viaja como entero en micras', () async {
       final (client, recorder) = clientWith((_) => [ok()]);
       final controller = TransferController(client);
 
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 12550,
+        amountMicros: 125500000,
         currency: 'USD',
       );
 
       final body = jsonDecode(recorder.requests.single.body) as Map<String, dynamic>;
-      expect(body['amount_minor'], 12550);
-      expect(body['amount_minor'], isA<int>());
+      expect(body['amount_micros'], 125500000);
+      expect(body['amount_micros'], isA<int>());
       expect(recorder.requests.single.body, isNot(contains('125.5')));
     });
 
@@ -249,7 +249,7 @@ void main() {
       await controller.send(
         fromAccountId: 'origen',
         toAccountId: 'destino',
-        amountMinor: 100,
+        amountMicros: 100,
         currency: 'USD',
       );
 

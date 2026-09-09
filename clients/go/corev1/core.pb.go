@@ -4,7 +4,7 @@
 // Un cambio incompatible aquí rompe la compilación de ambos lados, no la producción.
 //
 // Reglas del contrato:
-//   - El dinero SIEMPRE viaja como entero en unidades menores (centavos) + moneda.
+//   - El dinero SIEMPRE viaja como entero en micras (millonésimas, 10^-6) + moneda.
 //     Nunca punto flotante, nunca decimales en texto.
 //   - Toda escritura lleva idempotency_key: los rieles y las redes de tarjetas
 //     reintentan, y el efecto debe ocurrir exactamente una vez.
@@ -312,11 +312,82 @@ func (PostingErrorReason) EnumDescriptor() ([]byte, []int) {
 	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{4}
 }
 
-// Importe monetario. `amount_minor` es siempre positivo en los asientos: el signo
-// lo aporta la dirección contable.
+type FindingKind int32
+
+const (
+	FindingKind_FINDING_KIND_UNSPECIFIED FindingKind = 0
+	// El saldo materializado no coincide con la suma de los asientos.
+	FindingKind_FINDING_KIND_BALANCE_DRIFT FindingKind = 1
+	// El proveedor reporta un movimiento que no está en el ledger.
+	FindingKind_FINDING_KIND_MISSING_IN_LEDGER FindingKind = 2
+	// El ledger registra un movimiento que el proveedor no reporta.
+	FindingKind_FINDING_KIND_MISSING_AT_PROVIDER FindingKind = 3
+	// Ambos lo tienen, por importes distintos.
+	FindingKind_FINDING_KIND_AMOUNT_MISMATCH FindingKind = 4
+	// Dinero detenido en tránsito o retención más allá del plazo razonable.
+	FindingKind_FINDING_KIND_STALE_SUSPENSE FindingKind = 5
+)
+
+// Enum value maps for FindingKind.
+var (
+	FindingKind_name = map[int32]string{
+		0: "FINDING_KIND_UNSPECIFIED",
+		1: "FINDING_KIND_BALANCE_DRIFT",
+		2: "FINDING_KIND_MISSING_IN_LEDGER",
+		3: "FINDING_KIND_MISSING_AT_PROVIDER",
+		4: "FINDING_KIND_AMOUNT_MISMATCH",
+		5: "FINDING_KIND_STALE_SUSPENSE",
+	}
+	FindingKind_value = map[string]int32{
+		"FINDING_KIND_UNSPECIFIED":         0,
+		"FINDING_KIND_BALANCE_DRIFT":       1,
+		"FINDING_KIND_MISSING_IN_LEDGER":   2,
+		"FINDING_KIND_MISSING_AT_PROVIDER": 3,
+		"FINDING_KIND_AMOUNT_MISMATCH":     4,
+		"FINDING_KIND_STALE_SUSPENSE":      5,
+	}
+)
+
+func (x FindingKind) Enum() *FindingKind {
+	p := new(FindingKind)
+	*p = x
+	return p
+}
+
+func (x FindingKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FindingKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_aibank_core_v1_core_proto_enumTypes[5].Descriptor()
+}
+
+func (FindingKind) Type() protoreflect.EnumType {
+	return &file_aibank_core_v1_core_proto_enumTypes[5]
+}
+
+func (x FindingKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FindingKind.Descriptor instead.
+func (FindingKind) EnumDescriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{5}
+}
+
+// Importe monetario en MICRAS: millonésimas (10^-6) de la unidad mayor.
+// 1 USD = 1_000_000; 1 centavo = 10_000; $0,001 = 1_000.
+//
+// La escala es 6 y no 2 porque el banco liquida pagos entre agentes de software,
+// donde un precio de $0,001 por llamada es lo normal: en centavos ese importe no
+// existe. La app le sigue mostrando dos decimales a una persona — la escala es de
+// almacenamiento, no de presentación.
+//
+// `amount_micros` es siempre positivo en los asientos: el signo lo aporta la
+// dirección contable.
 type Money struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AmountMinor   int64                  `protobuf:"varint,1,opt,name=amount_minor,json=amountMinor,proto3" json:"amount_minor,omitempty"`
+	AmountMicros  int64                  `protobuf:"varint,1,opt,name=amount_micros,json=amountMicros,proto3" json:"amount_micros,omitempty"`
 	Currency      string                 `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"` // ISO-4217, 3 letras
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -352,9 +423,9 @@ func (*Money) Descriptor() ([]byte, []int) {
 	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Money) GetAmountMinor() int64 {
+func (x *Money) GetAmountMicros() int64 {
 	if x != nil {
-		return x.AmountMinor
+		return x.AmountMicros
 	}
 	return 0
 }
@@ -1232,11 +1303,11 @@ type Product struct {
 	Currency        string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`
 	AllowsOverdraft bool                   `protobuf:"varint,5,opt,name=allows_overdraft,json=allowsOverdraft,proto3" json:"allows_overdraft,omitempty"`
 	// Topes regulatorios; ausentes = sin tope.
-	MaxBalanceMinor     *int64 `protobuf:"varint,6,opt,name=max_balance_minor,json=maxBalanceMinor,proto3,oneof" json:"max_balance_minor,omitempty"`
-	MaxTransactionMinor *int64 `protobuf:"varint,7,opt,name=max_transaction_minor,json=maxTransactionMinor,proto3,oneof" json:"max_transaction_minor,omitempty"`
-	Active              bool   `protobuf:"varint,8,opt,name=active,proto3" json:"active,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	MaxBalanceMicros     *int64 `protobuf:"varint,6,opt,name=max_balance_micros,json=maxBalanceMicros,proto3,oneof" json:"max_balance_micros,omitempty"`
+	MaxTransactionMicros *int64 `protobuf:"varint,7,opt,name=max_transaction_micros,json=maxTransactionMicros,proto3,oneof" json:"max_transaction_micros,omitempty"`
+	Active               bool   `protobuf:"varint,8,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Product) Reset() {
@@ -1304,16 +1375,16 @@ func (x *Product) GetAllowsOverdraft() bool {
 	return false
 }
 
-func (x *Product) GetMaxBalanceMinor() int64 {
-	if x != nil && x.MaxBalanceMinor != nil {
-		return *x.MaxBalanceMinor
+func (x *Product) GetMaxBalanceMicros() int64 {
+	if x != nil && x.MaxBalanceMicros != nil {
+		return *x.MaxBalanceMicros
 	}
 	return 0
 }
 
-func (x *Product) GetMaxTransactionMinor() int64 {
-	if x != nil && x.MaxTransactionMinor != nil {
-		return *x.MaxTransactionMinor
+func (x *Product) GetMaxTransactionMicros() int64 {
+	if x != nil && x.MaxTransactionMicros != nil {
+		return *x.MaxTransactionMicros
 	}
 	return 0
 }
@@ -1326,15 +1397,15 @@ func (x *Product) GetActive() bool {
 }
 
 type CreateProductRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Code                string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
-	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Currency            string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
-	AllowsOverdraft     bool                   `protobuf:"varint,4,opt,name=allows_overdraft,json=allowsOverdraft,proto3" json:"allows_overdraft,omitempty"`
-	MaxBalanceMinor     *int64                 `protobuf:"varint,5,opt,name=max_balance_minor,json=maxBalanceMinor,proto3,oneof" json:"max_balance_minor,omitempty"`
-	MaxTransactionMinor *int64                 `protobuf:"varint,6,opt,name=max_transaction_minor,json=maxTransactionMinor,proto3,oneof" json:"max_transaction_minor,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Code                 string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Name                 string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Currency             string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
+	AllowsOverdraft      bool                   `protobuf:"varint,4,opt,name=allows_overdraft,json=allowsOverdraft,proto3" json:"allows_overdraft,omitempty"`
+	MaxBalanceMicros     *int64                 `protobuf:"varint,5,opt,name=max_balance_micros,json=maxBalanceMicros,proto3,oneof" json:"max_balance_micros,omitempty"`
+	MaxTransactionMicros *int64                 `protobuf:"varint,6,opt,name=max_transaction_micros,json=maxTransactionMicros,proto3,oneof" json:"max_transaction_micros,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *CreateProductRequest) Reset() {
@@ -1395,16 +1466,16 @@ func (x *CreateProductRequest) GetAllowsOverdraft() bool {
 	return false
 }
 
-func (x *CreateProductRequest) GetMaxBalanceMinor() int64 {
-	if x != nil && x.MaxBalanceMinor != nil {
-		return *x.MaxBalanceMinor
+func (x *CreateProductRequest) GetMaxBalanceMicros() int64 {
+	if x != nil && x.MaxBalanceMicros != nil {
+		return *x.MaxBalanceMicros
 	}
 	return 0
 }
 
-func (x *CreateProductRequest) GetMaxTransactionMinor() int64 {
-	if x != nil && x.MaxTransactionMinor != nil {
-		return *x.MaxTransactionMinor
+func (x *CreateProductRequest) GetMaxTransactionMicros() int64 {
+	if x != nil && x.MaxTransactionMicros != nil {
+		return *x.MaxTransactionMicros
 	}
 	return 0
 }
@@ -1453,13 +1524,404 @@ func (x *GetProductRequest) GetCode() string {
 	return ""
 }
 
+type Finding struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	RunId     string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Kind      FindingKind            `protobuf:"varint,3,opt,name=kind,proto3,enum=aibank.core.v1.FindingKind" json:"kind,omitempty"`
+	AccountId string                 `protobuf:"bytes,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Reference string                 `protobuf:"bytes,5,opt,name=reference,proto3" json:"reference,omitempty"`
+	// Lo que debería ser y lo que hay, en micras.
+	ExpectedMicros int64                  `protobuf:"varint,6,opt,name=expected_micros,json=expectedMicros,proto3" json:"expected_micros,omitempty"`
+	ActualMicros   int64                  `protobuf:"varint,7,opt,name=actual_micros,json=actualMicros,proto3" json:"actual_micros,omitempty"`
+	Currency       string                 `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`
+	Detail         string                 `protobuf:"bytes,9,opt,name=detail,proto3" json:"detail,omitempty"`
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Finding) Reset() {
+	*x = Finding{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Finding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Finding) ProtoMessage() {}
+
+func (x *Finding) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Finding.ProtoReflect.Descriptor instead.
+func (*Finding) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *Finding) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Finding) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *Finding) GetKind() FindingKind {
+	if x != nil {
+		return x.Kind
+	}
+	return FindingKind_FINDING_KIND_UNSPECIFIED
+}
+
+func (x *Finding) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *Finding) GetReference() string {
+	if x != nil {
+		return x.Reference
+	}
+	return ""
+}
+
+func (x *Finding) GetExpectedMicros() int64 {
+	if x != nil {
+		return x.ExpectedMicros
+	}
+	return 0
+}
+
+func (x *Finding) GetActualMicros() int64 {
+	if x != nil {
+		return x.ActualMicros
+	}
+	return 0
+}
+
+func (x *Finding) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *Finding) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *Finding) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type ListOpenFindingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOpenFindingsRequest) Reset() {
+	*x = ListOpenFindingsRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOpenFindingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOpenFindingsRequest) ProtoMessage() {}
+
+func (x *ListOpenFindingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOpenFindingsRequest.ProtoReflect.Descriptor instead.
+func (*ListOpenFindingsRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListOpenFindingsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListOpenFindingsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Findings      []*Finding             `protobuf:"bytes,1,rep,name=findings,proto3" json:"findings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOpenFindingsResponse) Reset() {
+	*x = ListOpenFindingsResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOpenFindingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOpenFindingsResponse) ProtoMessage() {}
+
+func (x *ListOpenFindingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOpenFindingsResponse.ProtoReflect.Descriptor instead.
+func (*ListOpenFindingsResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ListOpenFindingsResponse) GetFindings() []*Finding {
+	if x != nil {
+		return x.Findings
+	}
+	return nil
+}
+
+type ResolveFindingRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	FindingId int64                  `protobuf:"varint,1,opt,name=finding_id,json=findingId,proto3" json:"finding_id,omitempty"`
+	// Cómo se resolvió. Queda registrado: una diferencia cerrada sin explicación
+	// no sirve ante una auditoría.
+	Resolution    string `protobuf:"bytes,2,opt,name=resolution,proto3" json:"resolution,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveFindingRequest) Reset() {
+	*x = ResolveFindingRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveFindingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveFindingRequest) ProtoMessage() {}
+
+func (x *ResolveFindingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveFindingRequest.ProtoReflect.Descriptor instead.
+func (*ResolveFindingRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ResolveFindingRequest) GetFindingId() int64 {
+	if x != nil {
+		return x.FindingId
+	}
+	return 0
+}
+
+func (x *ResolveFindingRequest) GetResolution() string {
+	if x != nil {
+		return x.Resolution
+	}
+	return ""
+}
+
+type ResolveFindingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Resolved      bool                   `protobuf:"varint,1,opt,name=resolved,proto3" json:"resolved,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveFindingResponse) Reset() {
+	*x = ResolveFindingResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveFindingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveFindingResponse) ProtoMessage() {}
+
+func (x *ResolveFindingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveFindingResponse.ProtoReflect.Descriptor instead.
+func (*ResolveFindingResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ResolveFindingResponse) GetResolved() bool {
+	if x != nil {
+		return x.Resolved
+	}
+	return false
+}
+
+type RunInternalCheckRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInternalCheckRequest) Reset() {
+	*x = RunInternalCheckRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInternalCheckRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInternalCheckRequest) ProtoMessage() {}
+
+func (x *RunInternalCheckRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInternalCheckRequest.ProtoReflect.Descriptor instead.
+func (*RunInternalCheckRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{22}
+}
+
+type RunInternalCheckResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	FindingsCount int32                  `protobuf:"varint,2,opt,name=findings_count,json=findingsCount,proto3" json:"findings_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInternalCheckResponse) Reset() {
+	*x = RunInternalCheckResponse{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInternalCheckResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInternalCheckResponse) ProtoMessage() {}
+
+func (x *RunInternalCheckResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInternalCheckResponse.ProtoReflect.Descriptor instead.
+func (*RunInternalCheckResponse) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RunInternalCheckResponse) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RunInternalCheckResponse) GetFindingsCount() int32 {
+	if x != nil {
+		return x.FindingsCount
+	}
+	return 0
+}
+
 var File_aibank_core_v1_core_proto protoreflect.FileDescriptor
 
 const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\n" +
-	"\x19aibank/core/v1/core.proto\x12\x0eaibank.core.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"F\n" +
-	"\x05Money\x12!\n" +
-	"\famount_minor\x18\x01 \x01(\x03R\vamountMinor\x12\x1a\n" +
+	"\x19aibank/core/v1/core.proto\x12\x0eaibank.core.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"H\n" +
+	"\x05Money\x12#\n" +
+	"\ramount_micros\x18\x01 \x01(\x03R\famountMicros\x12\x1a\n" +
 	"\bcurrency\x18\x02 \x01(\tR\bcurrency\"\x8e\x01\n" +
 	"\x05Entry\x12\x1d\n" +
 	"\n" +
@@ -1529,29 +1991,59 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x11GetAccountRequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\"'\n" +
 	"\x15GetAccountByIdRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xba\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xc0\x02\n" +
 	"\aProduct\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1a\n" +
 	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12)\n" +
-	"\x10allows_overdraft\x18\x05 \x01(\bR\x0fallowsOverdraft\x12/\n" +
-	"\x11max_balance_minor\x18\x06 \x01(\x03H\x00R\x0fmaxBalanceMinor\x88\x01\x01\x127\n" +
-	"\x15max_transaction_minor\x18\a \x01(\x03H\x01R\x13maxTransactionMinor\x88\x01\x01\x12\x16\n" +
-	"\x06active\x18\b \x01(\bR\x06activeB\x14\n" +
-	"\x12_max_balance_minorB\x18\n" +
-	"\x16_max_transaction_minor\"\x9f\x02\n" +
+	"\x10allows_overdraft\x18\x05 \x01(\bR\x0fallowsOverdraft\x121\n" +
+	"\x12max_balance_micros\x18\x06 \x01(\x03H\x00R\x10maxBalanceMicros\x88\x01\x01\x129\n" +
+	"\x16max_transaction_micros\x18\a \x01(\x03H\x01R\x14maxTransactionMicros\x88\x01\x01\x12\x16\n" +
+	"\x06active\x18\b \x01(\bR\x06activeB\x15\n" +
+	"\x13_max_balance_microsB\x19\n" +
+	"\x17_max_transaction_micros\"\xa5\x02\n" +
 	"\x14CreateProductRequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
 	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12)\n" +
-	"\x10allows_overdraft\x18\x04 \x01(\bR\x0fallowsOverdraft\x12/\n" +
-	"\x11max_balance_minor\x18\x05 \x01(\x03H\x00R\x0fmaxBalanceMinor\x88\x01\x01\x127\n" +
-	"\x15max_transaction_minor\x18\x06 \x01(\x03H\x01R\x13maxTransactionMinor\x88\x01\x01B\x14\n" +
-	"\x12_max_balance_minorB\x18\n" +
-	"\x16_max_transaction_minor\"'\n" +
+	"\x10allows_overdraft\x18\x04 \x01(\bR\x0fallowsOverdraft\x121\n" +
+	"\x12max_balance_micros\x18\x05 \x01(\x03H\x00R\x10maxBalanceMicros\x88\x01\x01\x129\n" +
+	"\x16max_transaction_micros\x18\x06 \x01(\x03H\x01R\x14maxTransactionMicros\x88\x01\x01B\x15\n" +
+	"\x13_max_balance_microsB\x19\n" +
+	"\x17_max_transaction_micros\"'\n" +
 	"\x11GetProductRequest\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\tR\x04code*Q\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\"\xdb\x02\n" +
+	"\aFinding\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12/\n" +
+	"\x04kind\x18\x03 \x01(\x0e2\x1b.aibank.core.v1.FindingKindR\x04kind\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x04 \x01(\tR\taccountId\x12\x1c\n" +
+	"\treference\x18\x05 \x01(\tR\treference\x12'\n" +
+	"\x0fexpected_micros\x18\x06 \x01(\x03R\x0eexpectedMicros\x12#\n" +
+	"\ractual_micros\x18\a \x01(\x03R\factualMicros\x12\x1a\n" +
+	"\bcurrency\x18\b \x01(\tR\bcurrency\x12\x16\n" +
+	"\x06detail\x18\t \x01(\tR\x06detail\x129\n" +
+	"\n" +
+	"created_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"/\n" +
+	"\x17ListOpenFindingsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\"O\n" +
+	"\x18ListOpenFindingsResponse\x123\n" +
+	"\bfindings\x18\x01 \x03(\v2\x17.aibank.core.v1.FindingR\bfindings\"V\n" +
+	"\x15ResolveFindingRequest\x12\x1d\n" +
+	"\n" +
+	"finding_id\x18\x01 \x01(\x03R\tfindingId\x12\x1e\n" +
+	"\n" +
+	"resolution\x18\x02 \x01(\tR\n" +
+	"resolution\"4\n" +
+	"\x16ResolveFindingResponse\x12\x1a\n" +
+	"\bresolved\x18\x01 \x01(\bR\bresolved\"\x19\n" +
+	"\x17RunInternalCheckRequest\"X\n" +
+	"\x18RunInternalCheckResponse\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12%\n" +
+	"\x0efindings_count\x18\x02 \x01(\x05R\rfindingsCount*Q\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_DEBIT\x10\x01\x12\x14\n" +
@@ -1579,7 +2071,14 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"'POSTING_ERROR_REASON_INSUFFICIENT_FUNDS\x10\x03\x12-\n" +
 	")POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED\x10\x04\x121\n" +
 	"-POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED\x10\x05\x12'\n" +
-	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x062\xff\x01\n" +
+	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x06*\xd8\x01\n" +
+	"\vFindingKind\x12\x1c\n" +
+	"\x18FINDING_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aFINDING_KIND_BALANCE_DRIFT\x10\x01\x12\"\n" +
+	"\x1eFINDING_KIND_MISSING_IN_LEDGER\x10\x02\x12$\n" +
+	" FINDING_KIND_MISSING_AT_PROVIDER\x10\x03\x12 \n" +
+	"\x1cFINDING_KIND_AMOUNT_MISMATCH\x10\x04\x12\x1f\n" +
+	"\x1bFINDING_KIND_STALE_SUSPENSE\x10\x052\xff\x01\n" +
 	"\rLedgerService\x12A\n" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +
@@ -1594,7 +2093,11 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x0eProductService\x12N\n" +
 	"\rCreateProduct\x12$.aibank.core.v1.CreateProductRequest\x1a\x17.aibank.core.v1.Product\x12H\n" +
 	"\n" +
-	"GetProduct\x12!.aibank.core.v1.GetProductRequest\x1a\x17.aibank.core.v1.ProductB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
+	"GetProduct\x12!.aibank.core.v1.GetProductRequest\x1a\x17.aibank.core.v1.Product2\xc6\x02\n" +
+	"\x15ReconciliationService\x12e\n" +
+	"\x10ListOpenFindings\x12'.aibank.core.v1.ListOpenFindingsRequest\x1a(.aibank.core.v1.ListOpenFindingsResponse\x12_\n" +
+	"\x0eResolveFinding\x12%.aibank.core.v1.ResolveFindingRequest\x1a&.aibank.core.v1.ResolveFindingResponse\x12e\n" +
+	"\x10RunInternalCheck\x12'.aibank.core.v1.RunInternalCheckRequest\x1a(.aibank.core.v1.RunInternalCheckResponseB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
 
 var (
 	file_aibank_core_v1_core_proto_rawDescOnce sync.Once
@@ -1608,72 +2111,89 @@ func file_aibank_core_v1_core_proto_rawDescGZIP() []byte {
 	return file_aibank_core_v1_core_proto_rawDescData
 }
 
-var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_aibank_core_v1_core_proto_goTypes = []any{
 	(Direction)(0),                       // 0: aibank.core.v1.Direction
 	(AccountType)(0),                     // 1: aibank.core.v1.AccountType
 	(AccountOwner)(0),                    // 2: aibank.core.v1.AccountOwner
 	(AccountStatus)(0),                   // 3: aibank.core.v1.AccountStatus
 	(PostingErrorReason)(0),              // 4: aibank.core.v1.PostingErrorReason
-	(*Money)(nil),                        // 5: aibank.core.v1.Money
-	(*Entry)(nil),                        // 6: aibank.core.v1.Entry
-	(*PostRequest)(nil),                  // 7: aibank.core.v1.PostRequest
-	(*PostResponse)(nil),                 // 8: aibank.core.v1.PostResponse
-	(*GetBalanceRequest)(nil),            // 9: aibank.core.v1.GetBalanceRequest
-	(*GetBalanceResponse)(nil),           // 10: aibank.core.v1.GetBalanceResponse
-	(*AccountEntry)(nil),                 // 11: aibank.core.v1.AccountEntry
-	(*ListEntriesRequest)(nil),           // 12: aibank.core.v1.ListEntriesRequest
-	(*ListEntriesResponse)(nil),          // 13: aibank.core.v1.ListEntriesResponse
-	(*Account)(nil),                      // 14: aibank.core.v1.Account
-	(*OpenCustomerAccountRequest)(nil),   // 15: aibank.core.v1.OpenCustomerAccountRequest
-	(*CreateInternalAccountRequest)(nil), // 16: aibank.core.v1.CreateInternalAccountRequest
-	(*GetAccountRequest)(nil),            // 17: aibank.core.v1.GetAccountRequest
-	(*GetAccountByIdRequest)(nil),        // 18: aibank.core.v1.GetAccountByIdRequest
-	(*Product)(nil),                      // 19: aibank.core.v1.Product
-	(*CreateProductRequest)(nil),         // 20: aibank.core.v1.CreateProductRequest
-	(*GetProductRequest)(nil),            // 21: aibank.core.v1.GetProductRequest
-	(*timestamppb.Timestamp)(nil),        // 22: google.protobuf.Timestamp
+	(FindingKind)(0),                     // 5: aibank.core.v1.FindingKind
+	(*Money)(nil),                        // 6: aibank.core.v1.Money
+	(*Entry)(nil),                        // 7: aibank.core.v1.Entry
+	(*PostRequest)(nil),                  // 8: aibank.core.v1.PostRequest
+	(*PostResponse)(nil),                 // 9: aibank.core.v1.PostResponse
+	(*GetBalanceRequest)(nil),            // 10: aibank.core.v1.GetBalanceRequest
+	(*GetBalanceResponse)(nil),           // 11: aibank.core.v1.GetBalanceResponse
+	(*AccountEntry)(nil),                 // 12: aibank.core.v1.AccountEntry
+	(*ListEntriesRequest)(nil),           // 13: aibank.core.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),          // 14: aibank.core.v1.ListEntriesResponse
+	(*Account)(nil),                      // 15: aibank.core.v1.Account
+	(*OpenCustomerAccountRequest)(nil),   // 16: aibank.core.v1.OpenCustomerAccountRequest
+	(*CreateInternalAccountRequest)(nil), // 17: aibank.core.v1.CreateInternalAccountRequest
+	(*GetAccountRequest)(nil),            // 18: aibank.core.v1.GetAccountRequest
+	(*GetAccountByIdRequest)(nil),        // 19: aibank.core.v1.GetAccountByIdRequest
+	(*Product)(nil),                      // 20: aibank.core.v1.Product
+	(*CreateProductRequest)(nil),         // 21: aibank.core.v1.CreateProductRequest
+	(*GetProductRequest)(nil),            // 22: aibank.core.v1.GetProductRequest
+	(*Finding)(nil),                      // 23: aibank.core.v1.Finding
+	(*ListOpenFindingsRequest)(nil),      // 24: aibank.core.v1.ListOpenFindingsRequest
+	(*ListOpenFindingsResponse)(nil),     // 25: aibank.core.v1.ListOpenFindingsResponse
+	(*ResolveFindingRequest)(nil),        // 26: aibank.core.v1.ResolveFindingRequest
+	(*ResolveFindingResponse)(nil),       // 27: aibank.core.v1.ResolveFindingResponse
+	(*RunInternalCheckRequest)(nil),      // 28: aibank.core.v1.RunInternalCheckRequest
+	(*RunInternalCheckResponse)(nil),     // 29: aibank.core.v1.RunInternalCheckResponse
+	(*timestamppb.Timestamp)(nil),        // 30: google.protobuf.Timestamp
 }
 var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	0,  // 0: aibank.core.v1.Entry.direction:type_name -> aibank.core.v1.Direction
-	5,  // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
-	6,  // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
-	22, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
-	5,  // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
-	5,  // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
+	6,  // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
+	7,  // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
+	30, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
+	6,  // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
+	6,  // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
 	0,  // 6: aibank.core.v1.AccountEntry.direction:type_name -> aibank.core.v1.Direction
-	5,  // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
-	22, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
-	11, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
+	6,  // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
+	30, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
+	12, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
 	1,  // 10: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
 	2,  // 11: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
 	3,  // 12: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
-	22, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	30, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 14: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
-	7,  // 15: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
-	9,  // 16: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
-	12, // 17: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
-	15, // 18: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
-	16, // 19: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
-	17, // 20: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
-	18, // 21: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
-	20, // 22: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
-	21, // 23: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
-	8,  // 24: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
-	10, // 25: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
-	13, // 26: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
-	14, // 27: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
-	14, // 28: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
-	14, // 29: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
-	14, // 30: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
-	19, // 31: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
-	19, // 32: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
-	24, // [24:33] is the sub-list for method output_type
-	15, // [15:24] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	5,  // 15: aibank.core.v1.Finding.kind:type_name -> aibank.core.v1.FindingKind
+	30, // 16: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
+	23, // 17: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
+	8,  // 18: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
+	10, // 19: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
+	13, // 20: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
+	16, // 21: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
+	17, // 22: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
+	18, // 23: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
+	19, // 24: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
+	21, // 25: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
+	22, // 26: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
+	24, // 27: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
+	26, // 28: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
+	28, // 29: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
+	9,  // 30: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
+	11, // 31: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
+	14, // 32: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
+	15, // 33: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
+	15, // 34: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
+	15, // 35: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
+	15, // 36: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
+	20, // 37: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
+	20, // 38: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
+	25, // 39: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
+	27, // 40: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
+	29, // 41: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
+	30, // [30:42] is the sub-list for method output_type
+	18, // [18:30] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_aibank_core_v1_core_proto_init() }
@@ -1688,10 +2208,10 @@ func file_aibank_core_v1_core_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aibank_core_v1_core_proto_rawDesc), len(file_aibank_core_v1_core_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   17,
+			NumEnums:      6,
+			NumMessages:   24,
 			NumExtensions: 0,
-			NumServices:   3,
+			NumServices:   4,
 		},
 		GoTypes:           file_aibank_core_v1_core_proto_goTypes,
 		DependencyIndexes: file_aibank_core_v1_core_proto_depIdxs,

@@ -9,7 +9,7 @@
 //   - Traducción de errores: al cliente le llega un motivo accionable, nunca un
 //     detalle interno del core o de un proveedor.
 //
-// El dinero viaja SIEMPRE como entero en unidades menores más la moneda. Nunca
+// El dinero viaja SIEMPRE como entero en micras (10^-6) más la moneda. Nunca
 // como número decimal: JSON no distingue enteros de flotantes y el consumidor
 // acabaría haciendo aritmética binaria con saldos.
 package bff
@@ -81,8 +81,8 @@ func (s *Server) requireAuth(next func(http.ResponseWriter, *http.Request, *Prin
 
 // moneyJSON es la representación de un importe hacia el cliente.
 type moneyJSON struct {
-	// AmountMinor es entero en unidades menores (centavos).
-	AmountMinor int64  `json:"amount_minor"`
+	// AmountMicros es entero en micras: 1_000_000 micras = 1 unidad.
+	AmountMicros int64  `json:"amount_micros"`
 	Currency    string `json:"currency"`
 }
 

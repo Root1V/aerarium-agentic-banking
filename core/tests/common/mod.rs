@@ -48,14 +48,14 @@ impl Ctx {
     /// Producto de cuenta simple, con topes opcionales.
     pub async fn simple_product(
         &self,
-        max_balance_minor: Option<i64>,
-        max_transaction_minor: Option<i64>,
+        max_balance_micros: Option<i64>,
+        max_transaction_micros: Option<i64>,
     ) -> Product {
         let code = format!("SIMPLE-{}", Uuid::new_v4());
         self.products
             .create(
                 &NewProduct::deposit_account(code, "Cuenta simple", "USD")
-                    .with_caps(max_balance_minor, max_transaction_minor),
+                    .with_caps(max_balance_micros, max_transaction_micros),
             )
             .await
             .expect("create product")
@@ -126,8 +126,8 @@ pub fn transfer(from: Uuid, to: Uuid, amount: i64, key: &str) -> PostingRequest 
         key,
         "p2p_transfer",
         vec![
-            EntryCommand { account_id: from, direction: Direction::Debit, amount_minor: amount, currency: "USD".into() },
-            EntryCommand { account_id: to, direction: Direction::Credit, amount_minor: amount, currency: "USD".into() },
+            EntryCommand { account_id: from, direction: Direction::Debit, amount_micros: amount, currency: "USD".into() },
+            EntryCommand { account_id: to, direction: Direction::Credit, amount_micros: amount, currency: "USD".into() },
         ],
     )
 }

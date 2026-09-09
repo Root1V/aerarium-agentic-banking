@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO products (code, name, kind, currency, allows_overdraft,\n                                  max_balance_minor, max_transaction_minor)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            RETURNING id, code, name, kind as \"kind: ProductKind\", currency,\n                      allows_overdraft, max_balance_minor, max_transaction_minor, active\n            ",
+  "query": "\n            SELECT id, code, name, kind as \"kind: ProductKind\", currency,\n                   allows_overdraft, max_balance_micros, max_transaction_micros, active\n            FROM products WHERE code = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -44,12 +44,12 @@
       },
       {
         "ordinal": 6,
-        "name": "max_balance_minor",
+        "name": "max_balance_micros",
         "type_info": "Int8"
       },
       {
         "ordinal": 7,
-        "name": "max_transaction_minor",
+        "name": "max_transaction_micros",
         "type_info": "Int8"
       },
       {
@@ -60,22 +60,7 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        {
-          "Custom": {
-            "name": "product_kind",
-            "kind": {
-              "Enum": [
-                "DEPOSIT_ACCOUNT"
-              ]
-            }
-          }
-        },
-        "Bpchar",
-        "Bool",
-        "Int8",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -90,5 +75,5 @@
       false
     ]
   },
-  "hash": "8c60d2490eff7ccf1acfbc600b3c92d2b077e7adf694594159d96f2ca5629deb"
+  "hash": "68b0270d6b0fc005e812e73a71e58938d0b8a9bfe9b6e407ac69dd7c70f65748"
 }

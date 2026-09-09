@@ -34,7 +34,7 @@ class TransferController extends ChangeNotifier {
   String? _idempotencyKey;
   String? _fromAccountId;
   String? _toAccountId;
-  int? _amountMinor;
+  int? _amountMicros;
   String? _currency;
   String _description = '';
 
@@ -53,14 +53,14 @@ class TransferController extends ChangeNotifier {
   Future<void> send({
     required String fromAccountId,
     required String toAccountId,
-    required int amountMinor,
+    required int amountMicros,
     required String currency,
     String description = '',
   }) async {
     _idempotencyKey = _newKey();
     _fromAccountId = fromAccountId;
     _toAccountId = toAccountId;
-    _amountMinor = amountMinor;
+    _amountMicros = amountMicros;
     _currency = currency;
     _description = description;
     await _execute();
@@ -84,7 +84,7 @@ class TransferController extends ChangeNotifier {
     _idempotencyKey = null;
     _fromAccountId = null;
     _toAccountId = null;
-    _amountMinor = null;
+    _amountMicros = null;
     _currency = null;
     _description = '';
     notifyListeners();
@@ -100,7 +100,7 @@ class TransferController extends ChangeNotifier {
         idempotencyKey: _idempotencyKey!,
         fromAccountId: _fromAccountId!,
         toAccountId: _toAccountId!,
-        amountMinor: _amountMinor!,
+        amountMicros: _amountMicros!,
         currency: _currency!,
         description: _description,
       );

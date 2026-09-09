@@ -58,8 +58,8 @@ func (s *Service) HandleInboundCredit(ctx context.Context, credit InboundCredit)
 	if credit.RailTransactionID == "" {
 		return nil, errors.New("la notificación no trae identificador del riel")
 	}
-	if credit.AmountMinor <= 0 {
-		return nil, fmt.Errorf("monto inválido: %d", credit.AmountMinor)
+	if credit.AmountMicros <= 0 {
+		return nil, fmt.Errorf("monto inválido: %d", credit.AmountMicros)
 	}
 
 	accountID, err := s.resolver.AccountIDForAlias(ctx, credit.ToAlias)
@@ -71,8 +71,8 @@ func (s *Service) HandleInboundCredit(ctx context.Context, credit InboundCredit)
 
 	result, err := s.core.Post(ctx, s.inboundKey(credit.RailTransactionID), "rail_inbound_credit",
 		[]coreclient.Entry{
-			coreclient.Debit(s.accounts.SettlementID, credit.AmountMinor, credit.Currency),
-			coreclient.Credit(accountID, credit.AmountMinor, credit.Currency),
+			coreclient.Debit(s.accounts.SettlementID, credit.AmountMicros, credit.Currency),
+			coreclient.Credit(accountID, credit.AmountMicros, credit.Currency),
 		},
 		fmt.Sprintf("%s: %s", s.rail.Name(), credit.SenderName),
 	)
@@ -121,7 +121,7 @@ type OutboundRequest struct {
 	TransferID    string
 	FromAccountID string
 	ToAlias       string
-	AmountMinor   int64
+	AmountMicros   int64
 	Currency      string
 	Reference     string
 }
@@ -149,8 +149,8 @@ func (s *Service) SendOutbound(ctx context.Context, req OutboundRequest) (*Outbo
 	if req.TransferID == "" {
 		return nil, errors.New("TransferID es obligatorio: sin él no hay idempotencia")
 	}
-	if req.AmountMinor <= 0 {
-		return nil, fmt.Errorf("monto inválido: %d", req.AmountMinor)
+	if req.AmountMicros <= 0 {
+		return nil, fmt.Errorf("monto inválido: %d", req.AmountMicros)
 	}
 
 	// Validar el destino antes de mover dinero evita una reversa innecesaria.
@@ -163,8 +163,8 @@ func (s *Service) SendOutbound(ctx context.Context, req OutboundRequest) (*Outbo
 	// de que el riel se entere de nada.
 	if _, err := s.core.Post(ctx, s.reserveKey(req.TransferID), "rail_outbound_reserve",
 		[]coreclient.Entry{
-			coreclient.Debit(req.FromAccountID, req.AmountMinor, req.Currency),
-			coreclient.Credit(s.accounts.InTransitID, req.AmountMinor, req.Currency),
+			coreclient.Debit(req.FromAccountID, req.AmountMicros, req.Currency),
+			coreclient.Credit(s.accounts.InTransitID, req.AmountMicros, req.Currency),
 		},
 		fmt.Sprintf("%s -> %s", s.rail.Name(), req.ToAlias),
 	); err != nil {
@@ -175,7 +175,7 @@ func (s *Service) SendOutbound(ctx context.Context, req OutboundRequest) (*Outbo
 	receipt, err := s.rail.Send(ctx, SendRequest{
 		TransferID:  req.TransferID,
 		Alias:       req.ToAlias,
-		AmountMinor: req.AmountMinor,
+		AmountMicros: req.AmountMicros,
 		Currency:    req.Currency,
 		Reference:   req.Reference,
 	})
@@ -185,8 +185,8 @@ func (s *Service) SendOutbound(ctx context.Context, req OutboundRequest) (*Outbo
 		// (3a) Confirmado: el tránsito se salda contra la posición del riel.
 		if _, postErr := s.core.Post(ctx, s.settleKey(req.TransferID), "rail_outbound_settle",
 			[]coreclient.Entry{
-				coreclient.Debit(s.accounts.InTransitID, req.AmountMinor, req.Currency),
-				coreclient.Credit(s.accounts.SettlementID, req.AmountMinor, req.Currency),
+				coreclient.Debit(s.accounts.InTransitID, req.AmountMicros, req.Currency),
+				coreclient.Credit(s.accounts.SettlementID, req.AmountMicros, req.Currency),
 			},
 			receipt.RailTransactionID,
 		); postErr != nil {
@@ -204,8 +204,8 @@ func (s *Service) SendOutbound(ctx context.Context, req OutboundRequest) (*Outbo
 		// (3b) Rechazo explícito: el riel garantiza que no movió nada. Se revierte.
 		if _, postErr := s.core.Post(ctx, s.reverseKey(req.TransferID), "rail_outbound_reverse",
 			[]coreclient.Entry{
-				coreclient.Debit(s.accounts.InTransitID, req.AmountMinor, req.Currency),
-				coreclient.Credit(req.FromAccountID, req.AmountMinor, req.Currency),
+				coreclient.Debit(s.accounts.InTransitID, req.AmountMicros, req.Currency),
+				coreclient.Credit(req.FromAccountID, req.AmountMicros, req.Currency),
 			},
 			fmt.Sprintf("reversa: %v", err),
 		); postErr != nil {

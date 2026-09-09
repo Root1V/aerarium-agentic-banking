@@ -23,19 +23,19 @@ from aibank_risk import (
     score,
 )
 from aibank_risk.fairness import assert_permitted
-from aibank_risk.policy import MAX_INCOME_SHARE, MAX_INITIAL_LIMIT_MINOR
+from aibank_risk.policy import MAX_INCOME_SHARE, MAX_INITIAL_LIMIT_MICROS
 
 AS_OF = date(2026, 9, 1)
 EVALUATED_AT = datetime(2026, 9, 1, 10, 30)
 
 
-def salaried(months: int = 8, monthly_minor: int = 250_000) -> list[Movement]:
+def salaried(months: int = 8, monthly_micros: int = 2_500_000_000) -> list[Movement]:
     """Perfil de ingreso recurrente: mismo origen, importe estable, cada mes."""
     movements: list[Movement] = []
     for month in range(months):
         when = datetime.combine(AS_OF, datetime.min.time()) - timedelta(days=30 * month + 2)
         movements.append(
-            Movement(when, Direction.IN, monthly_minor, counterparty="empleador-1", kind="payroll")
+            Movement(when, Direction.IN, monthly_micros, counterparty="empleador-1", kind="payroll")
         )
         # Gasta el 60%: deja margen para una cuota.
         for week in range(4):
@@ -43,7 +43,7 @@ def salaried(months: int = 8, monthly_minor: int = 250_000) -> list[Movement]:
                 Movement(
                     when + timedelta(days=week * 6),
                     Direction.OUT,
-                    int(monthly_minor * 0.15),
+                    int(monthly_micros * 0.15),
                     counterparty=f"comercio-{week}",
                     kind="p2p_transfer",
                 )
@@ -53,7 +53,7 @@ def salaried(months: int = 8, monthly_minor: int = 250_000) -> list[Movement]:
 
 def irregular(months: int = 8) -> list[Movement]:
     """Ingreso informal: entra dinero, pero de orígenes y montos dispares."""
-    amounts = [40_000, 210_000, 15_000, 90_000, 5_000, 160_000, 30_000, 70_000]
+    amounts = [400_000_000, 2_100_000_000, 150_000_000, 900_000_000, 50_000_000, 1_600_000_000, 300_000_000, 700_000_000]
     movements: list[Movement] = []
     for month in range(months):
         when = datetime.combine(AS_OF, datetime.min.time()) - timedelta(days=30 * month + 3)
@@ -103,7 +103,7 @@ class TestCaracteristicas:
             Movement(
                 datetime.combine(AS_OF, datetime.min.time()) - timedelta(days=20),
                 Direction.IN,
-                500_000,
+                5_000_000_000,
                 counterparty="cliente",
                 kind="deposit",
             )
@@ -118,7 +118,7 @@ class TestCaracteristicas:
         features = extract([], as_of=AS_OF)
 
         assert features.months_of_history == 0
-        assert features.average_monthly_inflow_minor == 0
+        assert features.average_monthly_inflow_micros == 0
         assert features.outflow_to_inflow_ratio == 0.0
 
     def test_el_calculo_es_reproducible(self) -> None:
@@ -145,7 +145,7 @@ class TestPuntaje:
         assert score(features).value == score(features).value
 
     def test_el_puntaje_se_mantiene_en_su_rango(self) -> None:
-        for movements in ([], salaried(), irregular(), salaried(months=24, monthly_minor=5_000_000)):
+        for movements in ([], salaried(), irregular(), salaried(months=24, monthly_micros=50_000_000_000)):
             value = score(extract(movements, as_of=AS_OF)).value
             assert 0 <= value <= 1000
 
@@ -182,7 +182,7 @@ class TestDecision:
         resultado = assess("cli-1", salaried(), as_of=AS_OF, evaluated_at=EVALUATED_AT)
 
         assert resultado.decision.outcome is Outcome.APPROVED
-        assert resultado.decision.limit_minor > 0
+        assert resultado.decision.limit_micros > 0
         assert resultado.decision.reasons == (), "una aprobación no necesita motivos"
 
     def test_una_cuenta_nueva_no_se_rechaza_sino_que_se_pospone(self) -> None:
@@ -190,7 +190,7 @@ class TestDecision:
             Movement(
                 datetime.combine(AS_OF, datetime.min.time()) - timedelta(days=5),
                 Direction.IN,
-                120_000,
+                1_200_000_000,
                 counterparty="empleador-1",
                 kind="payroll",
             )
@@ -200,7 +200,7 @@ class TestDecision:
         assert resultado.decision.outcome is Outcome.NEEDS_MORE_HISTORY, (
             "ser nuevo no es ser mal pagador: se pide más historial, no se rechaza"
         )
-        assert resultado.decision.limit_minor == 0
+        assert resultado.decision.limit_micros == 0
         assert resultado.decision.reasons
 
     def test_una_cuenta_vacia_no_se_rechaza_por_falta_de_datos(self) -> None:
@@ -209,7 +209,7 @@ class TestDecision:
         # No hay evidencia MALA: no hay evidencia. Son cosas distintas y solo una
         # justifica dejarle a alguien un rechazo en su historial.
         assert resultado.decision.outcome is Outcome.NEEDS_MORE_HISTORY
-        assert resultado.decision.limit_minor == 0
+        assert resultado.decision.limit_micros == 0
         assert resultado.decision.reasons
 
     def test_un_rechazo_exige_evidencia_de_comportamiento(self) -> None:
@@ -229,27 +229,27 @@ class TestDecision:
 
     # La restricción que impide prestar contra un ingreso que no existe.
     def test_el_limite_nunca_supera_la_proporcion_del_ingreso(self) -> None:
-        for monthly in (100_000, 250_000, 400_000, 900_000):
+        for monthly in (1_000_000_000, 2_500_000_000, 4_000_000_000, 9_000_000_000):
             resultado = assess(
                 "cli-x",
-                salaried(monthly_minor=monthly),
+                salaried(monthly_micros=monthly),
                 as_of=AS_OF,
                 evaluated_at=EVALUATED_AT,
             )
-            tope = int(resultado.features.average_monthly_inflow_minor * MAX_INCOME_SHARE)
-            assert resultado.decision.limit_minor <= tope, (
-                f"con ingreso {monthly} el límite {resultado.decision.limit_minor} "
+            tope = int(resultado.features.average_monthly_inflow_micros * MAX_INCOME_SHARE)
+            assert resultado.decision.limit_micros <= tope, (
+                f"con ingreso {monthly} el límite {resultado.decision.limit_micros} "
                 f"supera el {int(MAX_INCOME_SHARE * 100)}% del ingreso observado"
             )
 
     def test_ningun_limite_inicial_supera_el_techo(self) -> None:
         resultado = assess(
             "cli-rico",
-            salaried(months=36, monthly_minor=20_000_000),
+            salaried(months=36, monthly_micros=200_000_000_000),
             as_of=AS_OF,
             evaluated_at=EVALUATED_AT,
         )
-        assert resultado.decision.limit_minor <= MAX_INITIAL_LIMIT_MINOR, (
+        assert resultado.decision.limit_micros <= MAX_INITIAL_LIMIT_MICROS, (
             "nadie estrena una línea grande: primero hay que ver cómo paga"
         )
 
@@ -260,7 +260,7 @@ class TestDecision:
                 salaried(months=meses),
                 as_of=AS_OF,
                 evaluated_at=EVALUATED_AT,
-            ).decision.limit_minor
+            ).decision.limit_micros
             for meses in (3, 6, 12)
         ]
         assert limites == sorted(limites), f"el límite debería crecer con la relación: {limites}"
@@ -328,7 +328,7 @@ class TestNoDiscriminacion:
         "atributo",
         [
             "months_of_history",
-            "average_monthly_inflow_minor",
+            "average_monthly_inflow_micros",
             "inflow_regularity",
             "has_recurring_income",
             "outflow_to_inflow_ratio",
