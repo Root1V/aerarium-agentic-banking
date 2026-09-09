@@ -1017,3 +1017,307 @@ var AuthorizationService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "aibank/core/v1/core.proto",
 }
+
+const (
+	MandateService_GrantMandate_FullMethodName          = "/aibank.core.v1.MandateService/GrantMandate"
+	MandateService_RevokeMandate_FullMethodName         = "/aibank.core.v1.MandateService/RevokeMandate"
+	MandateService_GetMandate_FullMethodName            = "/aibank.core.v1.MandateService/GetMandate"
+	MandateService_FindActiveMandate_FullMethodName     = "/aibank.core.v1.MandateService/FindActiveMandate"
+	MandateService_ListMandates_FullMethodName          = "/aibank.core.v1.MandateService/ListMandates"
+	MandateService_AuthorizeUnderMandate_FullMethodName = "/aibank.core.v1.MandateService/AuthorizeUnderMandate"
+)
+
+// MandateServiceClient is the client API for MandateService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type MandateServiceClient interface {
+	// Registra el permiso que un titular otorgó tras autenticarse.
+	GrantMandate(ctx context.Context, in *GrantMandateRequest, opts ...grpc.CallOption) (*Mandate, error)
+	// Retira el permiso. Idempotente. No cancela las retenciones ya vivas.
+	RevokeMandate(ctx context.Context, in *RevokeMandateRequest, opts ...grpc.CallOption) (*Mandate, error)
+	GetMandate(ctx context.Context, in *GetMandateRequest, opts ...grpc.CallOption) (*Mandate, error)
+	// Permiso vivo de una integración sobre una cuenta. NOT_FOUND si no hay.
+	FindActiveMandate(ctx context.Context, in *FindActiveMandateRequest, opts ...grpc.CallOption) (*Mandate, error)
+	// Mandatos de un titular, para que los vea y los revoque en su app.
+	ListMandates(ctx context.Context, in *ListMandatesRequest, opts ...grpc.CallOption) (*ListMandatesResponse, error)
+	// Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
+	// transacción.
+	AuthorizeUnderMandate(ctx context.Context, in *AuthorizeUnderMandateRequest, opts ...grpc.CallOption) (*AuthorizeUnderMandateResponse, error)
+}
+
+type mandateServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMandateServiceClient(cc grpc.ClientConnInterface) MandateServiceClient {
+	return &mandateServiceClient{cc}
+}
+
+func (c *mandateServiceClient) GrantMandate(ctx context.Context, in *GrantMandateRequest, opts ...grpc.CallOption) (*Mandate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mandate)
+	err := c.cc.Invoke(ctx, MandateService_GrantMandate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mandateServiceClient) RevokeMandate(ctx context.Context, in *RevokeMandateRequest, opts ...grpc.CallOption) (*Mandate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mandate)
+	err := c.cc.Invoke(ctx, MandateService_RevokeMandate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mandateServiceClient) GetMandate(ctx context.Context, in *GetMandateRequest, opts ...grpc.CallOption) (*Mandate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mandate)
+	err := c.cc.Invoke(ctx, MandateService_GetMandate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mandateServiceClient) FindActiveMandate(ctx context.Context, in *FindActiveMandateRequest, opts ...grpc.CallOption) (*Mandate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mandate)
+	err := c.cc.Invoke(ctx, MandateService_FindActiveMandate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mandateServiceClient) ListMandates(ctx context.Context, in *ListMandatesRequest, opts ...grpc.CallOption) (*ListMandatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMandatesResponse)
+	err := c.cc.Invoke(ctx, MandateService_ListMandates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mandateServiceClient) AuthorizeUnderMandate(ctx context.Context, in *AuthorizeUnderMandateRequest, opts ...grpc.CallOption) (*AuthorizeUnderMandateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeUnderMandateResponse)
+	err := c.cc.Invoke(ctx, MandateService_AuthorizeUnderMandate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// MandateServiceServer is the server API for MandateService service.
+// All implementations must embed UnimplementedMandateServiceServer
+// for forward compatibility.
+type MandateServiceServer interface {
+	// Registra el permiso que un titular otorgó tras autenticarse.
+	GrantMandate(context.Context, *GrantMandateRequest) (*Mandate, error)
+	// Retira el permiso. Idempotente. No cancela las retenciones ya vivas.
+	RevokeMandate(context.Context, *RevokeMandateRequest) (*Mandate, error)
+	GetMandate(context.Context, *GetMandateRequest) (*Mandate, error)
+	// Permiso vivo de una integración sobre una cuenta. NOT_FOUND si no hay.
+	FindActiveMandate(context.Context, *FindActiveMandateRequest) (*Mandate, error)
+	// Mandatos de un titular, para que los vea y los revoque en su app.
+	ListMandates(context.Context, *ListMandatesRequest) (*ListMandatesResponse, error)
+	// Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
+	// transacción.
+	AuthorizeUnderMandate(context.Context, *AuthorizeUnderMandateRequest) (*AuthorizeUnderMandateResponse, error)
+	mustEmbedUnimplementedMandateServiceServer()
+}
+
+// UnimplementedMandateServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedMandateServiceServer struct{}
+
+func (UnimplementedMandateServiceServer) GrantMandate(context.Context, *GrantMandateRequest) (*Mandate, error) {
+	return nil, status.Error(codes.Unimplemented, "method GrantMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) RevokeMandate(context.Context, *RevokeMandateRequest) (*Mandate, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) GetMandate(context.Context, *GetMandateRequest) (*Mandate, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) FindActiveMandate(context.Context, *FindActiveMandateRequest) (*Mandate, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindActiveMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) ListMandates(context.Context, *ListMandatesRequest) (*ListMandatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMandates not implemented")
+}
+func (UnimplementedMandateServiceServer) AuthorizeUnderMandate(context.Context, *AuthorizeUnderMandateRequest) (*AuthorizeUnderMandateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeUnderMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) mustEmbedUnimplementedMandateServiceServer() {}
+func (UnimplementedMandateServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeMandateServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MandateServiceServer will
+// result in compilation errors.
+type UnsafeMandateServiceServer interface {
+	mustEmbedUnimplementedMandateServiceServer()
+}
+
+func RegisterMandateServiceServer(s grpc.ServiceRegistrar, srv MandateServiceServer) {
+	// If the following call panics, it indicates UnimplementedMandateServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&MandateService_ServiceDesc, srv)
+}
+
+func _MandateService_GrantMandate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantMandateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).GrantMandate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_GrantMandate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).GrantMandate(ctx, req.(*GrantMandateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MandateService_RevokeMandate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeMandateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).RevokeMandate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_RevokeMandate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).RevokeMandate(ctx, req.(*RevokeMandateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MandateService_GetMandate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMandateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).GetMandate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_GetMandate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).GetMandate(ctx, req.(*GetMandateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MandateService_FindActiveMandate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindActiveMandateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).FindActiveMandate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_FindActiveMandate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).FindActiveMandate(ctx, req.(*FindActiveMandateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MandateService_ListMandates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMandatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).ListMandates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_ListMandates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).ListMandates(ctx, req.(*ListMandatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MandateService_AuthorizeUnderMandate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeUnderMandateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).AuthorizeUnderMandate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_AuthorizeUnderMandate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).AuthorizeUnderMandate(ctx, req.(*AuthorizeUnderMandateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// MandateService_ServiceDesc is the grpc.ServiceDesc for MandateService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var MandateService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "aibank.core.v1.MandateService",
+	HandlerType: (*MandateServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GrantMandate",
+			Handler:    _MandateService_GrantMandate_Handler,
+		},
+		{
+			MethodName: "RevokeMandate",
+			Handler:    _MandateService_RevokeMandate_Handler,
+		},
+		{
+			MethodName: "GetMandate",
+			Handler:    _MandateService_GetMandate_Handler,
+		},
+		{
+			MethodName: "FindActiveMandate",
+			Handler:    _MandateService_FindActiveMandate_Handler,
+		},
+		{
+			MethodName: "ListMandates",
+			Handler:    _MandateService_ListMandates_Handler,
+		},
+		{
+			MethodName: "AuthorizeUnderMandate",
+			Handler:    _MandateService_AuthorizeUnderMandate_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "aibank/core/v1/core.proto",
+}

@@ -120,6 +120,15 @@ func (s *Server) Handler() http.Handler {
 		s.authorized(oauth.ScopePaymentsWrite, s.handleRefund))
 	mux.Handle("GET /v1/authorizations/{id}", s.authorized(oauth.ScopePaymentsRead, s.handleGet))
 
+	// Modelo B: la plataforma pide permiso sobre la cuenta de un cliente del
+	// banco, y consulta el permiso que el titular le otorgó.
+	mux.Handle("POST /v1/consent-requests",
+		s.authorized(oauth.ScopePaymentsWrite, s.handleCreateConsentRequest))
+	mux.Handle("GET /v1/consent-requests/{id}",
+		s.authorized(oauth.ScopePaymentsRead, s.handleGetConsentRequest))
+	mux.Handle("GET /v1/mandates/{id}",
+		s.authorized(oauth.ScopePaymentsRead, s.handleGetMandate))
+
 	return telemetry.Middleware("mercatus", mux)
 }
 

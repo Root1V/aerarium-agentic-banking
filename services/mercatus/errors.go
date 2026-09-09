@@ -30,6 +30,15 @@ const (
 	CodeNothingToRefund      = "nothing_to_refund"
 	CodeServerError          = "server_error"
 	CodeServiceUnavailable   = "service_unavailable"
+
+	// Modelo B: permiso delegado por el titular de una cuenta.
+	CodeConsentNotFound      = "consent_request_not_found"
+	CodeConsentResolved      = "consent_request_already_resolved"
+	CodeMandateNotFound      = "mandate_not_found"
+	CodeMandateRevoked       = "mandate_revoked"
+	CodeMandateExpired       = "mandate_expired"
+	CodeMandateLimitExceeded = "mandate_limit_exceeded"
+	CodeMandateAccountScope  = "mandate_account_not_covered"
 )
 
 type errorBody struct {
@@ -103,5 +112,41 @@ func coreError(w http.ResponseWriter, err error) {
 
 	default:
 		writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
+	}
+}
+
+// mandateError traduce los rechazos del modelo B.
+//
+// Se separa de coreError porque "no te alcanza el permiso" y "no te alcanza el
+// saldo" son problemas distintos con soluciones distintas: uno se arregla
+// pidiéndole al titular que amplíe el mandato, el otro fondeando la cuenta.
+// Colapsarlos dejaría al cliente sin saber a quién recurrir.
+func mandateError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, coreclient.ErrMandateNotFound):
+		writeError(w, http.StatusNotFound, CodeMandateNotFound,
+			"no hay un permiso vigente sobre esa cuenta")
+
+	case errors.Is(err, coreclient.ErrMandateRevoked):
+		// 403 y no 404: el permiso existió y el titular lo retiró. Decirlo permite
+		// a la plataforma pedir uno nuevo en vez de buscar un error propio.
+		writeError(w, http.StatusForbidden, CodeMandateRevoked,
+			"el titular retiró el permiso")
+
+	case errors.Is(err, coreclient.ErrMandateExpired):
+		writeError(w, http.StatusForbidden, CodeMandateExpired,
+			"el permiso venció; hay que pedir uno nuevo")
+
+	case errors.Is(err, coreclient.ErrMandateLimitExceeded):
+		// 422 y no 402: hay saldo, lo que falta es autorización.
+		writeError(w, http.StatusUnprocessableEntity, CodeMandateLimitExceeded,
+			"el pago supera lo que el titular autorizó")
+
+	case errors.Is(err, coreclient.ErrMandateAccountNotCovered):
+		writeError(w, http.StatusForbidden, CodeMandateAccountScope,
+			"el permiso no cubre esa cuenta")
+
+	default:
+		coreError(w, err)
 	}
 }

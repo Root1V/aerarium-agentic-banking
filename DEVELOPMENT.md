@@ -230,6 +230,27 @@ confusión de algoritmo, incluido `alg: none`. Los secretos se guardan como SHA-
 los genera el banco con 256 bits de entropía — para una contraseña humana eso sería un
 error, y está anotado en el esquema para que nadie lo copie al lugar equivocado.
 
+## Mandatos de pago (modelo B)
+
+El permiso que un titular le da a una plataforma para iniciar pagos desde una cuenta suya.
+Es lo que hace posible que el dinero nunca salga a un pool de un tercero.
+
+```bash
+cd core && SQLX_OFFLINE=true cargo test --test mandates
+cd services && go test ./mercatus/ -run TestElModeloB
+```
+
+Un mandato NO es un scope. Un scope dice qué puede hacer una integración; un mandato dice
+qué autorizó una persona, sobre qué cuenta, hasta qué monto y contra qué evidencia. Ante
+"yo nunca autoricé ese pago", un scope no prueba nada.
+
+Lo consumido se DERIVA de las autorizaciones, no de un contador: uno que hay que subir al
+autorizar y bajar al liberar y al reembolsar termina desincronizado, y aquí eso significa
+o bloquear pagos legítimos o permitir los que superan el tope.
+
+El reparto entre los dos servicios es la garantía: quien pide el permiso (API de socio) no
+puede concederlo (canal del titular). Hay un test que lo intenta.
+
 ## Autorizaciones y su barrendero
 
 Retener ahora, mover el dinero después. Vive en el core y no en un adaptador porque

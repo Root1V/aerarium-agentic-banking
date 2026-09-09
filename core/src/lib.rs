@@ -8,6 +8,7 @@ pub mod authorizations;
 pub mod db;
 pub mod grpc;
 pub mod kafka;
+pub mod mandates;
 pub mod model;
 pub mod money;
 pub mod outbox;

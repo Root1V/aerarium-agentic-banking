@@ -115,7 +115,7 @@ func (s *Server) handleMovements(w http.ResponseWriter, r *http.Request, p *Prin
 type transferRequest struct {
 	FromAccountID string `json:"from_account_id"`
 	ToAccountID   string `json:"to_account_id"`
-	AmountMicros   int64  `json:"amount_micros"`
+	AmountMicros  int64  `json:"amount_micros"`
 	Currency      string `json:"currency"`
 	Description   string `json:"description"`
 }

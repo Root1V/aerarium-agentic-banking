@@ -65,3 +65,45 @@ CREATE TABLE IF NOT EXISTS oauth.client_accounts (
 
 CREATE INDEX IF NOT EXISTS idx_client_accounts_account
     ON oauth.client_accounts (account_id);
+
+-- Solicitudes de consentimiento: el puente entre "la plataforma pide permiso" y
+-- "el titular lo otorga".
+--
+-- La plataforma NO nombra la cuenta al pedir. Dice cuánto necesita y para qué; es
+-- el titular quien elige, dentro de su app, sobre qué cuenta lo concede. Así la
+-- plataforma no aprende identificadores de cuenta antes de tener permiso, y no
+-- puede sondear qué cuentas existen probando peticiones.
+CREATE TABLE IF NOT EXISTS oauth.consent_requests (
+    id                 UUID PRIMARY KEY,
+    client_id          TEXT NOT NULL REFERENCES oauth.clients (client_id),
+
+    -- Lo que el titular usa para encontrar la solicitud en su app. Alta entropía
+    -- porque viaja fuera de banda (un enlace, un QR) y no está detrás de un token.
+    handoff_code       TEXT NOT NULL UNIQUE,
+
+    -- Lo que la plataforma PIDE. El titular puede conceder menos, nunca más.
+    requested_max_per_operation_micros BIGINT,
+    requested_max_total_micros         BIGINT,
+    currency           CHAR(3) NOT NULL,
+    -- Para qué, en palabras que una persona entienda. Se muestra en pantalla.
+    purpose            TEXT NOT NULL DEFAULT '',
+
+    -- PENDING · APPROVED · REJECTED. "Vencida" se deriva de expires_at, igual que
+    -- en autorizaciones y mandatos.
+    status             TEXT NOT NULL DEFAULT 'PENDING',
+    -- El mandato que nació de aprobarla.
+    mandate_id         UUID,
+    account_id         UUID,
+
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at         TIMESTAMPTZ NOT NULL,
+    resolved_at        TIMESTAMPTZ,
+
+    CONSTRAINT approved_has_mandate
+        CHECK ((status = 'APPROVED') = (mandate_id IS NOT NULL)),
+    CONSTRAINT resolved_has_timestamp
+        CHECK ((status = 'PENDING') = (resolved_at IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_consent_requests_client
+    ON oauth.consent_requests (client_id, created_at DESC);

@@ -48,6 +48,9 @@ type fixture struct {
 	// Cuentas ya abiertas por la integración.
 	payer string
 	payee string
+	// Para los tests del modelo B, que necesitan abrir cuentas de titulares.
+	productCode string
+	cashID      string
 }
 
 func setup(t *testing.T) *fixture {
@@ -132,6 +135,7 @@ func setup(t *testing.T) *fixture {
 	f := &fixture{
 		srv: srv, core: core, store: store, server: server,
 		ctx: ctx, clientID: clientID,
+		productCode: products["USD"], cashID: cash.Id,
 	}
 	f.token = f.fetchToken(t, srv, clientID, secret, "")
 	f.readOnly = f.fetchToken(t, srv, clientID, secret, oauth.ScopePaymentsRead)
@@ -859,4 +863,41 @@ func mustDecode(t *testing.T, prefix, public string) string {
 		t.Fatalf("decodificar %q: %v", public, err)
 	}
 	return id
+}
+
+// callBFF ejecuta una petición contra el canal del titular.
+//
+// Los tests del modelo B necesitan los DOS servicios porque el reparto entre
+// ellos es la garantía: quien pide el permiso no puede concederlo.
+func (f *modelBFixture) callBFF(t *testing.T, method, path, token string, body any) (int, map[string]any) {
+	t.Helper()
+
+	var reader io.Reader
+	if body != nil {
+		raw, _ := json.Marshal(body)
+		reader = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, f.bff.URL+path, reader)
+	if err != nil {
+		t.Fatalf("construir petición: %v", err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := f.bff.Client().Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+
+	var out map[string]any
+	raw, _ := io.ReadAll(resp.Body)
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &out)
+	}
+	return resp.StatusCode, out
 }

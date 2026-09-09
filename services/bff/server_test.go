@@ -209,7 +209,7 @@ func TestNoSePuedeTransferirDesdeLaCuentaDeOtroCliente(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.mallory.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.mallory.accountID,
-		"amount_micros":    100_000000,
+		"amount_micros":   100_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -242,7 +242,7 @@ func TestNoSePuedeTransferirHaciaUnaCuentaInterna(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.cash,
-		"amount_micros":    10_000000,
+		"amount_micros":   10_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -268,7 +268,7 @@ func TestHomeDevuelveCuentaSaldoYMovimientos(t *testing.T) {
 		} `json:"account"`
 		Balance struct {
 			AmountMicros int64  `json:"amount_micros"`
-			Currency    string `json:"currency"`
+			Currency     string `json:"currency"`
 		} `json:"balance"`
 		Movements []struct {
 			Sign   int `json:"sign"`
@@ -365,7 +365,7 @@ func TestTransferenciaEntreClientes(t *testing.T) {
 	resp, body := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_micros":    120_000000,
+		"amount_micros":   120_000000,
 		"currency":        "USD",
 		"description":     "pago",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
@@ -391,7 +391,7 @@ func TestElMismoIdempotencyKeyNoTransfiereDosVeces(t *testing.T) {
 	payload := map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_micros":    50_000000,
+		"amount_micros":   50_000000,
 		"currency":        "USD",
 	}
 
@@ -415,7 +415,7 @@ func TestSinIdempotencyKeySeRechazaLaTransferencia(t *testing.T) {
 	resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 		"from_account_id": f.alice.accountID,
 		"to_account_id":   f.bob.accountID,
-		"amount_micros":    10_000000,
+		"amount_micros":   10_000000,
 		"currency":        "USD",
 	}, nil)
 
@@ -433,7 +433,7 @@ func TestLaClaveDeIdempotenciaEstaAisladaPorCliente(t *testing.T) {
 		resp, body := f.do(t, http.MethodPost, "/v1/transfers", c.token, map[string]any{
 			"from_account_id": c.accountID,
 			"to_account_id":   f.mallory.accountID,
-			"amount_micros":    10_000000,
+			"amount_micros":   10_000000,
 			"currency":        "USD",
 		}, map[string]string{"Idempotency-Key": sharedKey})
 		if resp.StatusCode != http.StatusCreated {
@@ -453,7 +453,7 @@ func TestSaldoInsuficienteDevuelveUnMotivoAccionable(t *testing.T) {
 	resp, body := f.do(t, http.MethodPost, "/v1/transfers", f.bob.token, map[string]any{
 		"from_account_id": f.bob.accountID,
 		"to_account_id":   f.alice.accountID,
-		"amount_micros":    900_000000,
+		"amount_micros":   900_000000,
 		"currency":        "USD",
 	}, map[string]string{"Idempotency-Key": uuid.NewString()})
 
@@ -489,7 +489,7 @@ func TestReintentosConcurrentesConLaMismaClaveTransfierenUnaVez(t *testing.T) {
 			resp, _ := f.do(t, http.MethodPost, "/v1/transfers", f.alice.token, map[string]any{
 				"from_account_id": f.alice.accountID,
 				"to_account_id":   f.bob.accountID,
-				"amount_micros":    30_000000,
+				"amount_micros":   30_000000,
 				"currency":        "USD",
 			}, map[string]string{"Idempotency-Key": key})
 			statuses[i] = resp.StatusCode

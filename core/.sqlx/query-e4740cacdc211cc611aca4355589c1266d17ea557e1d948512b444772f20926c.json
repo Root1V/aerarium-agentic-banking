@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO authorization_mandates (authorization_id, mandate_id)\n            VALUES ($1, $2)\n            ON CONFLICT (authorization_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4740cacdc211cc611aca4355589c1266d17ea557e1d948512b444772f20926c"
+}

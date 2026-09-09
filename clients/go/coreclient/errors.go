@@ -41,6 +41,14 @@ var (
 // clave: reenviar la MISMA idempotency_key no duplica el efecto.
 func Retryable(err error) bool { return errors.Is(err, ErrUnavailable) }
 
+// wrap adjunta el mensaje del servidor a un error sentinela.
+func wrap(sentinel, err error) error {
+	if st, ok := status.FromError(err); ok {
+		return fmt.Errorf("%w: %s", sentinel, st.Message())
+	}
+	return fmt.Errorf("%w: %v", sentinel, err)
+}
+
 // translate convierte un error gRPC en un error tipado, leyendo el motivo exacto
 // de los trailers y cayendo al código gRPC cuando el core no lo informó.
 func translate(err error, trailer metadata.MD) error {
