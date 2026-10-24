@@ -36,7 +36,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
-| Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | 👀 |
+| Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | ✅ |
 | Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
 
 ## Integración Mercatus (riel de pago para agentes de IA)
@@ -46,16 +46,16 @@ Análisis en [docs/09](docs/09-integracion-mercatus.md) · preguntas y respuesta
 
 | # | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|---|
-| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | 👀 |
-| 2 | OAuth2 client_credentials con scopes y rotación de secreto (26 tests) | Go | feat/oauth2 | 👀 |
-| 3 | Primitiva de autorización en el core: retención → captura, vencimiento y liberación (25 tests) | Rust | feat/authorizations | 👀 |
-| 4 | API REST: los siete endpoints del contrato (33 tests) | Go | feat/mercatus-api | 👀 |
-| 5 | Sandbox: OpenAPI congelado, barrendero de vencidas, alta de integración | Go/Rust | feat/mercatus-api | 👀 |
-| 6 | Reembolso parcial y total en la API (7 tests) | Go | feat/mercatus-refunds | 👀 |
-| 7 | **Modelo B**: mandato de pago con topes, vigencia y revocación (21 tests) | Rust | feat/payment-mandates | 👀 |
-| 8 | **Modelo B**: consentimiento, permiso delegado y pago bajo mandato (14 tests) | Go | feat/payment-mandates | 👀 |
-| 9 | Pantallas de consentimiento y gestión de permisos del titular (22 tests) | Flutter | feat/app-mandates | 👀 |
-| 10 | Sandbox entregable: entorno completo en contenedores, canal del titular y cliente de demostración | Go/Docker | feat/sandbox-entregable | 👀 |
+| 1 | Migración del ledger a micras (10⁻⁶): sin esto no se puede representar $0.001 | todos | feat/micro-units | ✅ |
+| 2 | OAuth2 client_credentials con scopes y rotación de secreto (26 tests) | Go | feat/oauth2 | ✅ |
+| 3 | Primitiva de autorización en el core: retención → captura, vencimiento y liberación (25 tests) | Rust | feat/authorizations | ✅ |
+| 4 | API REST: los siete endpoints del contrato (33 tests) | Go | feat/mercatus-api | ✅ |
+| 5 | Sandbox: OpenAPI congelado, barrendero de vencidas, alta de integración | Go/Rust | feat/mercatus-api | ✅ |
+| 6 | Reembolso parcial y total en la API (7 tests) | Go | feat/mercatus-refunds | ✅ |
+| 7 | **Modelo B**: mandato de pago con topes, vigencia y revocación (21 tests) | Rust | feat/payment-mandates | ✅ |
+| 8 | **Modelo B**: consentimiento, permiso delegado y pago bajo mandato (14 tests) | Go | feat/payment-mandates | ✅ |
+| 9 | Pantallas de consentimiento y gestión de permisos del titular (22 tests) | Flutter | feat/app-mandates | ✅ |
+| 10 | Sandbox entregable: entorno completo en contenedores, canal del titular y cliente de demostración | Go/Docker | feat/sandbox-entregable | ✅ |
 
 Mercatus respondió y **aceptó las 24 preguntas y el calendario** — ver
 [docs/10-preguntas-mercatus.md](docs/10-preguntas-mercatus.md) y
@@ -77,9 +77,6 @@ licencia o el proveedor BaaS en Perú.
 - **Estructura de cuenta ómnibus**: necesita asesoría regulatoria local y que el proveedor
   licenciado la acepte. Bloquea el paso a producción, no la integración técnica. El modelo B
   no depende de ella.
-- **Jurisdicción**: Mercatus asume que AIBank opera en Perú. El plan de entrada
-  ([doc 02](docs/02-regulacion-licencias.md)) todavía no fija el país ancla — hay que
-  cerrarlo, porque condiciona la licencia y el proveedor.
 - **Custodia de fondos de terceros en el modelo ómnibus**: Mercatus recibe dinero de sus
   clientes y lo mantiene como saldo de sub-ledger. Es la pregunta que su abogado tiene que
   responder antes del KYB, y puede exigir EEDE ([docs/12 §1](docs/12-modelo-b-iniciacion-de-pagos.md)).
@@ -95,7 +92,7 @@ licencia o el proveedor BaaS en Perú.
   actual; al crecer habrá que conciliar por ventanas con saldos de corte.
 - El límite de tasa de la API de socio es POR INSTANCIA. Con más de una réplica el
   límite efectivo se multiplica; hay que moverlo a un almacén compartido antes de
-  escalar horizontalmente.
+  escalar horizontalmente — o antes de abrir el sandbox alojado a un segundo socio.
 
 ## Backlog (post-sprint 6)
 
