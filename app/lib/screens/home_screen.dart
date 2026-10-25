@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../theme.dart';
 import 'mandates_screen.dart';
 import 'transfer_screen.dart';
 
@@ -184,7 +185,8 @@ class _MovementTile extends StatelessWidget {
         movement.signedAmount.format(withSign: true),
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: incoming ? Colors.green.shade700 : null,
+          fontFeatures: const [FontFeature.tabularFigures()],
+          color: incoming ? context.moneyColors.positive : null,
         ),
       ),
     );

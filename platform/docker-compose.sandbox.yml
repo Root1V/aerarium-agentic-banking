@@ -124,6 +124,9 @@ services:
       # Cierra el simulador de titulares. Vacío en local; OBLIGATORIO en cuanto
       # el entorno sea accesible desde fuera.
       DEV_API_KEY: ${DEV_API_KEY:-}
+      # Orígenes del portal web, separados por coma. Vacío = sin CORS, que es lo
+      # correcto mientras solo lo use la app móvil.
+      CORS_ALLOWED_ORIGINS: ${HOLDER_CORS_ORIGINS:-}
     ports:
       - "${HOLDER_PUBLISH:-8080}:8080"
     depends_on:
