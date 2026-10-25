@@ -42,7 +42,7 @@
 | **Riesgo: scoring, antifraude, modelos** | **Python** | Todo el ecosistema de ML vive aquí (scikit-learn, XGBoost, feature stores, notebooks para el equipo de riesgo). No hay competencia real |
 | **Plataforma de datos** | **SQL + Python** | dbt, orquestación, transformaciones analíticas |
 | **Backoffice web** | **TypeScript + React** | Es una aplicación web; tipado estático de extremo a extremo |
-| **App móvil** | **Dart / Flutter** | Un solo código para iOS+Android con UI pixel-perfect (elección de Nubank tras evaluar React Native y Kotlin nativo) |
+| **App móvil** | **Dart / Flutter** | Un solo código para iOS+Android, que un equipo pequeño puede sostener. El núcleo de seguridad va en nativo (ver [doc 14](14-ux-y-decision-movil.md)) |
 
 **Contratos entre lenguajes**: las fronteras se definen en **Protobuf/OpenAPI** con tipos generados para cada lenguaje. Un cambio de contrato rompe la compilación en ambos lados, no en producción. Esto es lo que hace viable el políglota: las fronteras son verificadas por máquina, no por convención.
 
@@ -57,7 +57,7 @@
 - **CQRS selectivo**: proyecciones de saldo/movimientos para lecturas de la app; el ledger nunca se lee en caliente para renderizar la home.
 
 ### Mobile
-- **Flutter** — la elección dominante de los neobancos grandes; Nubank migró a Flutter tras evaluar React Native y Kotlin nativo, buscando un solo lenguaje y arquitectura para todos los equipos ([Building Nubank](https://building.nubank.com/why-we-think-flutter-will-help-us-scale-mobile-development-at-nubank/); [flutter.dev showcase](https://flutter.dev/showcase/nubank)). Un solo equipo cubre iOS+Android con UI pixel-perfect.
+- **Flutter** — Nubank lo eligió tras evaluar React Native y Kotlin nativo ([Building Nubank](https://building.nubank.com/why-we-think-flutter-will-help-us-scale-mobile-development-at-nubank/)); Revolut, en cambio, es nativo. **No es «la elección dominante»**: la razón que aguanta es que un solo código permite a un equipo pequeño cubrir iOS y Android en un mercado 82% Android. Revisado en el [doc 14](14-ux-y-decision-movil.md), con dos reglas: núcleo de seguridad nativo y Flutter web solo para el portal autenticado.
 - Seguridad en el cliente: certificate pinning, detección de root/jailbreak, secure storage, device binding, passkeys.
 
 ### Infraestructura
@@ -81,7 +81,7 @@
 
 | Decisión | Elegido | Descartado | Por qué |
 |---|---|---|---|
-| Mobile | Flutter | React Native | Validación de los neobancos más grandes de la región; un solo equipo; RN cerró brecha de rendimiento pero fragmenta la experiencia financiera pixel-perfect |
+| Mobile | Flutter (+ núcleo de seguridad nativo) | React Native, nativo, Compose Multiplatform | Un solo equipo para iOS y Android. Nativo exige dos equipos; Compose Multiplatform no tiene bancos con UI compartida en producción; RN no resuelve nada que falte. Ver [doc 14](14-ux-y-decision-movil.md) |
 | **Core ledger** | **Rust** | Kotlin/JVM, Go, Python | JVM: buena, pero GC y exhaustividad más débil. Go: sin tipos suma ni decimal nativo, `error` sin exhaustividad. Python: el GIL complica la concurrencia transaccional y el tipado dinámico es inaceptable donde un error mueve dinero. **Evidencia real: al portar el core, el compilador atrapó que `SUM()` en Postgres devuelve `NUMERIC` y no `bigint` — en JDBC eso pasaba silenciosamente por coerción implícita** |
 | Adaptadores y BFF | Go | Rust | Rust también sirve, pero para *glue* I/O la ergonomía async añade fricción sin ganancia; Go compila y despliega más simple |
 | Riesgo/ML | Python | Rust, JVM | El ecosistema de ML no tiene sustituto |
