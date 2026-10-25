@@ -422,14 +422,27 @@ paths:
         "404": { $ref: "#/components/responses/AuthorizationNotFound" }
         "409":
           description: |
-            `authorization_expired`: la retención venció y el dinero volvió al
-            pagador. Hay que autorizar de nuevo.
+            La autorización ya no admite captura. Dos códigos, según por qué:
+
+            - `authorization_expired`: la retención venció y el barrendero todavía
+              no la liberó. El dinero vuelve al pagador; hay que autorizar de nuevo.
+            - `authorization_not_capturable`: ya no está viva — venció y se
+              liberó, o se cobró y se devolvió. Consulten su estado con `GET`.
+              Si el `GET` dice `refunded` o `partially_refunded`, una captura
+              anterior SÍ se hizo: este 409 a un reintento no significa que el
+              dinero no se movió.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-              example:
-                error: authorization_expired
-                message: la autorización venció y el dinero se devuelve al pagador
+              examples:
+                vencida:
+                  value:
+                    error: authorization_expired
+                    message: la autorización venció y el dinero se devuelve al pagador
+                liberada:
+                  value:
+                    error: authorization_not_capturable
+                    message: "la autorización ya no admite captura: consulta su estado con GET"
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/Unavailable" }
 

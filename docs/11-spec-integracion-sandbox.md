@@ -285,13 +285,28 @@ demás. Acotarlo por cuenta convierte ese incidente en un problema de un agente.
 | 404 | `account_not_found` | Cuenta inexistente, ajena o mal formada |
 | 404 | `authorization_not_found` | Ídem para autorizaciones |
 | 409 | `idempotency_key_reused` | Misma clave, payload distinto |
-| 409 | `authorization_expired` | Se intentó capturar una retención vencida |
-| 409 | `nothing_to_refund` | Reembolso sobre algo que no se cobró |
+| 409 | `authorization_expired` | Se intentó capturar una retención vencida que el barrendero todavía no liberó |
+| 409 | `authorization_not_capturable` | Se intentó capturar algo que ya no está vivo: venció y se liberó, o se cobró y se devolvió. Consulten su estado con `GET` |
+| 409 | `nothing_to_refund` | Reembolso sobre algo que no se cobró, o que se liberó sin cobrarse |
+| 422 | `refund_exceeds_capture` | El reembolso supera lo que queda por devolver |
 | 422 | `amount_mismatch` / `recipient_mismatch` | La verificación del vendedor no coincide |
 | 422 | `currency_mismatch` | Monedas distintas, o moneda no habilitada |
 | 422 | `same_account` | Pagador y receptor coinciden |
-| 429 | `rate_limited` | Cuota superada |
+| 429 | `rate_limited` | Cuota superada. Respeten `Retry-After` |
+| 500 | `server_error` | Error nuestro. No es reintentable a ciegas: consulten el estado con `GET` |
 | 503 | `service_unavailable` | Transitorio. **Reintentable** con la misma clave |
+
+Los errores de mandatos y consentimiento (modelo B) están en la [spec 13 §5](13-spec-modelos-a-y-b.md).
+
+**Dos operaciones son idempotentes por naturaleza, y no devuelven error al repetirse:**
+
+- **Capturar algo ya capturado** devuelve `200` con el mismo `settled_at`. Un reintento
+  tras un timeout no obliga a adivinar si el dinero se movió.
+- **Reembolsar algo ya devuelto entero** devuelve `200` con `refunded: 0`. No se mueve
+  dinero.
+
+Por eso no existe `already_captured`, y `already_refunded` —que se emitía en la captura y
+describía mal el caso— pasó a ser `authorization_not_capturable` el 25/10.
 
 **El campo `error` es estable**: compárenlo por igualdad. El campo `message` es
 para humanos y puede cambiar sin aviso — no lo parseen.

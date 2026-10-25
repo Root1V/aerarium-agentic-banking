@@ -362,11 +362,16 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request, claims *o
 	captured, err := s.core.Capture(r.Context(), auth.ID)
 	if err != nil {
 		if errors.Is(err, coreclient.ErrInvalidState) {
-			// El core rechaza capturar una retención ya liberada. Para el contrato
-			// eso es un conflicto de estado, no una captura repetida: capturar dos
-			// veces SÍ funciona y devuelve la misma captura.
-			writeError(w, http.StatusConflict, CodeAlreadyRefunded,
-				"la autorización ya no admite captura")
+			// La retención ya no está viva: venció y el barrendero la liberó, o
+			// se cobró y se devolvió. Es un conflicto de estado, no una captura
+			// repetida: capturar dos veces SÍ funciona y devuelve la misma captura.
+			//
+			// Si venció pero el barrendero no pasó todavía, el core responde
+			// Expired antes de llegar aquí, y el cliente recibe
+			// `authorization_expired`: el estado se deriva del reloj, no de que el
+			// barrendero haya hecho su trabajo.
+			writeError(w, http.StatusConflict, CodeNotCapturable,
+				"la autorización ya no admite captura: consulta su estado con GET")
 			return
 		}
 		coreError(w, err)
