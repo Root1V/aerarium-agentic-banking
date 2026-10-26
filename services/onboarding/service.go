@@ -130,6 +130,28 @@ func (s *Service) advance(ctx context.Context, app *Application, accountCode str
 		return nil, err
 	}
 
+	// Una persona, un alta viva. Se comprueba solo en un expediente que no ha
+	// empezado, y ANTES de la verificación de identidad: no tiene sentido pagarle
+	// al proveedor por alguien que ya tiene un alta en marcha.
+	//
+	// El desenlace es revisión y no rechazo: puede ser alguien que perdió el
+	// teléfono a mitad de su alta y empezó otra, y eso lo resuelve una persona.
+	// Tampoco se le dice al interesado que su documento ya figura: eso permitiría
+	// a cualquiera averiguar quién es cliente del banco.
+	if len(done) == 0 {
+		duplicate, err := s.store.HasOtherLiveApplication(ctx, app)
+		if err != nil {
+			return nil, err
+		}
+		if duplicate {
+			if err := s.finish(ctx, app, StepDecision, "manual_review",
+				"el documento tiene otra alta vigente: posible duplicado", StatusManualReview); err != nil {
+				return nil, err
+			}
+			return s.store.Get(ctx, app.ID)
+		}
+	}
+
 	for _, step := range pipeline {
 		if _, already := done[step]; already {
 			continue

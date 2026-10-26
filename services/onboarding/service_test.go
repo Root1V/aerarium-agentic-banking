@@ -10,6 +10,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -104,6 +106,16 @@ func setup(t *testing.T) *fixture {
 	}
 }
 
+// newDNI devuelve un DNI que ningún otro test ni ejecución anterior usó.
+//
+// Hace falta desde que el alta comprueba que una persona no tenga dos altas
+// vivas: con un DNI fijo, la segunda ejecución de la suite —la base persiste—
+// caería en revisión por "posible duplicado", que es justo lo que tiene que pasar
+// con una persona real que repite.
+func newDNI() string {
+	return fmt.Sprintf("%08d", rand.Intn(100_000_000))
+}
+
 func (f *fixture) request(documentNumber string) onboarding.SubmitRequest {
 	id := uuid.NewString()
 	return onboarding.SubmitRequest{
@@ -126,7 +138,7 @@ func (f *fixture) request(documentNumber string) onboarding.SubmitRequest {
 func TestAltaAprobadaAbreLaCuenta(t *testing.T) {
 	f := setup(t)
 
-	app, err := f.svc.Submit(f.ctx, f.request("12345678"))
+	app, err := f.svc.Submit(f.ctx, f.request(newDNI()))
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
@@ -151,7 +163,7 @@ func TestAltaAprobadaAbreLaCuenta(t *testing.T) {
 func TestElExpedienteConservaLaEvidenciaDeCadaPaso(t *testing.T) {
 	f := setup(t)
 
-	app, err := f.svc.Submit(f.ctx, f.request("12345678"))
+	app, err := f.svc.Submit(f.ctx, f.request(newDNI()))
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
@@ -187,7 +199,7 @@ func TestElExpedienteConservaLaEvidenciaDeCadaPaso(t *testing.T) {
 
 func TestPruebaDeVidaFallidaRechazaSinAbrirCuenta(t *testing.T) {
 	f := setup(t)
-	doc := "99999999"
+	doc := newDNI()
 	f.verifier.SetOutcome(doc, kycsim.Rejected("la selfie no superó la prueba de vida"))
 
 	app, err := f.svc.Submit(f.ctx, f.request(doc))
@@ -210,7 +222,7 @@ func TestPruebaDeVidaFallidaRechazaSinAbrirCuenta(t *testing.T) {
 // homonimia son frecuentes y la decisión corresponde a un analista.
 func TestCoincidenciaEnListasVaARevisionManual(t *testing.T) {
 	f := setup(t)
-	doc := "77777777"
+	doc := newDNI()
 	f.screener.AddToWatchlist(doc, "OFAC", "ONU")
 
 	app, err := f.svc.Submit(f.ctx, f.request(doc))
@@ -228,7 +240,7 @@ func TestCoincidenciaEnListasVaARevisionManual(t *testing.T) {
 
 func TestElAnalistaPuedeAprobarUnaRevisionYSeAbreLaCuenta(t *testing.T) {
 	f := setup(t)
-	doc := "77777777"
+	doc := newDNI()
 	f.screener.AddToWatchlist(doc, "OFAC")
 	req := f.request(doc)
 
@@ -275,7 +287,7 @@ func TestElAnalistaPuedeAprobarUnaRevisionYSeAbreLaCuenta(t *testing.T) {
 
 func TestElAnalistaPuedeRechazar(t *testing.T) {
 	f := setup(t)
-	doc := "77777777"
+	doc := newDNI()
 	f.screener.AddToWatchlist(doc, "OFAC")
 
 	app, err := f.svc.Submit(f.ctx, f.request(doc))
@@ -298,7 +310,7 @@ func TestElAnalistaPuedeRechazar(t *testing.T) {
 // verificaciones ya realizadas.
 func TestReanudarNoRepiteLosPasosYaPagados(t *testing.T) {
 	f := setup(t)
-	req := f.request("12345678")
+	req := f.request(newDNI())
 
 	// El screening cae justo después de verificar la identidad.
 	f.screener.FailNext(1)
@@ -333,7 +345,7 @@ func TestReanudarNoRepiteLosPasosYaPagados(t *testing.T) {
 // Reenviar la misma solicitud no abre un segundo expediente ni una segunda cuenta.
 func TestReenviarLaMismaSolicitudEsIdempotente(t *testing.T) {
 	f := setup(t)
-	req := f.request("12345678")
+	req := f.request(newDNI())
 
 	first, err := f.svc.Submit(f.ctx, req)
 	if err != nil {
@@ -357,7 +369,7 @@ func TestReenviarLaMismaSolicitudEsIdempotente(t *testing.T) {
 
 func TestUnaCuentaYaAbiertaSeReutilizaAlReintentar(t *testing.T) {
 	f := setup(t)
-	req := f.request("12345678")
+	req := f.request(newDNI())
 
 	// La cuenta ya existe con ese código (caída entre abrirla y registrar el paso).
 	existing, err := f.core.OpenCustomerAccount(f.ctx, req.AccountCode, "Persona de Prueba", req.CustomerID, f.productCode)
@@ -371,5 +383,59 @@ func TestUnaCuentaYaAbiertaSeReutilizaAlReintentar(t *testing.T) {
 	}
 	if app.AccountID != existing.Id {
 		t.Errorf("se abrió una cuenta nueva (%s) en vez de reutilizar %s", app.AccountID, existing.Id)
+	}
+}
+
+// ---------------------------------------------------------------- duplicados
+
+// Una persona no puede tener dos altas vivas. Sin esta regla, quien quisiera
+// saltarse los topes de una cuenta básica abriría varias, una por referencia.
+func TestUnaSegundaAltaDelMismoDocumentoVaARevisionSinPagarOtraVerificacion(t *testing.T) {
+	f := setup(t)
+	doc := newDNI()
+
+	first, err := f.svc.Submit(f.ctx, f.request(doc))
+	if err != nil || first.Status != onboarding.StatusApproved {
+		t.Fatalf("primera alta: %v, %v", first, err)
+	}
+	paid := f.verifier.Calls()
+
+	second, err := f.svc.Submit(f.ctx, f.request(doc))
+	if err != nil {
+		t.Fatalf("segunda alta: %v", err)
+	}
+	if second.Status != onboarding.StatusManualReview {
+		t.Errorf("estado = %s, se esperaba revisión", second.Status)
+	}
+	if second.AccountID != "" {
+		t.Error("la segunda alta abrió una cuenta")
+	}
+	// Se detecta ANTES de encargar la verificación: no se le paga al proveedor
+	// por alguien que ya tiene un alta en marcha.
+	if f.verifier.Calls() != paid {
+		t.Errorf("se pagó otra verificación: %d → %d", paid, f.verifier.Calls())
+	}
+}
+
+// Las altas rechazadas no cuentan: quien fue rechazado por una foto borrosa
+// tiene que poder intentarlo otra vez.
+func TestTrasUnRechazoSePuedeVolverAIntentar(t *testing.T) {
+	f := setup(t)
+	doc := newDNI()
+	f.verifier.SetOutcome(doc, kycsim.Rejected("selfie movida"))
+
+	first, err := f.svc.Submit(f.ctx, f.request(doc))
+	if err != nil || first.Status != onboarding.StatusRejected {
+		t.Fatalf("primera alta: %v, %v", first, err)
+	}
+
+	// La persona vuelve con una foto buena.
+	f.verifier.SetOutcome(doc, kyc.IdentityResult{Outcome: kyc.IdentityVerified, LivenessPassed: true})
+	second, err := f.svc.Submit(f.ctx, f.request(doc))
+	if err != nil {
+		t.Fatalf("segunda alta: %v", err)
+	}
+	if second.Status != onboarding.StatusApproved {
+		t.Errorf("estado = %s, se esperaba aprobada", second.Status)
 	}
 }
