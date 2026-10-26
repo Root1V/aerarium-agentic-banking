@@ -25,17 +25,20 @@ ella.
 
 Hay dos formas, y las dos sirven:
 
-- **El entorno alojado**, con una URL pública. La dirección, las credenciales y
-  la clave del simulador de titulares se entregan **por canal seguro, aparte de
-  este documento**. Con eso se puede saltar directo a la sección 3.
-- **Uno propio, en su máquina.** Es lo que describe el resto de esta sección.
-  Aislado, reiniciable de cero y sin compartir límites de tasa con nadie; para
-  desarrollar suele ser más cómodo que el alojado.
+- **Uno propio, en su máquina — disponible hoy.** El código es público, así que
+  no hace falta esperar a nadie: se clona y se levanta. Aislado, reiniciable de
+  cero y sin compartir límites de tasa con nadie; para desarrollar suele ser más
+  cómodo que el alojado. Es lo que describe el resto de esta sección.
+- **El entorno alojado**, con una URL pública, cuando esté desplegado. La
+  dirección, las credenciales y la clave del simulador de titulares se entregan
+  **por canal seguro, aparte de este documento**. Con eso se puede saltar directo
+  a la sección 3.
 
-Requisitos para levantarlo uno mismo: Docker con Compose v2. Nada más — ni Rust,
-ni Go, ni Postgres.
+Requisitos para levantarlo uno mismo: git y Docker con Compose v2. Nada más — ni
+Rust, ni Go, ni Postgres.
 
 ```bash
+git clone https://github.com/Root1V/aerarium-agentic-banking.git && cd aerarium-agentic-banking
 echo "OAUTH_SIGNING_KEY=$(head -c 32 /dev/urandom | base64)" > platform/.env
 ```
 
@@ -48,6 +51,16 @@ docker compose -f platform/docker-compose.sandbox.yml up --build -d
 ```
 
 La primera vez tarda: compila el core en Rust. Después arranca en segundos.
+
+**Si 8080 u 8081 ya están ocupados** —pasa a menudo: son los puertos por defecto de
+media docena de herramientas— se mueven sin tocar nada más:
+
+```bash
+PARTNER_PUBLISH=28081 HOLDER_PUBLISH=28080 \
+  docker compose -f platform/docker-compose.sandbox.yml up --build -d
+```
+
+La demo no se entera: habla con los servicios por la red interna de Docker.
 
 | | |
 |---|---|
