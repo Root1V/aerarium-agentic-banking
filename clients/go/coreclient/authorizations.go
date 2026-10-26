@@ -128,6 +128,47 @@ func (c *Client) ReleaseExpired(ctx context.Context, limit int32) ([]string, err
 	return resp.GetAuthorizationIds(), nil
 }
 
+// HoldGroup es lo retenido en una cuenta pagadora para una misma integración.
+type HoldGroup struct {
+	// Grantee es el client_id de la integración titular del mandato. Vacío si la
+	// retención no se hizo bajo un mandato.
+	Grantee     string
+	Currency    string
+	Count       int64
+	TotalMicros int64
+	// ExpiredMicros ya pasó su vencimiento: sigue retenido hasta que pase el
+	// barrendero, pero no se puede cobrar.
+	ExpiredMicros  int64
+	FirstExpiresAt time.Time
+	LastExpiresAt  time.Time
+}
+
+// SummarizeLiveHolds devuelve lo retenido en una cuenta, agrupado por quién lo
+// cobra, de mayor a menor. Los totales vienen calculados por el core: no hay que
+// sumar nada aquí, y no se pierde nada por paginar.
+func (c *Client) SummarizeLiveHolds(ctx context.Context, payerAccountID string) ([]HoldGroup, error) {
+	var trailer metadata.MD
+	resp, err := c.authorizations.SummarizeLiveHolds(ctx,
+		&corev1.SummarizeLiveHoldsRequest{PayerAccountId: payerAccountID}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translateAuthorization(err, trailer)
+	}
+
+	groups := make([]HoldGroup, 0, len(resp.GetGroups()))
+	for _, g := range resp.GetGroups() {
+		groups = append(groups, HoldGroup{
+			Grantee:        g.GetGrantee(),
+			Currency:       g.GetTotal().GetCurrency(),
+			Count:          g.GetCount(),
+			TotalMicros:    g.GetTotal().GetAmountMicros(),
+			ExpiredMicros:  g.GetExpired().GetAmountMicros(),
+			FirstExpiresAt: g.GetFirstExpiresAt().AsTime(),
+			LastExpiresAt:  g.GetLastExpiresAt().AsTime(),
+		})
+	}
+	return groups, nil
+}
+
 func toAuthorization(pb *corev1.Authorization) *Authorization {
 	if pb == nil {
 		return nil

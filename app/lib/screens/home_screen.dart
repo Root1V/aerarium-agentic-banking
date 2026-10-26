@@ -5,6 +5,7 @@ import '../api/errors.dart';
 import '../api/models.dart';
 import '../theme.dart';
 import 'mandates_screen.dart';
+import 'pending_payments_screen.dart';
 import 'transfer_screen.dart';
 
 /// Pantalla principal: saldo y últimos movimientos.
@@ -88,6 +89,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openPending() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PendingPaymentsScreen(
+        client: widget.client,
+        groups: _home!.pending,
+      ),
+    ));
+  }
+
   void _openMandates() {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => MandatesScreen(client: widget.client),
@@ -107,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _BalanceCard(home: home),
+        _BalanceCard(home: home, onOpenPending: _openPending),
         const SizedBox(height: 24),
         Text('Movimientos', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -139,28 +149,69 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.home});
+  const _BalanceCard({required this.home, required this.onOpenPending});
 
   final Home home;
+  final VoidCallback onOpenPending;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(home.account.name,
-                style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 8),
-            Text(
-              home.balance.format(),
-              key: const Key('balance'),
-              style: Theme.of(context).textTheme.headlineMedium,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(home.account.name, style: muted),
+                const SizedBox(height: AppSpacing.md),
+                // "Disponible" y no "Saldo": lo retenido ya salió de aquí, y
+                // llamar saldo a lo que queda haría pensar que falta dinero.
+                Text('Disponible', style: theme.textTheme.labelLarge),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  home.balance.format(),
+                  key: const Key('balance'),
+                  style: theme.textTheme.headlineMedium,
+                ),
+              ],
+            ),
+          ),
+          // Solo si hay algo que contar. Ni "0,00 retenidos" —ruido que hace
+          // dudar— ni una fila cuando el banco no pudo calcularlo: callar es
+          // mejor que afirmar algo que no se sabe.
+          if (home.hasRetained) ...[
+            const Divider(height: 1),
+            InkWell(
+              key: const Key('retained'),
+              onTap: onOpenPending,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        '${home.retained!.format()} retenidos en pagos en curso',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+                  ],
+                ),
+              ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }

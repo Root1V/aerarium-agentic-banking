@@ -389,6 +389,29 @@ message ReleaseExpiredResponse {
   repeated string authorization_ids = 1;
 }
 
+message SummarizeLiveHoldsRequest {
+  string payer_account_id = 1;
+}
+
+// Lo retenido para una misma integración, en una misma moneda.
+message HoldGroup {
+  // client_id de la integración titular del mandato. Vacío si la retención no
+  // se hizo bajo un mandato.
+  string grantee = 1;
+  Money total = 2;
+  int64 count = 3;
+  // Ya vencido: sigue retenido hasta que pase el barrendero, pero no se puede
+  // cobrar. Vuelve al saldo en breve.
+  Money expired = 4;
+  google.protobuf.Timestamp first_expires_at = 5;
+  google.protobuf.Timestamp last_expires_at = 6;
+}
+
+message SummarizeLiveHoldsResponse {
+  // Ordenados de mayor a menor importe retenido.
+  repeated HoldGroup groups = 1;
+}
+
 service AuthorizationService {
   // Retiene el monto en la cuenta pagadora. Idempotente por `idempotency_key`.
   rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
@@ -400,6 +423,12 @@ service AuthorizationService {
   rpc GetAuthorization(GetAuthorizationRequest) returns (Authorization);
   // Libera las retenciones vencidas. La invoca un proceso periódico.
   rpc ReleaseExpired(ReleaseExpiredRequest) returns (ReleaseExpiredResponse);
+  // Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
+  //
+  // Agrupado y sumado en el servidor, no una lista: un agente que paga por
+  // llamada deja cientos de retenciones vivas, y un total calculado sumando una
+  // página sería falso en cuanto la lista no cupiera en ella.
+  rpc SummarizeLiveHolds(SummarizeLiveHoldsRequest) returns (SummarizeLiveHoldsResponse);
 }
 
 // ---------------------------------------------------------------- mandatos

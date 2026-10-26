@@ -170,6 +170,27 @@ pub struct AuthorizeCommand {
     pub ttl_minutes: Option<i64>,
 }
 
+/// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
+///
+/// Agrupado y no una lista, y sumado en SQL: un agente que paga $0,001 por
+/// llamada deja cientos de retenciones vivas en 15 minutos. Una lista paginada
+/// sumada en el cliente daría un total retenido falso en cuanto pasara del
+/// tamaño de página — y el total es justo lo que la persona necesita ver bien.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoldGroup {
+    /// La integración titular del mandato bajo el que se retuvo. `None` si la
+    /// retención no se hizo bajo un mandato.
+    pub grantee: Option<String>,
+    pub currency: String,
+    pub count: i64,
+    pub total_micros: i64,
+    /// La parte que ya pasó su vencimiento. Sigue retenida —el barrendero aún no
+    /// pasó— pero ya no se puede cobrar: vuelve al saldo en breve.
+    pub expired_micros: i64,
+    pub first_expires_at: DateTime<Utc>,
+    pub last_expires_at: DateTime<Utc>,
+}
+
 pub struct AuthorizationService {
     pool: PgPool,
 }
@@ -408,6 +429,54 @@ impl AuthorizationService {
             }
         }
         Ok(released)
+    }
+
+    /// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
+    ///
+    /// Cuenta todo lo que sigue en AUTHORIZED, incluido lo vencido que el
+    /// barrendero todavía no liberó: ese dinero tampoco está en el saldo. Lo
+    /// vencido se separa en `expired_micros`, con el mismo reloj que usa
+    /// `observed()`, para que la app no prometa un cobro que ya no puede ocurrir.
+    pub async fn summarize_live_holds(
+        &self,
+        payer: Uuid,
+    ) -> Result<Vec<HoldGroup>, AuthorizationError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT m.grantee AS "grantee?",
+                   a.currency AS "currency!",
+                   COUNT(*) AS "count!",
+                   SUM(a.amount_micros)::BIGINT AS "total_micros!",
+                   COALESCE(SUM(a.amount_micros) FILTER (WHERE a.expires_at <= $2), 0)::BIGINT
+                       AS "expired_micros!",
+                   MIN(a.expires_at) AS "first_expires_at!",
+                   MAX(a.expires_at) AS "last_expires_at!"
+              FROM authorizations a
+              LEFT JOIN authorization_mandates am ON am.authorization_id = a.id
+              LEFT JOIN payment_mandates m ON m.id = am.mandate_id
+             WHERE a.payer_account_id = $1
+               AND a.status = 'AUTHORIZED'
+             GROUP BY m.grantee, a.currency
+             ORDER BY SUM(a.amount_micros) DESC, m.grantee
+            "#,
+            payer,
+            Utc::now(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| HoldGroup {
+                grantee: r.grantee,
+                currency: r.currency,
+                count: r.count,
+                total_micros: r.total_micros,
+                expired_micros: r.expired_micros,
+                first_expires_at: r.first_expires_at,
+                last_expires_at: r.last_expires_at,
+            })
+            .collect())
     }
 
     pub async fn find(&self, id: Uuid) -> Result<Option<Authorization>, AuthorizationError> {

@@ -725,6 +725,37 @@ impl AuthorizationService for AuthorizationApi {
         Ok(Response::new(authorization_to_pb(&auth)))
     }
 
+    async fn summarize_live_holds(
+        &self,
+        request: Request<pb::SummarizeLiveHoldsRequest>,
+    ) -> Result<Response<pb::SummarizeLiveHoldsResponse>, Status> {
+        let payer = parse_uuid(&request.into_inner().payer_account_id, "payer_account_id")?;
+
+        let groups = self
+            .authorizations
+            .summarize_live_holds(payer)
+            .await
+            .map_err(auth_to_status)?
+            .into_iter()
+            .map(|g| pb::HoldGroup {
+                grantee: g.grantee.unwrap_or_default(),
+                total: Some(pb::Money {
+                    amount_micros: g.total_micros,
+                    currency: g.currency.clone(),
+                }),
+                count: g.count,
+                expired: Some(pb::Money {
+                    amount_micros: g.expired_micros,
+                    currency: g.currency,
+                }),
+                first_expires_at: Some(to_timestamp(g.first_expires_at)),
+                last_expires_at: Some(to_timestamp(g.last_expires_at)),
+            })
+            .collect();
+
+        Ok(Response::new(pb::SummarizeLiveHoldsResponse { groups }))
+    }
+
     async fn get_authorization(
         &self,
         request: Request<pb::GetAuthorizationRequest>,
