@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The INTERNET permission is required for development. Specifically,
+         the Flutter tool needs it to communicate with the running application
+         to allow setting breakpoints, to provide hot reload, etc.
+    -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- El sandbox local habla HTTP sin cifrar. Se permite SOLO en la variante
+         de depuración: en release este manifiesto no se fusiona, y la app
+         exige HTTPS como manda Android desde la versión 9. -->
+    <application android:usesCleartextTraffic="true"/>
+</manifest>

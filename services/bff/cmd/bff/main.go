@@ -11,6 +11,7 @@
 //	CORE_ADDR       core gRPC (por defecto 127.0.0.1:50051)
 //	BIND_ADDR       dirección de escucha (por defecto 127.0.0.1:8080)
 //	ALLOW_DEV_AUTH  "true" monta la autenticación de juguete y /dev. SOLO sandbox.
+//	CORS_ALLOWED_ORIGINS  orígenes del portal web, separados por coma. Vacío = sin CORS.
 package main
 
 import (
@@ -90,7 +91,7 @@ func run(log *slog.Logger) error {
 	addr := env("BIND_ADDR", "127.0.0.1:8080")
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           withCORS(mux, parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
