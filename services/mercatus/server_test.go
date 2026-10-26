@@ -735,7 +735,12 @@ func TestReembolsarLoYaDevueltoNoMueveDinero(t *testing.T) {
 	if s, _, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil); s != http.StatusOK {
 		t.Fatalf("primer reembolso: %d", s)
 	}
-	before, err := f.core.GetBalance(f.ctx, f.payer)
+	// El core trabaja con el identificador interno; `f.payer` es el público acc_….
+	payerID, err := decodeID(accountPrefix, f.payer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := f.core.GetBalance(f.ctx, payerID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,7 +753,7 @@ func TestReembolsarLoYaDevueltoNoMueveDinero(t *testing.T) {
 		t.Errorf("refunded = %v, refundable = %v; se esperaba 0 y 0", out["refunded"], out["refundable"])
 	}
 
-	after, err := f.core.GetBalance(f.ctx, f.payer)
+	after, err := f.core.GetBalance(f.ctx, payerID)
 	if err != nil {
 		t.Fatal(err)
 	}
