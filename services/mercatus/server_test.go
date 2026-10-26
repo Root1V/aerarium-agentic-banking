@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/aibank/aibank/services/ratelimit"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -763,7 +764,7 @@ func TestUnLimitFueraDeRangoSeRechaza(t *testing.T) {
 
 func TestElLimiteDeTasaDevuelve429ConRetryAfter(t *testing.T) {
 	f := setup(t)
-	f.server.byClient = NewLimiter(1, 1)
+	f.server.byClient = ratelimit.NewLimiter(1, 1)
 
 	f.do(t, http.MethodGet, "/v1/accounts/"+f.payer+"/transactions", f.token, nil, nil)
 	status, out, headers := f.do(t, http.MethodGet, "/v1/accounts/"+f.payer+"/transactions", f.token, nil, nil)
@@ -780,7 +781,7 @@ func TestElLimiteDeTasaDevuelve429ConRetryAfter(t *testing.T) {
 
 func TestElEndpointDelTokenTambienEstaLimitado(t *testing.T) {
 	f := setup(t)
-	f.server.byClient = NewLimiter(1, 1)
+	f.server.byClient = ratelimit.NewLimiter(1, 1)
 
 	form := url.Values{"grant_type": {"client_credentials"}, "client_id": {"x"}, "client_secret": {"y"}}
 	_, _ = f.srv.Client().PostForm(f.srv.URL+"/oauth/token", form)
@@ -794,36 +795,6 @@ func TestElEndpointDelTokenTambienEstaLimitado(t *testing.T) {
 	// a fuerza bruta.
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("status = %d, se esperaba 429", resp.StatusCode)
-	}
-}
-
-func TestElCuboDeFichasSeRellenaConElTiempo(t *testing.T) {
-	limiter := NewLimiter(10, 2)
-	base := time.Now()
-	limiter.now = func() time.Time { return base }
-
-	if ok, _ := limiter.Allow("k"); !ok {
-		t.Fatal("la primera petición debería pasar")
-	}
-	limiter.Allow("k")
-	if ok, wait := limiter.Allow("k"); ok || wait <= 0 {
-		t.Fatalf("la tercera debería rebotar con espera, ok=%v wait=%v", ok, wait)
-	}
-
-	// A 10 por segundo, un décimo de segundo devuelve una ficha.
-	limiter.now = func() time.Time { return base.Add(150 * time.Millisecond) }
-	if ok, _ := limiter.Allow("k"); !ok {
-		t.Error("el cubo no se rellenó con el paso del tiempo")
-	}
-}
-
-func TestElLimitePorCuentaNoAfectaAOtraCuenta(t *testing.T) {
-	limiter := NewLimiter(1, 1)
-	limiter.Allow("cuenta-a")
-
-	// Un agente en bucle no puede consumir la cuota de los demás.
-	if ok, _ := limiter.Allow("cuenta-b"); !ok {
-		t.Error("una cuenta agotó la cuota de otra")
 	}
 }
 
