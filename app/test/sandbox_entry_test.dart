@@ -138,4 +138,46 @@ void main() {
     expect(recorder.requests, isEmpty);
     expect(find.textContaining('Escribe un nombre'), findsOneWidget);
   });
+
+  testWidgets('el alta real solo aparece si se cablea', (tester) async {
+    final (client, _) = _client();
+    var abierta = false;
+
+    await tester.pumpWidget(MaterialApp(
+      home: SandboxEntryScreen(client: client, onSession: (_) {}),
+    ));
+    expect(find.text('Abrir una cuenta'), findsNothing);
+
+    await tester.pumpWidget(MaterialApp(
+      home: SandboxEntryScreen(
+        client: client,
+        onSession: (_) {},
+        onOpenAccount: () => abierta = true,
+      ),
+    ));
+    // Va debajo del camino rápido: en una pantalla de prueba de 800x600 queda
+    // fuera de la vista, como quedaría en un teléfono pequeño.
+    await tester.ensureVisible(find.text('Abrir una cuenta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Abrir una cuenta'));
+    expect(abierta, isTrue);
+  });
+
+  test('la sesión de un cliente recién aprobado lleva la clave del entorno',
+      () async {
+    final requests = <http.Request>[];
+    final client = SandboxClient(
+      baseUrl: Uri.parse('http://sandbox.test'),
+      devKey: 'secreta',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode({'customer_id': 'c-1', 'token': 'dev-x'}), 201);
+      }),
+    );
+
+    expect(await client.createSession('c-1'), 'dev-x');
+    expect(requests.single.url.path, '/dev/sessions');
+    expect(requests.single.headers['X-Dev-Key'], 'secreta');
+    expect((jsonDecode(requests.single.body) as Map)['customer_id'], 'c-1');
+  });
 }

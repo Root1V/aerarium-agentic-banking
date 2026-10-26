@@ -20,8 +20,9 @@ import (
 // siempre, y el que corresponde a un BFF que solo sirve a la app móvil.
 
 // Cabeceras que el portal manda. Idempotency-Key es imprescindible: sin ella el
-// navegador no dejaría pasar una transferencia.
-const corsAllowedHeaders = "Authorization, Content-Type, Idempotency-Key, X-Dev-Key"
+// navegador no dejaría pasar una transferencia. X-Onboarding-Reference, igual
+// para consultar el estado de un alta.
+const corsAllowedHeaders = "Authorization, Content-Type, Idempotency-Key, X-Dev-Key, X-Onboarding-Reference"
 
 func parseOrigins(raw string) map[string]bool {
 	origins := make(map[string]bool)

@@ -61,6 +61,30 @@ class BffClient {
     return TransferResult.fromJson(json);
   }
 
+  // ------------------------------------------------------------------ alta
+
+  /// Envía el alta. Sin sesión: quien se da de alta todavía no es cliente, y
+  /// mandar una cabecera de autorización vacía sería ruido.
+  Future<OnboardingResult> submitOnboarding(OnboardingRequest request) async {
+    final json = await _send(() => _http.post(
+          baseUrl.replace(path: '/v1/onboarding'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(request.toJson()),
+        ));
+    return OnboardingResult.fromJson(json);
+  }
+
+  /// Consulta un alta. La referencia va en una cabecera y no en la URL: las URL
+  /// acaban en los logs de cualquier proxy, y la referencia funciona como un
+  /// token.
+  Future<OnboardingResult> onboardingStatus(String reference) async {
+    final json = await _send(() => _http.get(
+          baseUrl.replace(path: '/v1/onboarding'),
+          headers: {'X-Onboarding-Reference': reference},
+        ));
+    return OnboardingResult.fromJson(json);
+  }
+
   void close() => _http.close();
 
   // ------------------------------------------------------------ transporte

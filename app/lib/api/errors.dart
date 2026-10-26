@@ -16,6 +16,13 @@ enum ApiErrorCode {
   currencyMismatch,
   unavailable,
   network,
+  // Alta de clientes.
+  invalidDocument,
+  invalidName,
+  invalidDate,
+  underage,
+  rateLimited,
+  referenceConflict,
   unknown,
 }
 
@@ -40,6 +47,12 @@ class ApiError implements Exception {
         'invalid_request' || 'missing_idempotency_key' => ApiErrorCode.invalidRequest,
         'currency_mismatch' => ApiErrorCode.currencyMismatch,
         'unavailable' => ApiErrorCode.unavailable,
+        'invalid_document' => ApiErrorCode.invalidDocument,
+        'invalid_name' => ApiErrorCode.invalidName,
+        'invalid_date' => ApiErrorCode.invalidDate,
+        'underage' => ApiErrorCode.underage,
+        'rate_limited' => ApiErrorCode.rateLimited,
+        'reference_conflict' || 'invalid_reference' => ApiErrorCode.referenceConflict,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -61,6 +74,14 @@ class ApiError implements Exception {
         ApiErrorCode.invalidRequest => 'Revisa los datos e intenta de nuevo.',
         ApiErrorCode.unavailable || ApiErrorCode.network =>
           'No pudimos conectarnos. Intenta de nuevo.',
+        ApiErrorCode.invalidDocument => 'El DNI tiene 8 dígitos.',
+        ApiErrorCode.invalidName => 'Escribe tus nombres y tus apellidos.',
+        ApiErrorCode.invalidDate => 'Revisa la fecha de nacimiento.',
+        ApiErrorCode.underage =>
+          'Necesitas ser mayor de edad para abrir una cuenta.',
+        ApiErrorCode.rateLimited =>
+          'Demasiados intentos. Espera un momento y vuelve a intentarlo.',
+        ApiErrorCode.referenceConflict => 'Algo salió mal. Intenta de nuevo.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',
       };
 

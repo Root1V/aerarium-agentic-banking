@@ -80,8 +80,17 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		server = server.WithConsents(store)
+
+		svc, onboardingStore, product, err := setupOnboarding(ctx, db, core, "USD")
+		if err != nil {
+			return err
+		}
+		server = server.WithOnboarding(svc, onboardingStore, product)
+		log.Info("alta de clientes habilitada", "producto", product,
+			"dni_de_prueba", TestDNIRejected+" rechazo, "+TestDNIInconclusive+" revisión, "+
+				TestDNIWatchlist+" listas")
 	} else {
-		log.Warn("sin DATABASE_URL: el canal arranca sin las pantallas de permiso del modelo B")
+		log.Warn("sin DATABASE_URL: el canal arranca sin permisos del modelo B ni alta de clientes")
 	}
 
 	mux := http.NewServeMux()

@@ -4,6 +4,7 @@ import 'api/client.dart';
 import 'sandbox/sandbox_client.dart';
 import 'sandbox/sandbox_entry_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'theme.dart';
 
 /// Configuración de compilación.
@@ -74,9 +75,35 @@ class AiBankApp extends StatelessWidget {
   }
 
   Widget _sandboxEntry() {
+    final sandbox = SandboxClient(baseUrl: Uri.parse(baseUrl), devKey: _devKey);
+
     return Builder(
       builder: (context) => SandboxEntryScreen(
-        client: SandboxClient(baseUrl: Uri.parse(baseUrl), devKey: _devKey),
+        client: sandbox,
+        onOpenAccount: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => OnboardingScreen(
+            // El alta no lleva sesión: el token del cliente queda vacío y el
+            // cliente no lo manda en estas llamadas.
+            client: BffClient(baseUrl: Uri.parse(baseUrl), token: () => ''),
+            onApproved: (result) async {
+              // En producción, aquí se registra la passkey del dispositivo. En
+              // el sandbox no hay otra forma de autenticar a nadie.
+              final token = await sandbox.createSession(result.customerId!);
+              if (!context.mounted) return;
+              // Se vacía la pila: volver atrás desde la cuenta recién abierta no
+              // debe llevar al formulario del alta.
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute<void>(
+                  builder: (_) => HomeScreen(
+                    client: BffClient(baseUrl: Uri.parse(baseUrl), token: () => token),
+                    accountId: result.accountId!,
+                  ),
+                ),
+                (_) => false,
+              );
+            },
+          ),
+        )),
         // Se reemplaza la ruta en vez de apilarla: volver atrás desde el
         // inicio no debe llevar a crear otro titular.
         onSession: (session) => Navigator.of(context).pushReplacement(
