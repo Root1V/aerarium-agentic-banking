@@ -396,8 +396,11 @@ func TestElTitularVeYRetiraSusPermisos(t *testing.T) {
 		t.Fatalf("se esperaba 1 permiso, hay %d", len(mandates))
 	}
 	first := mandates[0].(map[string]any)
-	if first["granted_to"] != f.clientID {
-		t.Errorf("granted_to = %v", first["granted_to"])
+	// El titular ve el nombre registrado de la plataforma, no su client_id:
+	// concedió el permiso a "Mercatus", y por ese nombre lo va a buscar para
+	// retirarlo. Este test comprobaba antes el client_id, y eso fijaba el error.
+	if first["granted_to"] != "Mercatus" || first["granted_to"] == f.clientID {
+		t.Errorf("granted_to = %v; se esperaba el nombre registrado", first["granted_to"])
 	}
 	if first["remaining"] != float64(20_000000) {
 		t.Errorf("remaining = %v", first["remaining"])

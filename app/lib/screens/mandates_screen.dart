@@ -190,9 +190,16 @@ class _MandateCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             // Lo gastado va antes que los topes: es la pregunta que trae aquí a
-            // alguien que sospecha de un cobro.
+            // alguien que sospecha de un cobro. Y primero lo de hoy, que es lo
+            // que la persona puede contrastar con lo que hizo su agente.
+            if (mandate.spend case final spend?) ...[
+              _Row(label: 'Hoy', value: _spent(spend.today, spend.todayCount)),
+              _Row(label: 'Este mes', value: _spent(spend.month, spend.monthCount)),
+              if (spend.inFlight.amountMicros > 0)
+                _Row(label: 'En curso', value: spend.inFlight.format()),
+            ],
             _Row(
-              label: 'Gastado',
+              label: 'Gastado en total',
               value: Money(mandate.consumedMicros, mandate.currency).format(),
             ),
             if (mandate.remainingMicros != null)
@@ -232,6 +239,13 @@ class _MandateCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// "0,42 USD · 380 pagos". El número de pagos importa tanto como el importe:
+  /// 0,42 USD en un pago y en 380 son dos historias distintas.
+  static String _spent(Money amount, int count) {
+    if (count == 0) return amount.format();
+    return '${amount.format()} · ${count == 1 ? '1 pago' : '$count pagos'}';
   }
 
   /// Fecha en formato local sin depender de `intl`: la app no tiene esa

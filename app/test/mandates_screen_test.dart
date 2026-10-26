@@ -90,7 +90,7 @@ void main() {
     expect(find.text('Mercatus'), findsOneWidget);
     // Lo gastado va primero porque es la pregunta que trae aquí a alguien que
     // sospecha de un cobro.
-    expect(find.text('Gastado'), findsOneWidget);
+    expect(find.text('Gastado en total'), findsOneWidget);
     expect(find.text('8,00 USD'), findsOneWidget);
     expect(find.text('Disponible'), findsOneWidget);
     expect(find.text('12,00 USD'), findsOneWidget);
@@ -214,6 +214,6 @@ void main() {
     // Mostrar "Disponible: 0" donde no hay tope sería exactamente lo contrario
     // de lo que ocurre.
     expect(find.text('Disponible'), findsNothing);
-    expect(find.text('Gastado'), findsOneWidget);
+    expect(find.text('Gastado en total'), findsOneWidget);
   });
 }

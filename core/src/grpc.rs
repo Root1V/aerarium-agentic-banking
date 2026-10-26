@@ -725,6 +725,36 @@ impl AuthorizationService for AuthorizationApi {
         Ok(Response::new(authorization_to_pb(&auth)))
     }
 
+    async fn lookup_hold_grantees(
+        &self,
+        request: Request<pb::LookupHoldGranteesRequest>,
+    ) -> Result<Response<pb::LookupHoldGranteesResponse>, Status> {
+        let ids = request.into_inner().transaction_ids;
+        // Una página del extracto, no un volcado: el límite evita que una sola
+        // llamada se convierta en una consulta sin fondo.
+        if ids.len() > 200 {
+            return Err(Status::invalid_argument("como máximo 200 transaction_ids por llamada"));
+        }
+        let ids = ids
+            .iter()
+            .map(|id| parse_uuid(id, "transaction_ids"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let holds = self
+            .authorizations
+            .lookup_hold_grantees(&ids)
+            .await
+            .map_err(auth_to_status)?
+            .into_iter()
+            .map(|(transaction_id, grantee)| pb::HoldGrantee {
+                transaction_id: transaction_id.to_string(),
+                grantee,
+            })
+            .collect();
+
+        Ok(Response::new(pb::LookupHoldGranteesResponse { holds }))
+    }
+
     async fn summarize_live_holds(
         &self,
         request: Request<pb::SummarizeLiveHoldsRequest>,
@@ -963,6 +993,39 @@ impl MandateService for MandateApi {
 
         let usage = self.with_usage(mandate).await?;
         Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+    }
+
+    async fn summarize_spend(
+        &self,
+        request: Request<pb::SummarizeSpendRequest>,
+    ) -> Result<Response<pb::SummarizeSpendResponse>, Status> {
+        let req = request.into_inner();
+        let granted_by = parse_uuid(&req.granted_by, "granted_by")?;
+        if req.time_zone.is_empty() {
+            return Err(Status::invalid_argument("falta time_zone"));
+        }
+
+        let money = |micros: i64, currency: &str| pb::Money {
+            amount_micros: micros,
+            currency: currency.to_string(),
+        };
+        let mandates = self
+            .mandates
+            .summarize_spend(granted_by, chrono::Utc::now(), &req.time_zone)
+            .await
+            .map_err(mandate_status)?
+            .into_iter()
+            .map(|m| pb::MandateSpend {
+                mandate_id: m.mandate_id.to_string(),
+                today: Some(money(m.today_micros, &m.currency)),
+                today_count: m.today_count,
+                month: Some(money(m.month_micros, &m.currency)),
+                month_count: m.month_count,
+                in_flight: Some(money(m.in_flight_micros, &m.currency)),
+            })
+            .collect();
+
+        Ok(Response::new(pb::SummarizeSpendResponse { mandates }))
     }
 
     async fn list_mandates(

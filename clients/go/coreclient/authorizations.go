@@ -169,6 +169,26 @@ func (c *Client) SummarizeLiveHolds(ctx context.Context, payerAccountID string) 
 	return groups, nil
 }
 
+// LookupHoldGrantees dice a qué integración pertenece cada asiento de retención
+// hecho bajo un mandato. Devuelve un mapa transaction_id → client_id; los
+// asientos que no son retenciones bajo mandato no aparecen.
+func (c *Client) LookupHoldGrantees(ctx context.Context, transactionIDs []string) (map[string]string, error) {
+	out := make(map[string]string)
+	if len(transactionIDs) == 0 {
+		return out, nil
+	}
+	var trailer metadata.MD
+	resp, err := c.authorizations.LookupHoldGrantees(ctx,
+		&corev1.LookupHoldGranteesRequest{TransactionIds: transactionIDs}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translateAuthorization(err, trailer)
+	}
+	for _, h := range resp.GetHolds() {
+		out[h.GetTransactionId()] = h.GetGrantee()
+	}
+	return out, nil
+}
+
 func toAuthorization(pb *corev1.Authorization) *Authorization {
 	if pb == nil {
 		return nil

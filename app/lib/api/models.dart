@@ -28,6 +28,10 @@ class Movement {
 
   final String kind;
   final String description;
+
+  /// Nombre registrado de la plataforma, en los pagos hechos con un permiso.
+  /// Vacío en todo lo demás.
+  final String merchant;
   final DateTime postedAt;
 
   const Movement({
@@ -38,6 +42,7 @@ class Movement {
     required this.kind,
     required this.description,
     required this.postedAt,
+    this.merchant = '',
   });
 
   factory Movement.fromJson(Map<String, dynamic> json) => Movement(
@@ -47,6 +52,7 @@ class Movement {
         sign: json['sign'] as int,
         kind: json['kind'] as String,
         description: (json['description'] as String?) ?? '',
+        merchant: (json['merchant'] as String?) ?? '',
         postedAt: DateTime.parse(json['posted_at'] as String),
       );
 
@@ -54,8 +60,13 @@ class Movement {
   Money get signedAmount =>
       sign < 0 ? Money(-amount.amountMicros, amount.currency) : amount;
 
+  /// Si es un pago hecho por una plataforma con permiso, con plataforma conocida.
+  bool get isPlatformPayment => kind == 'authorization_hold' && merchant.isNotEmpty;
+
   /// Etiqueta legible del tipo de movimiento.
-  String get label => switch (kind) {
+  String get label => isPlatformPayment ? 'Pago a $merchant' : _kindLabel;
+
+  String get _kindLabel => switch (kind) {
         'deposit' => 'Depósito',
         'withdrawal' => 'Retiro',
         'p2p_transfer' => 'Transferencia',
@@ -130,12 +141,16 @@ class Home {
   final List<PendingGroup> pending;
   final List<Movement> movements;
 
+  /// Si hay movimientos más antiguos que los de esta pantalla.
+  final bool hasMore;
+
   const Home({
     required this.account,
     required this.balance,
     required this.movements,
     this.retained,
     this.pending = const [],
+    this.hasMore = false,
   });
 
   factory Home.fromJson(Map<String, dynamic> json) => Home(
@@ -150,6 +165,7 @@ class Home {
         movements: ((json['movements'] as List<dynamic>?) ?? const [])
             .map((m) => Movement.fromJson(m as Map<String, dynamic>))
             .toList(),
+        hasMore: (json['has_more'] as bool?) ?? false,
       );
 
   /// Si hay algo retenido que contar. Falso tanto si es cero como si se
@@ -261,6 +277,10 @@ class Mandate {
   final DateTime expiresAt;
   final DateTime? revokedAt;
 
+  /// Lo gastado hoy y este mes. `null` si el banco no pudo calcularlo: la
+  /// pantalla sigue siendo útil sin él, y lo esencial es poder retirar.
+  final MandateSpend? spend;
+
   const Mandate({
     required this.id,
     required this.accountId,
@@ -273,6 +293,7 @@ class Mandate {
     required this.remainingMicros,
     required this.expiresAt,
     required this.revokedAt,
+    this.spend,
   });
 
   /// Si el permiso habilita pagos ahora mismo.
@@ -296,9 +317,38 @@ class Mandate {
         revokedAt: json['revoked_at'] == null
             ? null
             : DateTime.parse(json['revoked_at'] as String),
+        spend: json['spend'] == null
+            ? null
+            : MandateSpend.fromJson(json['spend'] as Map<String, dynamic>),
       );
 }
 
+/// Lo gastado bajo un permiso, con "hoy" contado en la hora de la persona.
+class MandateSpend {
+  final Money today;
+  final int todayCount;
+  final Money month;
+  final int monthCount;
+
+  /// Retenido sin cobrar. Ya va incluido en `today` y `month`.
+  final Money inFlight;
+
+  const MandateSpend({
+    required this.today,
+    required this.todayCount,
+    required this.month,
+    required this.monthCount,
+    required this.inFlight,
+  });
+
+  factory MandateSpend.fromJson(Map<String, dynamic> json) => MandateSpend(
+        today: Money.fromJson(json['today'] as Map<String, dynamic>),
+        todayCount: json['today_count'] as int,
+        month: Money.fromJson(json['month'] as Map<String, dynamic>),
+        monthCount: json['month_count'] as int,
+        inFlight: Money.fromJson(json['in_flight'] as Map<String, dynamic>),
+      );
+}
 
 /// Datos del alta de nivel 1: lo justo para verificar a la persona con la fuente
 /// oficial. Cada campo de más es gente que abandona el formulario.

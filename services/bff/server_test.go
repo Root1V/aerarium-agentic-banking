@@ -662,3 +662,177 @@ func bffDatabaseURL() string {
 	}
 	return "postgres://aibank:aibank_dev@localhost:5434/aibank?sslmode=disable"
 }
+
+// ---------------------------------------------------------------- centro de control
+
+// serverWithRegistry monta el canal con el registro de integraciones, que es lo
+// que habilita las rutas de permisos y los nombres registrados.
+func serverWithRegistry(t *testing.T, f *fixture) (*httptest.Server, *oauth.Store) {
+	t.Helper()
+	db, err := sql.Open("postgres", bffDatabaseURL())
+	if err != nil {
+		t.Fatalf("abrir base: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := oauth.NewStore(db)
+	if err := store.Migrate(f.ctx); err != nil {
+		t.Skipf("base no disponible: %v", err)
+	}
+	ts := httptest.NewServer(bff.NewServer(f.core, f.auth, nil).WithConsents(store).Handler())
+	t.Cleanup(ts.Close)
+	return ts, store
+}
+
+func getJSON(t *testing.T, f *fixture, url string, out any) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(f.ctx, http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+f.alice.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s: status %d", url, resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Sin la plataforma, el historial de un agente son cien filas anónimas de
+// "Pago autorizado". Con ella, la app puede agruparlas.
+func TestCadaPagoDeUnAgenteLlevaSuPlataformaEnElHistorial(t *testing.T) {
+	f := setup(t)
+	grantee := "plataforma-" + uuid.NewString()[:8]
+	f.payUnderMandate(t, grantee, 1_000, 2_000, 3_000)
+
+	var home struct {
+		Movements []struct {
+			Kind     string `json:"kind"`
+			Merchant string `json:"merchant"`
+		} `json:"movements"`
+	}
+	getJSON(t, f, f.srv.URL+"/v1/home?account_id="+f.alice.accountID, &home)
+
+	var pagos, otros int
+	for _, m := range home.Movements {
+		switch m.Kind {
+		case "authorization_hold":
+			pagos++
+			if m.Merchant != grantee {
+				t.Errorf("pago sin su plataforma: %+v", m)
+			}
+		default:
+			otros++
+			// El depósito inicial no es un pago a nadie: no se le inventa una.
+			if m.Merchant != "" {
+				t.Errorf("movimiento %s con plataforma inventada: %q", m.Kind, m.Merchant)
+			}
+		}
+	}
+	if pagos != 3 || otros == 0 {
+		t.Errorf("pagos = %d, otros = %d", pagos, otros)
+	}
+}
+
+// La persona concedió el permiso a "Mercatus", no a "mercatus_sandbox". Por ese
+// nombre lo va a buscar para retirarlo, y por ese nombre tiene que verlo.
+func TestLosPermisosYLosPagosUsanElNombreRegistrado(t *testing.T) {
+	f := setup(t)
+	srv, store := serverWithRegistry(t, f)
+
+	grantee := "plataforma-" + uuid.NewString()[:8]
+	if _, err := store.Register(f.ctx, grantee, "Plataforma de Prueba", []string{oauth.ScopePaymentsWrite}); err != nil {
+		t.Fatal(err)
+	}
+	f.payUnderMandate(t, grantee, 1_000)
+
+	var mandates struct {
+		Mandates []struct {
+			GrantedTo string `json:"granted_to"`
+		} `json:"mandates"`
+	}
+	getJSON(t, f, srv.URL+"/v1/mandates", &mandates)
+	if len(mandates.Mandates) != 1 || mandates.Mandates[0].GrantedTo != "Plataforma de Prueba" {
+		t.Errorf("permisos = %+v; se esperaba el nombre registrado, no %q", mandates.Mandates, grantee)
+	}
+
+	var home struct {
+		Movements []struct {
+			Kind     string `json:"kind"`
+			Merchant string `json:"merchant"`
+		} `json:"movements"`
+	}
+	getJSON(t, f, srv.URL+"/v1/home?account_id="+f.alice.accountID, &home)
+	for _, m := range home.Movements {
+		if m.Kind == "authorization_hold" && m.Merchant != "Plataforma de Prueba" {
+			t.Errorf("pago con %q, se esperaba el nombre registrado", m.Merchant)
+		}
+	}
+}
+
+func TestCadaPermisoTraeLoGastadoHoyYEsteMes(t *testing.T) {
+	f := setup(t)
+	srv, _ := serverWithRegistry(t, f)
+	f.payUnderMandate(t, "plataforma-"+uuid.NewString()[:8], 1_000, 2_000, 500_000)
+
+	var mandates struct {
+		Mandates []struct {
+			Spend *struct {
+				Today struct {
+					AmountMicros int64 `json:"amount_micros"`
+				} `json:"today"`
+				TodayCount int64 `json:"today_count"`
+				Month      struct {
+					AmountMicros int64 `json:"amount_micros"`
+				} `json:"month"`
+				InFlight struct {
+					AmountMicros int64 `json:"amount_micros"`
+				} `json:"in_flight"`
+			} `json:"spend"`
+		} `json:"mandates"`
+	}
+	getJSON(t, f, srv.URL+"/v1/mandates", &mandates)
+
+	sp := mandates.Mandates[0].Spend
+	if sp == nil {
+		t.Fatal("falta el gasto del permiso")
+	}
+	if sp.Today.AmountMicros != 503_000 || sp.TodayCount != 3 {
+		t.Errorf("hoy = %d en %d pagos; se esperaba 503000 en 3", sp.Today.AmountMicros, sp.TodayCount)
+	}
+	// Nada se cobró todavía: todo está en curso, y el mes incluye lo de hoy.
+	if sp.InFlight.AmountMicros != 503_000 || sp.Month.AmountMicros != 503_000 {
+		t.Errorf("en curso = %d, mes = %d", sp.InFlight.AmountMicros, sp.Month.AmountMicros)
+	}
+}
+
+// La pantalla de inicio trae los últimos movimientos, no todos. La app necesita
+// saber si hay más atrás para no rotular "10 pagos" lo que fueron 121.
+func TestElInicioDiceSiHayMovimientosMasAntiguos(t *testing.T) {
+	f := setup(t)
+
+	var poco struct {
+		HasMore bool `json:"has_more"`
+	}
+	getJSON(t, f, f.srv.URL+"/v1/home?account_id="+f.alice.accountID, &poco)
+	if poco.HasMore {
+		t.Error("con un solo movimiento dice que hay más")
+	}
+
+	pagos := make([]int64, 12)
+	for i := range pagos {
+		pagos[i] = 1_000
+	}
+	f.payUnderMandate(t, "plataforma-"+uuid.NewString()[:8], pagos...)
+
+	var mucho struct {
+		HasMore   bool              `json:"has_more"`
+		Movements []json.RawMessage `json:"movements"`
+	}
+	getJSON(t, f, f.srv.URL+"/v1/home?account_id="+f.alice.accountID, &mucho)
+	if !mucho.HasMore {
+		t.Errorf("con 13 movimientos y %d en pantalla, no dice que hay más", len(mucho.Movements))
+	}
+}

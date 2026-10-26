@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.hold_transaction_id AS \"transaction_id!\", m.grantee AS \"grantee!\"\n              FROM authorizations a\n              JOIN authorization_mandates am ON am.authorization_id = a.id\n              JOIN payment_mandates m ON m.id = am.mandate_id\n             WHERE a.hold_transaction_id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "transaction_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "grantee!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6db30ea65359b5c33b60c58c84aaccf41194bb1b544bef4133bf84b59ab6e570"
+}

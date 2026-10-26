@@ -407,6 +407,22 @@ message HoldGroup {
   google.protobuf.Timestamp last_expires_at = 6;
 }
 
+message LookupHoldGranteesRequest {
+  // Asientos de retención (transaction_id del extracto). Máximo 200 por llamada.
+  repeated string transaction_ids = 1;
+}
+
+message HoldGrantee {
+  string transaction_id = 1;
+  // client_id de la integración titular del mandato.
+  string grantee = 2;
+}
+
+message LookupHoldGranteesResponse {
+  // Solo los asientos que son retenciones hechas bajo un mandato.
+  repeated HoldGrantee holds = 1;
+}
+
 message SummarizeLiveHoldsResponse {
   // Ordenados de mayor a menor importe retenido.
   repeated HoldGroup groups = 1;
@@ -429,6 +445,10 @@ service AuthorizationService {
   // llamada deja cientos de retenciones vivas, y un total calculado sumando una
   // página sería falso en cuanto la lista no cupiera en ella.
   rpc SummarizeLiveHolds(SummarizeLiveHoldsRequest) returns (SummarizeLiveHoldsResponse);
+  // A qué integración pertenece cada asiento de retención. Para que el
+  // historial diga "pagos a Mercatus" sin acoplar el extracto del ledger a los
+  // mandatos.
+  rpc LookupHoldGrantees(LookupHoldGranteesRequest) returns (LookupHoldGranteesResponse);
 }
 
 // ---------------------------------------------------------------- mandatos
@@ -502,6 +522,29 @@ message FindActiveMandateRequest {
   string grantee = 2;
 }
 
+message SummarizeSpendRequest {
+  // Titular cuyos mandatos se resumen.
+  string granted_by = 1;
+  // Zona IANA de quien mira ("America/Lima"). "Hoy" es su hoy, no el de UTC.
+  string time_zone = 2;
+}
+
+// Lo gastado bajo un mandato. Misma regla que su consumo: retenido y cobrado,
+// menos lo reembolsado, sin lo liberado.
+message MandateSpend {
+  string mandate_id = 1;
+  Money today = 2;
+  int64 today_count = 3;
+  Money month = 4;
+  int64 month_count = 5;
+  // Retenido sin cobrar. Incluido en today y month.
+  Money in_flight = 6;
+}
+
+message SummarizeSpendResponse {
+  repeated MandateSpend mandates = 1;
+}
+
 message ListMandatesRequest {
   // Titular cuyos mandatos se listan.
   string granted_by = 1;
@@ -537,4 +580,6 @@ service MandateService {
   // Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
   // transacción.
   rpc AuthorizeUnderMandate(AuthorizeUnderMandateRequest) returns (AuthorizeUnderMandateResponse);
+  // Lo gastado en cada mandato del titular, hoy y en el mes, en su zona horaria.
+  rpc SummarizeSpend(SummarizeSpendRequest) returns (SummarizeSpendResponse);
 }

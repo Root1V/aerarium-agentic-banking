@@ -431,6 +431,37 @@ impl AuthorizationService {
         Ok(released)
     }
 
+    /// A qué integración pertenece cada asiento de retención, para los que se
+    /// hicieron bajo un mandato.
+    ///
+    /// Existe para que el historial pueda decir "pago a Mercatus" en vez de un
+    /// "Pago autorizado" anónimo. Vive aquí y no como un join dentro del extracto
+    /// del ledger: el ledger es genérico —lo usan tarjetas, rieles y
+    /// transferencias— y acoplarlo a los mandatos lo haría saber de un producto.
+    ///
+    /// Los asientos que no son retenciones bajo mandato simplemente no aparecen.
+    pub async fn lookup_hold_grantees(
+        &self,
+        transaction_ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, String)>, AuthorizationError> {
+        if transaction_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query!(
+            r#"
+            SELECT a.hold_transaction_id AS "transaction_id!", m.grantee AS "grantee!"
+              FROM authorizations a
+              JOIN authorization_mandates am ON am.authorization_id = a.id
+              JOIN payment_mandates m ON m.id = am.mandate_id
+             WHERE a.hold_transaction_id = ANY($1)
+            "#,
+            transaction_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| (r.transaction_id, r.grantee)).collect())
+    }
+
     /// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
     ///
     /// Cuenta todo lo que sigue en AUTHORIZED, incluido lo vencido que el

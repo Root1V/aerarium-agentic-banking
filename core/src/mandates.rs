@@ -157,6 +157,23 @@ pub struct GrantCommand {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Lo gastado bajo un mandato en el día y en el mes en curso.
+///
+/// "Gastado" sigue la misma regla que el consumo del mandato: cuenta lo retenido
+/// y lo cobrado, descuenta lo reembolsado y excluye lo liberado. Así la cifra que
+/// ve la persona es la misma que va agotando su tope, y no hay dos verdades.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MandateSpend {
+    pub mandate_id: Uuid,
+    pub currency: String,
+    pub today_micros: i64,
+    pub today_count: i64,
+    pub month_micros: i64,
+    pub month_count: i64,
+    /// Lo retenido todavía sin cobrar. Está incluido en `today` y `month`.
+    pub in_flight_micros: i64,
+}
+
 pub struct MandateService {
     pool: PgPool,
 }
@@ -408,6 +425,73 @@ impl MandateService {
         .fetch_all(&self.pool)
         .await?;
         Ok(mandates)
+    }
+
+    /// Lo gastado en cada mandato del titular, hoy y en el mes en curso.
+    ///
+    /// "Hoy" es el hoy de quien mira, no el de UTC: a las 21:00 en Lima ya es
+    /// mañana en UTC, y una persona que revisa su gasto del día a esa hora vería
+    /// la cifra en cero. Por eso la zona horaria es un parámetro, y los límites del
+    /// día y del mes se calculan en esa zona.
+    ///
+    /// `now` también es parámetro: el mismo instante para todos los mandatos, y
+    /// una forma de probar los bordes del día sin depender del reloj.
+    pub async fn summarize_spend(
+        &self,
+        granted_by: Uuid,
+        now: DateTime<Utc>,
+        time_zone: &str,
+    ) -> Result<Vec<MandateSpend>, MandateError> {
+        let rows = sqlx::query!(
+            r#"
+            WITH bounds AS (
+                SELECT date_trunc('day', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3 AS day_start,
+                       date_trunc('month', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3 AS month_start
+            )
+            SELECT m.id AS "mandate_id!",
+                   m.currency AS "currency!",
+                   COALESCE(SUM(a.amount_micros - a.refunded_micros)
+                            FILTER (WHERE a.created_at >= b.day_start), 0)::BIGINT AS "today_micros!",
+                   COUNT(a.id) FILTER (WHERE a.created_at >= b.day_start) AS "today_count!",
+                   COALESCE(SUM(a.amount_micros - a.refunded_micros)
+                            FILTER (WHERE a.created_at >= b.month_start), 0)::BIGINT AS "month_micros!",
+                   COUNT(a.id) FILTER (WHERE a.created_at >= b.month_start) AS "month_count!",
+                   COALESCE(SUM(a.amount_micros)
+                            FILTER (WHERE a.status = 'AUTHORIZED'), 0)::BIGINT AS "in_flight_micros!"
+              FROM payment_mandates m
+             CROSS JOIN bounds b
+              LEFT JOIN authorization_mandates am ON am.mandate_id = m.id
+              LEFT JOIN authorizations a ON a.id = am.authorization_id AND a.status <> 'RELEASED'
+             WHERE m.granted_by = $1
+             GROUP BY m.id, m.currency
+            "#,
+            granted_by,
+            now,
+            time_zone,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| match e.as_database_error() {
+            // 22023: zona horaria desconocida. Es un error del llamador, no del
+            // banco, y conviene que lo vea como tal.
+            Some(db) if db.code().as_deref() == Some("22023") => {
+                MandateError::Invalid(format!("zona horaria desconocida: {time_zone}"))
+            }
+            _ => MandateError::from(e),
+        })?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| MandateSpend {
+                mandate_id: r.mandate_id,
+                currency: r.currency,
+                today_micros: r.today_micros,
+                today_count: r.today_count,
+                month_micros: r.month_micros,
+                month_count: r.month_count,
+                in_flight_micros: r.in_flight_micros,
+            })
+            .collect())
     }
 
     async fn find_mandate(&self, id: Uuid) -> Result<Option<Mandate>, MandateError> {
