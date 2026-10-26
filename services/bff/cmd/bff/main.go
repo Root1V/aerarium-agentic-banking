@@ -10,7 +10,13 @@
 //	DATABASE_URL    PostgreSQL. Habilita las pantallas de permiso del modelo B.
 //	CORE_ADDR       core gRPC (por defecto 127.0.0.1:50051)
 //	BIND_ADDR       dirección de escucha (por defecto 127.0.0.1:8080)
-//	ALLOW_DEV_AUTH  "true" monta la autenticación de juguete y /dev. SOLO sandbox.
+//	ALLOW_DEV_AUTH  "true" monta la autenticación de juguete, /dev y el alta con
+//	                KYC simulado. SOLO sandbox.
+//	PASSKEY_RP_ID       dominio al que quedan atadas las passkeys. Con él (y con
+//	                    DATABASE_URL) el canal autentica de verdad.
+//	PASSKEY_RP_ORIGINS  orígenes aceptados, separados por coma (https://<RP_ID>,
+//	                    android:apk-key-hash:<hash>).
+//	PASSKEY_RP_NAME     nombre que muestra el sistema operativo. Por defecto AIBank.
 //	CORS_ALLOWED_ORIGINS  orígenes del portal web, separados por coma. Vacío = sin CORS.
 package main
 
@@ -29,6 +35,7 @@ import (
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/bff/sim"
 	"github.com/aibank/aibank/services/oauth"
+	"github.com/aibank/aibank/services/onboarding"
 	_ "github.com/lib/pq"
 )
 
@@ -44,17 +51,26 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// La autenticación real son passkeys FIDO2 vinculadas al dispositivo, y no
-	// están construidas. Hasta que lo estén este binario SOLO puede arrancar en
-	// modo sandbox, y hay que pedirlo explícitamente: un servicio que se queda
-	// con el autenticador de juguete porque nadie configuró el de verdad es
-	// exactamente el accidente que este error impide.
-	if os.Getenv("ALLOW_DEV_AUTH") != "true" {
-		return errors.New(
-			"este binario solo sabe autenticar con el sustituto de desarrollo; " +
-				"arráncalo con ALLOW_DEV_AUTH=true y NUNCA contra datos reales")
+	devAuth := os.Getenv("ALLOW_DEV_AUTH") == "true"
+	dsn := os.Getenv("DATABASE_URL")
+	rpID := os.Getenv("PASSKEY_RP_ID")
+
+	// Sin una forma de autenticar, el canal no arranca. Las passkeys son la
+	// forma real; el sustituto de desarrollo hay que pedirlo explícitamente, y
+	// solo vale para el sandbox. Un servicio que se queda con el autenticador de
+	// juguete porque nadie configuró el de verdad es exactamente el accidente que
+	// este error impide.
+	if rpID != "" && dsn == "" {
+		return errors.New("PASSKEY_RP_ID necesita DATABASE_URL: las passkeys y las sesiones se guardan ahí")
 	}
-	log.Warn("AUTENTICACIÓN DE DESARROLLO ACTIVA: cualquiera puede emitir una sesión")
+	if !devAuth && rpID == "" {
+		return errors.New(
+			"sin forma de autenticar: configura las passkeys (PASSKEY_RP_ID, " +
+				"PASSKEY_RP_ORIGINS, DATABASE_URL) o, SOLO en el sandbox, ALLOW_DEV_AUTH=true")
+	}
+	if devAuth {
+		log.Warn("AUTENTICACIÓN DE DESARROLLO ACTIVA: cualquiera puede emitir una sesión")
+	}
 
 	core, err := coreclient.Dial(ctx, env("CORE_ADDR", "127.0.0.1:50051"))
 	if err != nil {
@@ -62,13 +78,13 @@ func run(log *slog.Logger) error {
 	}
 	defer core.Close()
 
-	auth := sim.NewAuthenticator()
-	server := bff.NewServer(core, auth, log)
+	var (
+		chain   bff.ChainAuthenticator
+		simAuth *sim.Authenticator
+		setup   []func(*bff.Server) *bff.Server
+	)
 
-	// Sin base de datos el canal funciona igual, solo que sin permisos delegados.
-	// Se avisa, porque arrancar callado sin la mitad del modelo B convierte un
-	// 404 en un misterio para quien integra.
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+	if dsn != "" {
 		db, err := sql.Open("postgres", dsn)
 		if err != nil {
 			return err
@@ -79,23 +95,60 @@ func run(log *slog.Logger) error {
 		if err := store.Migrate(ctx); err != nil {
 			return err
 		}
-		server = server.WithConsents(store)
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithConsents(store) })
 
-		svc, onboardingStore, product, err := setupOnboarding(ctx, db, core, "USD")
-		if err != nil {
+		onboardingStore := onboarding.NewStore(db)
+		if err := onboardingStore.Migrate(ctx); err != nil {
 			return err
 		}
-		server = server.WithOnboarding(svc, onboardingStore, product)
-		log.Info("alta de clientes habilitada", "producto", product,
-			"dni_de_prueba", TestDNIRejected+" rechazo, "+TestDNIInconclusive+" revisión, "+
-				TestDNIWatchlist+" listas")
+
+		if rpID != "" {
+			pk, err := setupPasskeys(ctx, db, onboardingStore, rpID)
+			if err != nil {
+				return err
+			}
+			chain = append(chain, bff.NewPasskeyAuthenticator(pk))
+			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithPasskeys(pk) })
+			log.Info("passkeys habilitadas", "rp_id", rpID)
+		}
+
+		// El alta usa el simulador de KYC, que aprueba a casi todo el mundo. Fuera
+		// del sandbox eso sería abrir cuentas sin verificar la identidad de nadie:
+		// el alta solo se monta en modo desarrollo, hasta que haya un proveedor
+		// de identidad real.
+		if devAuth {
+			svc, _, product, err := setupOnboarding(ctx, db, core, "USD")
+			if err != nil {
+				return err
+			}
+			setup = append(setup, func(s *bff.Server) *bff.Server {
+				return s.WithOnboarding(svc, onboardingStore, product)
+			})
+			log.Info("alta de clientes habilitada con KYC SIMULADO", "producto", product,
+				"dni_de_prueba", TestDNIRejected+" rechazo, "+TestDNIInconclusive+" revisión, "+
+					TestDNIWatchlist+" listas")
+		} else {
+			log.Warn("alta de clientes deshabilitada: no hay proveedor de identidad real")
+		}
 	} else {
 		log.Warn("sin DATABASE_URL: el canal arranca sin permisos del modelo B ni alta de clientes")
 	}
 
+	if devAuth {
+		simAuth = sim.NewAuthenticator()
+		chain = append(chain, simAuth)
+	}
+
+	server := bff.NewServer(core, chain, log)
+	for _, apply := range setup {
+		server = apply(server)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/", server.Handler())
-	mountDevRoutes(mux, core, auth, log)
+	if devAuth {
+		mountDevRoutes(mux, core, simAuth, log)
+	}
 
 	addr := env("BIND_ADDR", "127.0.0.1:8080")
 	httpServer := &http.Server{
