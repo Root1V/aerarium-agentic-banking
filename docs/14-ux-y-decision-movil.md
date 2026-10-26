@@ -60,6 +60,10 @@ banco es el último sitio donde conviene un intermediario sin auditar.
 > los invoca por *platform channels*. Flutter no impide lo nativo: solo hay que decidir qué
 > parte lo es, y esta es la que se decide así.
 
+*Aplicada en `feat/app-auth-passkeys`:* el puente de passkeys en iOS son ~200 líneas de
+Swift sobre AuthenticationServices, sin paquete intermedio. Solo traduce JSON de WebAuthn;
+desafíos y verificación viven en el banco.
+
 **2. El compromiso de Google.** En 2024 un exmiembro del equipo hizo un fork (Flock)
 alegando que tres de seis plataformas estaban en mantenimiento ([DevClass][flock]). Eran
 las de escritorio, no las móviles. Riesgo medio, y la regla 1 lo acota: lo más delicado no

@@ -118,9 +118,31 @@ resultados son además el rastro de auditoría que el supervisor puede exigir.
 cd services && go test ./bff/     # requiere core + Postgres arriba
 ```
 
-La autenticación es un PUERTO (`bff.Authenticator`), no una implementación: banca
-se resuelve con passkeys FIDO2 vinculadas al dispositivo. El sustituto de
-desarrollo vive en `bff/sim` para que no pueda cablearse a producción por descuido.
+La autenticación es un PUERTO (`bff.Authenticator`), no una implementación. En
+producción la resuelven las passkeys (`services/passkeys`): el banco es el Relying
+Party WebAuthn, emite los desafíos, verifica las firmas y abre sesiones de 30
+minutos. El sustituto de desarrollo vive en `bff/sim` para que no pueda cablearse a
+producción por descuido.
+
+Reglas de las passkeys, cada una con su prueba:
+
+- **Verificación del usuario obligatoria** (cara, huella o código). Es lo que hace
+  que una passkey cubra los dos factores que exige la SBS (Res. 2286-2024).
+- **La primera passkey se registra con la referencia del alta**: aprobada, sin
+  passkey previa y dentro de las 24 horas. Una más, solo con sesión.
+- **Cada desafío sirve una vez** y para un solo tipo de ceremonia; se consume en la
+  misma sentencia que lo lee.
+- **Una passkey desconocida, una firma desde otro dominio y una passkey clonada
+  reciben la misma respuesta** (`passkey_rejected`). La diferencia va al log.
+- Los tokens de sesión se guardan como SHA-256; cerrar sesión los revoca en el banco.
+
+```bash
+# Arrancar el canal con passkeys (requiere Postgres para ceremonias y sesiones):
+cd services && PASSKEY_RP_ID=<dominio> DATABASE_URL=... CORE_ADDR=... go run ./bff/cmd/bff
+```
+
+`PASSKEY_RP_ORIGINS` (por defecto `https://<dominio>`) y `PASSKEY_RP_NAME` son
+opcionales. Sin `ALLOW_DEV_AUTH`, el alta no se monta: su KYC es simulado.
 
 Dos reglas del canal: el dinero viaja como entero en micras (nunca decimal en
 JSON) y toda operación que mueve dinero exige `Idempotency-Key`.
@@ -135,6 +157,15 @@ cd app && flutter test && flutter analyze
 flutter run --dart-define=AIBANK_BFF_URL=http://localhost:8080 \
             --dart-define=AIBANK_TOKEN=... --dart-define=AIBANK_ACCOUNT_ID=...
 ```
+
+Sin sesión fija ni sandbox, la app arranca en **Entrar con passkey**, y el alta
+termina en **Protege tu cuenta**, que registra la primera. El puente con el sistema
+está escrito a mano en Swift (`ios/Runner/AppDelegate.swift`, AuthenticationServices),
+sin paquetes de terceros (doc 14, regla 1). Las pruebas usan un autenticador falso;
+la ceremonia real necesita el dominio asociado (ver el roadmap). En Android el canal
+no tiene módulo todavía y la app lo explica.
+
+El token vive solo en memoria: cerrar la app es cerrar la sesión.
 
 **Para probarla de punta a punta, un comando:**
 
@@ -269,8 +300,8 @@ El alta de la integración corre sola e imprime el secreto una vez
 
 El canal del titular es la pieza que faltaba para que el modelo B se pudiera
 probar fuera de una prueba de Go: la mitad del flujo la protagoniza una persona.
-Su binario **se niega a arrancar** sin `ALLOW_DEV_AUTH=true`, porque hasta que
-existan las passkeys lo único que sabe autenticar es el sustituto de desarrollo.
+Su binario **se niega a arrancar** sin una forma de autenticar: `ALLOW_DEV_AUTH=true`
+(el sustituto de desarrollo, que es lo que usa el sandbox) o `PASSKEY_RP_ID`.
 
 El recorrido completo por HTTP, que es también el ejemplo de cliente:
 
