@@ -136,6 +136,28 @@ flutter run --dart-define=AIBANK_BFF_URL=http://localhost:8080 \
             --dart-define=AIBANK_TOKEN=... --dart-define=AIBANK_ACCOUNT_ID=...
 ```
 
+**Para probarla de punta a punta, un comando:**
+
+```bash
+app/tool/sandbox.sh ios    # simulador de iPhone
+app/tool/sandbox.sh web    # portal web en Chrome
+```
+
+Levanta el sandbox, arranca la app contra él y entra por la pantalla de titular de
+prueba: «Crear titular de prueba» crea una persona con 100 USD y entra con su sesión.
+Hay hot reload (`r` en la terminal).
+
+Usa los puertos 38080/38081/5050 porque 8080/8081 casi siempre están ocupados en una
+máquina de desarrollo; se cambian con `HOLDER_PORT`, `PARTNER_PORT` y `WEB_PORT`. El
+script hace casar los cinco valores que tienen que coincidir —puerto, CORS del portal,
+clave del simulador, URL compilada y modo sandbox—, que es donde falla hacerlo a mano.
+
+**La entrada de prueba no existe en producción**: solo se compila con
+`--dart-define=AIBANK_SANDBOX=true`. Verificado sobre el binario: la compilación web sin
+ese valor no contiene ni el texto de la pantalla ni la ruta `/dev/holders`.
+
+Android está configurado pero no se ha compilado en esta máquina (falta el SDK).
+
 Dos reglas del cliente: el dinero nunca es `double` (entero en micras, se formatea
 solo para mostrar) y un reintento de envío CONSERVA la clave de idempotencia — si
 generara una nueva, un timeout que el servidor sí procesó cobraría dos veces.
