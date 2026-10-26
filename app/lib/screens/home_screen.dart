@@ -19,10 +19,15 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.client,
     required this.accountId,
+    this.onSignOut,
   });
 
   final BffClient client;
   final String accountId;
+
+  /// Vuelve a la entrada. Sin él —el sandbox, una sesión fija de desarrollo—
+  /// no hay a dónde salir y la pantalla no ofrece hacerlo.
+  final VoidCallback? onSignOut;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -74,6 +79,12 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Permisos de pago',
             onPressed: _openMandates,
           ),
+          if (widget.onSignOut != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Salir',
+              onPressed: _signOut,
+            ),
         ],
       ),
       body: RefreshIndicator(
@@ -88,6 +99,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Enviar'),
             ),
     );
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await widget.client.logout();
+    } on ApiError {
+      // Sin red no se puede avisar al banco, pero no se retiene a nadie dentro:
+      // el token se descarta aquí y en el banco vence solo en 30 minutos.
+    }
+    widget.onSignOut!();
   }
 
   void _openPending() {
@@ -111,7 +132,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_error != null) {
-      return _ErrorView(error: _error!, onRetry: _load);
+      final expired = _error!.code == ApiErrorCode.unauthenticated;
+      if (expired && widget.onSignOut != null) {
+        return _ErrorView(error: _error!, action: 'Volver a entrar', onAction: widget.onSignOut!);
+      }
+      return _ErrorView(error: _error!, action: 'Reintentar', onAction: _load);
     }
 
     final home = _home!;
@@ -287,10 +312,11 @@ class _MovementTile extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.error, required this.onRetry});
+  const _ErrorView({required this.error, required this.action, required this.onAction});
 
   final ApiError error;
-  final VoidCallback onRetry;
+  final String action;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -304,7 +330,7 @@ class _ErrorView extends StatelessWidget {
               children: [
                 Text(error.userMessage, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: onRetry, child: const Text('Reintentar')),
+                FilledButton(onPressed: onAction, child: Text(action)),
               ],
             ),
           ),

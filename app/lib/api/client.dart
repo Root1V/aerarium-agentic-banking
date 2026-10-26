@@ -85,6 +85,51 @@ class BffClient {
     return OnboardingResult.fromJson(json);
   }
 
+  // -------------------------------------------------------------- passkeys
+
+  /// Empieza el registro de la primera passkey, con la referencia del alta.
+  Future<PasskeyCeremony> beginEnrollment(String reference) async =>
+      PasskeyCeremony.fromJson(await _postPublic('/v1/passkeys/enrollment', {'reference': reference}));
+
+  /// Empieza el registro de una passkey más, en un dispositivo nuevo.
+  Future<PasskeyCeremony> beginAddDevice() async =>
+      PasskeyCeremony.fromJson(await _post('/v1/passkeys/devices', headers: const {}, body: const {}));
+
+  Future<SessionGrant> finishRegistration(String ceremonyId, Map<String, dynamic> credential) async =>
+      SessionGrant.fromJson(await _postPublic('/v1/passkeys/registration', {
+        'ceremony_id': ceremonyId,
+        'credential': credential,
+      }));
+
+  Future<PasskeyCeremony> beginLogin() async =>
+      PasskeyCeremony.fromJson(await _postPublic('/v1/passkeys/login/options', const {}));
+
+  Future<SessionGrant> finishLogin(String ceremonyId, Map<String, dynamic> credential) async =>
+      SessionGrant.fromJson(await _postPublic('/v1/passkeys/login', {
+        'ceremony_id': ceremonyId,
+        'credential': credential,
+      }));
+
+  /// Las cuentas del titular. Es lo primero que se pide tras entrar.
+  Future<List<Account>> listAccounts() async {
+    final json = await _get('/v1/accounts', const {});
+    return ((json['accounts'] as List<dynamic>?) ?? const [])
+        .map((a) => Account.fromJson(a as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Cierra la sesión en el banco, no solo en el teléfono: un token olvidado en
+  /// memoria tiene que dejar de valer también del otro lado.
+  Future<void> logout() => _postNoContent('/v1/session/logout');
+
+  /// POST sin sesión: las ceremonias las hace alguien que todavía no entró.
+  Future<Map<String, dynamic>> _postPublic(String path, Map<String, dynamic> body) =>
+      _send(() => _http.post(
+            baseUrl.replace(path: path),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          ));
+
   void close() => _http.close();
 
   // ------------------------------------------------------------ transporte
@@ -172,7 +217,9 @@ class BffClient {
       // Cuerpo no interpretable: se mantiene el detalle genérico.
     }
 
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 && code != 'passkey_rejected') {
+      // Un 401 es una sesión que ya no vale, salvo el de una passkey rechazada:
+      // ahí no había sesión, y decir "tu sesión expiró" confundiría.
       return throw ApiError(ApiErrorCode.unauthenticated, detail);
     }
     throw ApiError.fromResponse(code, detail);

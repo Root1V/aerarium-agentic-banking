@@ -408,3 +408,34 @@ class OnboardingResult {
         accountId: json['account_id'] as String?,
       );
 }
+
+
+/// Una ceremonia de passkey en curso: el desafío que emitió el banco.
+class PasskeyCeremony {
+  final String id;
+
+  /// Lo que se le pasa tal cual al sistema operativo.
+  final Map<String, dynamic> options;
+
+  const PasskeyCeremony({required this.id, required this.options});
+
+  factory PasskeyCeremony.fromJson(Map<String, dynamic> json) => PasskeyCeremony(
+        id: json['ceremony_id'] as String,
+        options: json['options'] as Map<String, dynamic>,
+      );
+}
+
+/// La sesión que entrega el banco tras una passkey verificada.
+class SessionGrant {
+  final String token;
+  final String customerId;
+  final DateTime expiresAt;
+
+  const SessionGrant({required this.token, required this.customerId, required this.expiresAt});
+
+  factory SessionGrant.fromJson(Map<String, dynamic> json) => SessionGrant(
+        token: json['token'] as String,
+        customerId: json['customer_id'] as String,
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+      );
+}
