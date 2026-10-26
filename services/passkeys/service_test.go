@@ -14,6 +14,7 @@ import (
 	"github.com/aibank/aibank/adapters/kyc"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
+	"github.com/aibank/aibank/services/sessions"
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -66,7 +67,11 @@ func setupWith(t *testing.T, tweak func(*passkeys.Config)) *env {
 	if tweak != nil {
 		tweak(&cfg)
 	}
-	svc, err := passkeys.NewService(cfg, store, onb)
+	sess := sessions.NewStore(db)
+	if err := sess.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := passkeys.NewService(cfg, store, onb, sess)
 	if err != nil {
 		t.Fatal(err)
 	}

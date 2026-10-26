@@ -24,6 +24,7 @@ import (
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
 	"github.com/aibank/aibank/services/oauth"
+	"github.com/aibank/aibank/services/sessions"
 )
 
 // Server es la API del canal móvil.
@@ -40,6 +41,10 @@ type Server struct {
 	onboarding *onboardingConfig
 	// passkeys habilita el login real y sus ceremonias.
 	passkeys *passkeyConfig
+	// devices habilita vincular teléfonos y entrar con ellos.
+	devices *deviceConfig
+	// sessions habilita cerrar sesión en el banco.
+	sessions *sessions.Store
 	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
 	// titular. Una sola mientras el banco opera en un país; con más de uno,
 	// saldrá del perfil del cliente.
@@ -89,6 +94,12 @@ func (s *Server) Handler() http.Handler {
 
 	if s.passkeys != nil {
 		s.passkeyRoutes(mux)
+	}
+	if s.devices != nil {
+		s.deviceRoutes(mux)
+	}
+	if s.sessions != nil {
+		mux.Handle("POST /v1/session/logout", s.requireAuth(s.handleLogout))
 	}
 
 	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.
