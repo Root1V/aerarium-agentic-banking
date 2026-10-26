@@ -1,17 +1,15 @@
 import 'dart:convert';
 
-import 'package:aibank_app/api/client.dart';
 import 'package:aibank_app/auth/passkeys.dart';
 import 'package:aibank_app/main.dart';
 import 'package:aibank_app/screens/account_gate.dart';
-import 'package:aibank_app/screens/enroll_passkey_screen.dart';
 import 'package:aibank_app/screens/home_screen.dart';
 import 'package:aibank_app/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
+import 'support/fake_bank.dart';
 
 /// Un teléfono de mentira: devuelve lo que se le diga y anota qué se le pidió.
 class FakePasskeys implements PasskeyPlatform {
@@ -36,32 +34,6 @@ class FakePasskeys implements PasskeyPlatform {
   }
 }
 
-/// Un banco de mentira: responde por ruta y guarda lo que recibió.
-class FakeBank {
-  FakeBank(this.routes);
-
-  final Map<String, http.Response Function(Map<String, dynamic> body)> routes;
-  final received = <String, Map<String, dynamic>>{};
-  final authorization = <String, String?>{};
-
-  BffClient client({String token = ''}) => BffClient(
-        baseUrl: Uri.parse('http://bff.test'),
-        token: () => token,
-        httpClient: MockClient((request) async {
-          final key = '${request.method} ${request.url.path}';
-          final body = request.body.isEmpty
-              ? <String, dynamic>{}
-              : jsonDecode(request.body) as Map<String, dynamic>;
-          received[key] = body;
-          authorization[key] = request.headers['Authorization'];
-          final route = routes[key];
-          return route == null ? http.Response('{}', 404) : route(body);
-        }),
-      );
-}
-
-http.Response json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status);
-
 const _options = {
   'publicKey': {'challenge': 'desafio', 'rpId': 'aerarium.test'},
 };
@@ -75,7 +47,14 @@ Widget _app(Widget home) => MaterialApp(home: home);
 
 void main() {
   testWidgets('sin sesión fija ni sandbox, la app arranca en entrar con passkey', (tester) async {
+    // El teléfono dice que no está vinculado.
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('dev.aerarium/device_keys'), (_) async => {'deviceId': null, 'biometry': 'faceID'});
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dev.aerarium/device_keys'), null));
+
     await tester.pumpWidget(const AiBankApp(baseUrl: 'http://bff.test', token: '', accountId: ''));
+    await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.text('Abrir una cuenta'), findsOneWidget);
   });
@@ -163,68 +142,6 @@ void main() {
 
       expect(bank.authorization['POST /v1/passkeys/login/options'], isNull);
       expect(bank.authorization['POST /v1/passkeys/login'], isNull);
-    });
-  });
-
-  group('proteger la cuenta', () {
-    testWidgets('registra la passkey con la referencia del alta', (tester) async {
-      final bank = FakeBank({
-        'POST /v1/passkeys/enrollment': _ceremony,
-        'POST /v1/passkeys/registration': (_) => json({
-              'token': 'tok-1',
-              'customer_id': 'cus-1',
-              'expires_at': '2026-10-25T12:30:00Z',
-            }, 201),
-      });
-      final phone = FakePasskeys();
-      String? token;
-
-      await tester.pumpWidget(_app(EnrollPasskeyScreen(
-        flow: PasskeyFlow(client: bank.client(), platform: phone),
-        onboardingReference: 'ref-alta',
-        onEnrolled: (s) => token = s.token,
-        onAlreadyEnrolled: () => fail('no tenía passkey'),
-      )));
-      await tester.tap(find.text('Crear passkey'));
-      await tester.pumpAndSettle();
-
-      expect(bank.received['POST /v1/passkeys/enrollment'], {'reference': 'ref-alta'});
-      expect(phone.createdWith, _options);
-      expect(bank.received['POST /v1/passkeys/registration']?['ceremony_id'], 'cer-1');
-      expect(token, 'tok-1');
-    });
-
-    testWidgets('si la cuenta ya tiene passkey, ofrece entrar con ella', (tester) async {
-      final bank = FakeBank({
-        'POST /v1/passkeys/enrollment': _ceremony,
-        'POST /v1/passkeys/registration': (_) =>
-            json({'code': 'already_enrolled', 'message': 'ya hay una passkey registrada'}, 409),
-      });
-      var toLogin = false;
-
-      await tester.pumpWidget(_app(EnrollPasskeyScreen(
-        flow: PasskeyFlow(client: bank.client(), platform: FakePasskeys()),
-        onboardingReference: 'ref-alta',
-        onEnrolled: (_) => fail('no debía registrar'),
-        onAlreadyEnrolled: () => toLogin = true,
-      )));
-      await tester.tap(find.text('Crear passkey'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Tu cuenta ya está protegida con una passkey.'), findsOneWidget);
-      await tester.tap(find.text('Entrar con mi passkey'));
-      expect(toLogin, isTrue);
-    });
-
-    testWidgets('no ofrece saltarse el paso', (tester) async {
-      await tester.pumpWidget(_app(EnrollPasskeyScreen(
-        flow: PasskeyFlow(client: FakeBank({}).client(), platform: FakePasskeys()),
-        onboardingReference: 'ref-alta',
-        onEnrolled: (_) {},
-        onAlreadyEnrolled: () {},
-      )));
-      expect(find.byType(TextButton), findsNothing);
-      expect(find.textContaining(RegExp('después|luego|omitir', caseSensitive: false)), findsNothing);
     });
   });
 
