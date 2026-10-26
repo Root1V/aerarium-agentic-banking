@@ -556,3 +556,156 @@ async fn pagar_y_revocar_a_la_vez_no_deja_un_pago_sin_permiso(pool: PgPool) {
         assert_eq!(comprometido, 0, "se retuvo dinero de un pago que falló");
     }
 }
+
+// ---------------------------------------------------------------- lo retenido
+
+/// Lo que ve el titular en la app: cuánto tiene retenido y para quién.
+
+#[sqlx::test]
+async fn sin_pagos_en_curso_no_hay_nada_retenido(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    assert!(groups.is_empty());
+}
+
+#[sqlx::test]
+async fn lo_retenido_se_suma_en_el_servidor_aunque_sean_cientos(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+
+    // 150 micropagos de $0,001: más de lo que cabría en una página de cien. Si
+    // el total se calculara sumando una lista paginada, saldría mal.
+    for _ in 0..150 {
+        s.mandates
+            .authorize(mandate.id, &payment(s.agent_account, s.payee, 1_000))
+            .await
+            .unwrap();
+    }
+
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].grantee.as_deref(), Some("mercatus_sandbox"));
+    assert_eq!(groups[0].count, 150);
+    assert_eq!(groups[0].total_micros, 150_000);
+    assert_eq!(groups[0].expired_micros, 0);
+
+    // Y cuadra con el ledger: lo retenido es exactamente lo que falta del saldo.
+    assert_eq!(
+        s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(),
+        100_000000 - 150_000
+    );
+}
+
+#[sqlx::test]
+async fn lo_cobrado_y_lo_liberado_ya_no_esta_retenido(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+
+    let mut ids = Vec::new();
+    for amount in [1_000000, 2_000000, 3_000000] {
+        let (result, _) = s
+            .mandates
+            .authorize(mandate.id, &payment(s.agent_account, s.payee, amount))
+            .await
+            .unwrap();
+        ids.push(result.authorization.id);
+    }
+
+    // El de 1 se cobra y el de 2 se libera: solo queda retenido el de 3.
+    s.auth.capture(ids[0]).await.unwrap();
+    s.auth.release(ids[1]).await.unwrap();
+
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].count, 1);
+    assert_eq!(groups[0].total_micros, 3_000000);
+}
+
+#[sqlx::test]
+async fn lo_vencido_sigue_retenido_pero_se_distingue(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+
+    let (vencida, _) = s
+        .mandates
+        .authorize(mandate.id, &payment(s.agent_account, s.payee, 4_000000))
+        .await
+        .unwrap();
+    s.mandates
+        .authorize(mandate.id, &payment(s.agent_account, s.payee, 6_000000))
+        .await
+        .unwrap();
+
+    // Vence, pero el barrendero todavía no pasó: el dinero sigue fuera del
+    // saldo. Contarlo como "nada" mentiría sobre el saldo; contarlo como cobro
+    // pendiente prometería algo que ya no puede ocurrir.
+    sqlx::query("UPDATE authorizations SET expires_at = now() - interval '1 minute' WHERE id = $1")
+        .bind(vencida.authorization.id)
+        .execute(&s.ctx.pool)
+        .await
+        .unwrap();
+
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    assert_eq!(groups[0].total_micros, 10_000000);
+    assert_eq!(groups[0].expired_micros, 4_000000);
+}
+
+#[sqlx::test]
+async fn se_agrupa_por_quien_cobra_y_lo_mayor_va_primero(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mercatus = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+    let mut otra = grant(s.agent_account, s.holder, None, None);
+    otra.grantee = "otra_plataforma".into();
+    let otra = s.mandates.grant(&otra).await.unwrap();
+
+    s.mandates
+        .authorize(mercatus.id, &payment(s.agent_account, s.payee, 1_000000))
+        .await
+        .unwrap();
+    s.mandates
+        .authorize(otra.id, &payment(s.agent_account, s.payee, 5_000000))
+        .await
+        .unwrap();
+
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    let resumen: Vec<_> = groups
+        .iter()
+        .map(|g| (g.grantee.as_deref(), g.total_micros))
+        .collect();
+    assert_eq!(
+        resumen,
+        vec![(Some("otra_plataforma"), 5_000000), (Some("mercatus_sandbox"), 1_000000)]
+    );
+}
+
+#[sqlx::test]
+async fn una_retencion_sin_mandato_no_se_atribuye_a_nadie(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    s.auth
+        .authorize(&payment(s.agent_account, s.payee, 2_000000))
+        .await
+        .unwrap();
+
+    let groups = s.auth.summarize_live_holds(s.agent_account).await.unwrap();
+    assert_eq!(groups.len(), 1);
+    // Sin mandato no hay plataforma a la que atribuirla. Inventar una sería peor
+    // que decir que no se sabe.
+    assert_eq!(groups[0].grantee, None);
+    assert_eq!(groups[0].total_micros, 2_000000);
+}

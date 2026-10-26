@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT m.grantee AS \"grantee?\",\n                   a.currency AS \"currency!\",\n                   COUNT(*) AS \"count!\",\n                   SUM(a.amount_micros)::BIGINT AS \"total_micros!\",\n                   COALESCE(SUM(a.amount_micros) FILTER (WHERE a.expires_at <= $2), 0)::BIGINT\n                       AS \"expired_micros!\",\n                   MIN(a.expires_at) AS \"first_expires_at!\",\n                   MAX(a.expires_at) AS \"last_expires_at!\"\n              FROM authorizations a\n              LEFT JOIN authorization_mandates am ON am.authorization_id = a.id\n              LEFT JOIN payment_mandates m ON m.id = am.mandate_id\n             WHERE a.payer_account_id = $1\n               AND a.status = 'AUTHORIZED'\n             GROUP BY m.grantee, a.currency\n             ORDER BY SUM(a.amount_micros) DESC, m.grantee\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grantee?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_micros!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "expired_micros!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_expires_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_expires_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fc5b28b264fed78c8c1a59352540715d1e6c6946ab07e093ecd8e4fdd9de7053"
+}

@@ -62,29 +62,99 @@ class Movement {
         'rail_inbound_credit' => 'Transferencia recibida',
         'rail_outbound_reserve' => 'Transferencia enviada',
         'rail_outbound_reverse' => 'Devolución',
+        // Pagos de una plataforma con permiso (modelo B). Al autorizar, el
+        // dinero sale del saldo; si nunca se cobra, vuelve. Las dos mitades
+        // tienen que leerse como el mismo pago, no como dos movimientos sueltos.
+        'authorization_hold' => 'Pago autorizado',
+        'authorization_release' => 'Pago no cobrado, devuelto',
+        'authorization_refund' => 'Reembolso',
+        'authorization_capture' => 'Pago recibido',
+        'card_authorization_hold' => 'Compra con tarjeta',
+        'card_authorization_reversal' => 'Compra anulada',
+        // El cobro de tarjeta solo toca la cuenta por la diferencia con lo
+        // retenido: propinas, combustible.
+        'card_clearing' => 'Ajuste de compra con tarjeta',
+        'sandbox_funding' => 'Saldo inicial de prueba',
         _ => 'Movimiento',
       };
+}
+
+/// Lo retenido para una misma plataforma.
+class PendingGroup {
+  /// Nombre registrado en el banco de quien cobra. Vacío si la retención no se
+  /// hizo bajo un permiso de pago.
+  final String merchant;
+  final int count;
+  final Money amount;
+
+  /// Parte que ya venció: sigue fuera del saldo hasta que el banco la libere,
+  /// pero ya no se puede cobrar.
+  final Money expired;
+
+  /// Antes de esta hora, todo lo retenido o se cobra o vuelve.
+  final DateTime lastExpiresAt;
+
+  const PendingGroup({
+    required this.merchant,
+    required this.count,
+    required this.amount,
+    required this.expired,
+    required this.lastExpiresAt,
+  });
+
+  factory PendingGroup.fromJson(Map<String, dynamic> json) => PendingGroup(
+        merchant: (json['merchant'] as String?) ?? '',
+        count: json['count'] as int,
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        expired: Money.fromJson(json['expired'] as Map<String, dynamic>),
+        lastExpiresAt: DateTime.parse(json['last_expires_at'] as String),
+      );
+
+  bool get allExpired => expired.amountMicros >= amount.amountMicros;
 }
 
 /// Contenido de la pantalla principal, resuelto en una sola llamada.
 class Home {
   final Account account;
+
+  /// Lo disponible: lo retenido ya salió de aquí.
   final Money balance;
+
+  /// Lo que salió del saldo hacia pagos que aún no se cobraron ni volvieron.
+  ///
+  /// `null` significa que el banco no pudo calcularlo, que NO es lo mismo que
+  /// cero: en ese caso la pantalla no dice nada en vez de afirmar que no hay
+  /// nada retenido.
+  final Money? retained;
+
+  final List<PendingGroup> pending;
   final List<Movement> movements;
 
   const Home({
     required this.account,
     required this.balance,
     required this.movements,
+    this.retained,
+    this.pending = const [],
   });
 
   factory Home.fromJson(Map<String, dynamic> json) => Home(
         account: Account.fromJson(json['account'] as Map<String, dynamic>),
         balance: Money.fromJson(json['balance'] as Map<String, dynamic>),
+        retained: json['retained'] == null
+            ? null
+            : Money.fromJson(json['retained'] as Map<String, dynamic>),
+        pending: ((json['pending'] as List<dynamic>?) ?? const [])
+            .map((g) => PendingGroup.fromJson(g as Map<String, dynamic>))
+            .toList(),
         movements: ((json['movements'] as List<dynamic>?) ?? const [])
             .map((m) => Movement.fromJson(m as Map<String, dynamic>))
             .toList(),
       );
+
+  /// Si hay algo retenido que contar. Falso tanto si es cero como si se
+  /// desconoce: en los dos casos lo correcto es no mostrar la fila.
+  bool get hasRetained => (retained?.amountMicros ?? 0) > 0;
 }
 
 /// Página del extracto.

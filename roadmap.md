@@ -83,6 +83,22 @@ licencia o el proveedor BaaS en Perú.
 - **Y el bloqueante real es nuestro**: sin licencia ni proveedor BaaS contratado, ningún
   modelo mueve dinero real. El sandbox funciona completo; producción no depende de Mercatus.
 
+## App de clientes
+
+Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app/tool/sandbox.sh ios|web`.
+
+| # | Feature | Lenguaje | Rama | Estado |
+|---|---|---|---|---|
+| 1 | La app corre: iOS, Android, portal web; entrada de sandbox; tokens de diseño | Flutter/Go | feat/app-runnable | ✅ |
+| 2 | Disponible frente a retenido, con los pagos en curso agrupados por plataforma | Rust/Go/Flutter | feat/app-saldo-retenido | 👀 |
+| 3 | Alta por niveles: sin esto nadie puede hacerse cliente | Go/Flutter | feat/app-onboarding | ⬜ |
+| 4 | Centro de control de agentes: gasto agregado, umbrales de aprobación | Go/Flutter | feat/app-agentes | ⬜ |
+| 5 | Núcleo de seguridad nativo: passkeys, vinculación, atestación | Swift/Kotlin | feat/app-auth-passkeys | ⬜ |
+
+**Visto al verificar el punto 2, para el 4:** el historial de movimientos no agrupa. Un
+agente que hace 120 micropagos deja 120 filas de «−0,001 USD». El desglose de lo retenido
+sí agrupa; el historial tiene que hacer lo mismo.
+
 ## Deuda técnica anotada
 
 - El pool de PostgreSQL del core espera hasta 10 s por una conexión bajo carga en
@@ -90,6 +106,10 @@ licencia o el proveedor BaaS en Perú.
   al hacer pruebas de carga.
 - La deriva de saldo se detecta recorriendo todos los asientos. Sirve al volumen
   actual; al crecer habrá que conciliar por ventanas con saldos de corte.
+- **Lo retenido no incluye las retenciones de tarjeta.** El adaptador de tarjetas
+  retiene con sus propios asientos, fuera de la tabla de autorizaciones del core. Hoy no
+  importa —las tarjetas no están en la app—, pero el día que entren, «retenido» tiene que
+  sumarlas o mentirá por omisión.
 - El límite de tasa de la API de socio es POR INSTANCIA. Con más de una réplica el
   límite efectivo se multiplica; hay que moverlo a un almacén compartido antes de
   escalar horizontalmente — o antes de abrir el sandbox alojado a un segundo socio.

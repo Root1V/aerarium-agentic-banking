@@ -755,11 +755,12 @@ var ReconciliationService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthorizationService_Authorize_FullMethodName        = "/aibank.core.v1.AuthorizationService/Authorize"
-	AuthorizationService_Capture_FullMethodName          = "/aibank.core.v1.AuthorizationService/Capture"
-	AuthorizationService_Refund_FullMethodName           = "/aibank.core.v1.AuthorizationService/Refund"
-	AuthorizationService_GetAuthorization_FullMethodName = "/aibank.core.v1.AuthorizationService/GetAuthorization"
-	AuthorizationService_ReleaseExpired_FullMethodName   = "/aibank.core.v1.AuthorizationService/ReleaseExpired"
+	AuthorizationService_Authorize_FullMethodName          = "/aibank.core.v1.AuthorizationService/Authorize"
+	AuthorizationService_Capture_FullMethodName            = "/aibank.core.v1.AuthorizationService/Capture"
+	AuthorizationService_Refund_FullMethodName             = "/aibank.core.v1.AuthorizationService/Refund"
+	AuthorizationService_GetAuthorization_FullMethodName   = "/aibank.core.v1.AuthorizationService/GetAuthorization"
+	AuthorizationService_ReleaseExpired_FullMethodName     = "/aibank.core.v1.AuthorizationService/ReleaseExpired"
+	AuthorizationService_SummarizeLiveHolds_FullMethodName = "/aibank.core.v1.AuthorizationService/SummarizeLiveHolds"
 )
 
 // AuthorizationServiceClient is the client API for AuthorizationService service.
@@ -776,6 +777,12 @@ type AuthorizationServiceClient interface {
 	GetAuthorization(ctx context.Context, in *GetAuthorizationRequest, opts ...grpc.CallOption) (*Authorization, error)
 	// Libera las retenciones vencidas. La invoca un proceso periódico.
 	ReleaseExpired(ctx context.Context, in *ReleaseExpiredRequest, opts ...grpc.CallOption) (*ReleaseExpiredResponse, error)
+	// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
+	//
+	// Agrupado y sumado en el servidor, no una lista: un agente que paga por
+	// llamada deja cientos de retenciones vivas, y un total calculado sumando una
+	// página sería falso en cuanto la lista no cupiera en ella.
+	SummarizeLiveHolds(ctx context.Context, in *SummarizeLiveHoldsRequest, opts ...grpc.CallOption) (*SummarizeLiveHoldsResponse, error)
 }
 
 type authorizationServiceClient struct {
@@ -836,6 +843,16 @@ func (c *authorizationServiceClient) ReleaseExpired(ctx context.Context, in *Rel
 	return out, nil
 }
 
+func (c *authorizationServiceClient) SummarizeLiveHolds(ctx context.Context, in *SummarizeLiveHoldsRequest, opts ...grpc.CallOption) (*SummarizeLiveHoldsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SummarizeLiveHoldsResponse)
+	err := c.cc.Invoke(ctx, AuthorizationService_SummarizeLiveHolds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthorizationServiceServer is the server API for AuthorizationService service.
 // All implementations must embed UnimplementedAuthorizationServiceServer
 // for forward compatibility.
@@ -850,6 +867,12 @@ type AuthorizationServiceServer interface {
 	GetAuthorization(context.Context, *GetAuthorizationRequest) (*Authorization, error)
 	// Libera las retenciones vencidas. La invoca un proceso periódico.
 	ReleaseExpired(context.Context, *ReleaseExpiredRequest) (*ReleaseExpiredResponse, error)
+	// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
+	//
+	// Agrupado y sumado en el servidor, no una lista: un agente que paga por
+	// llamada deja cientos de retenciones vivas, y un total calculado sumando una
+	// página sería falso en cuanto la lista no cupiera en ella.
+	SummarizeLiveHolds(context.Context, *SummarizeLiveHoldsRequest) (*SummarizeLiveHoldsResponse, error)
 	mustEmbedUnimplementedAuthorizationServiceServer()
 }
 
@@ -874,6 +897,9 @@ func (UnimplementedAuthorizationServiceServer) GetAuthorization(context.Context,
 }
 func (UnimplementedAuthorizationServiceServer) ReleaseExpired(context.Context, *ReleaseExpiredRequest) (*ReleaseExpiredResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReleaseExpired not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) SummarizeLiveHolds(context.Context, *SummarizeLiveHoldsRequest) (*SummarizeLiveHoldsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SummarizeLiveHolds not implemented")
 }
 func (UnimplementedAuthorizationServiceServer) mustEmbedUnimplementedAuthorizationServiceServer() {}
 func (UnimplementedAuthorizationServiceServer) testEmbeddedByValue()                              {}
@@ -986,6 +1012,24 @@ func _AuthorizationService_ReleaseExpired_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthorizationService_SummarizeLiveHolds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SummarizeLiveHoldsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).SummarizeLiveHolds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_SummarizeLiveHolds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).SummarizeLiveHolds(ctx, req.(*SummarizeLiveHoldsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthorizationService_ServiceDesc is the grpc.ServiceDesc for AuthorizationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1012,6 +1056,10 @@ var AuthorizationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseExpired",
 			Handler:    _AuthorizationService_ReleaseExpired_Handler,
+		},
+		{
+			MethodName: "SummarizeLiveHolds",
+			Handler:    _AuthorizationService_SummarizeLiveHolds_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

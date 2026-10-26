@@ -12,7 +12,9 @@ package bff_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +28,9 @@ import (
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/bff"
 	bffsim "github.com/aibank/aibank/services/bff/sim"
+	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
 
 type fixture struct {
@@ -506,4 +510,155 @@ func TestReintentosConcurrentesConLaMismaClaveTransfierenUnaVez(t *testing.T) {
 	if balance.AmountMicros != 470_000000 {
 		t.Errorf("saldo = %d, se esperaba 47000 pese a %d reintentos", balance.AmountMicros, attempts)
 	}
+}
+
+// ---------------------------------------------------------------- lo retenido
+
+type homeHolds struct {
+	Balance struct {
+		AmountMicros int64 `json:"amount_micros"`
+	} `json:"balance"`
+	Retained *struct {
+		AmountMicros int64  `json:"amount_micros"`
+		Currency     string `json:"currency"`
+	} `json:"retained"`
+	Pending []struct {
+		Merchant string `json:"merchant"`
+		Count    int64  `json:"count"`
+		Amount   struct {
+			AmountMicros int64 `json:"amount_micros"`
+		} `json:"amount"`
+		Expired struct {
+			AmountMicros int64 `json:"amount_micros"`
+		} `json:"expired"`
+		LastExpiresAt time.Time `json:"last_expires_at"`
+	} `json:"pending"`
+}
+
+// payUnderMandate le da a una plataforma permiso sobre la cuenta de Alice y paga
+// con él a Bob: lo que hace un agente en el modelo B.
+func (f *fixture) payUnderMandate(t *testing.T, grantee string, amounts ...int64) {
+	t.Helper()
+
+	// El core necesita la cuenta de retenciones de la moneda para autorizar.
+	if _, err := f.core.CreateInternalAccount(f.ctx, "AUTH-HOLDS-USD", "Retenciones",
+		corev1.AccountType_ACCOUNT_TYPE_LIABILITY, "USD"); err != nil &&
+		!errors.Is(err, coreclient.ErrAlreadyExists) {
+		t.Fatalf("cuenta de retenciones: %v", err)
+	}
+
+	mandate, err := f.core.GrantMandate(f.ctx, f.alice.accountID, grantee, f.alice.customerID,
+		"consent:test", nil, nil, time.Now().Add(30*24*time.Hour))
+	if err != nil {
+		t.Fatalf("otorgar mandato: %v", err)
+	}
+	for _, amount := range amounts {
+		if _, _, err := f.core.AuthorizeUnderMandate(f.ctx, mandate.ID, uuid.NewString(),
+			f.alice.accountID, f.bob.accountID, amount, "USD"); err != nil {
+			t.Fatalf("autorizar: %v", err)
+		}
+	}
+}
+
+func getHomeHolds(t *testing.T, f *fixture, base string) homeHolds {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(f.ctx, http.MethodGet,
+		base+"/v1/home?account_id="+f.alice.accountID, nil)
+	req.Header.Set("Authorization", "Bearer "+f.alice.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("home: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("home: status %d", resp.StatusCode)
+	}
+	var home homeHolds
+	if err := json.NewDecoder(resp.Body).Decode(&home); err != nil {
+		t.Fatalf("deserializar: %v", err)
+	}
+	return home
+}
+
+// "Cero retenido" es una afirmación, y se hace explícita: la app no tiene que
+// deducirla de que falte un campo.
+func TestSinPagosEnCursoElInicioDiceCeroRetenido(t *testing.T) {
+	f := setup(t)
+	home := getHomeHolds(t, f, f.srv.URL)
+
+	if home.Retained == nil {
+		t.Fatal("falta retained: la app no puede distinguir cero de desconocido")
+	}
+	if home.Retained.AmountMicros != 0 || len(home.Pending) != 0 {
+		t.Errorf("retenido = %d con %d grupos; se esperaba nada", home.Retained.AmountMicros, len(home.Pending))
+	}
+}
+
+func TestElInicioMuestraLoRetenidoAgrupadoPorPlataforma(t *testing.T) {
+	f := setup(t)
+	grantee := "plataforma-" + uuid.NewString()[:8]
+	f.payUnderMandate(t, grantee, 1_500000, 2_000000)
+
+	home := getHomeHolds(t, f, f.srv.URL)
+
+	// El saldo ya no incluye lo retenido: es lo disponible.
+	if home.Balance.AmountMicros != 500_000000-3_500000 {
+		t.Errorf("disponible = %d", home.Balance.AmountMicros)
+	}
+	if home.Retained == nil || home.Retained.AmountMicros != 3_500000 {
+		t.Fatalf("retenido = %+v, se esperaba 3,50", home.Retained)
+	}
+	if len(home.Pending) != 1 {
+		t.Fatalf("grupos = %d, se esperaba uno: los dos pagos son de la misma plataforma", len(home.Pending))
+	}
+	g := home.Pending[0]
+	// Sin registro de integraciones montado se ve el client_id: menos amable,
+	// pero sigue identificando de verdad a quien cobra.
+	if g.Merchant != grantee || g.Count != 2 || g.Amount.AmountMicros != 3_500000 {
+		t.Errorf("grupo = %+v", g)
+	}
+	if g.Expired.AmountMicros != 0 {
+		t.Errorf("vencido = %d, se esperaba 0", g.Expired.AmountMicros)
+	}
+	if time.Until(g.LastExpiresAt) <= 0 {
+		t.Errorf("last_expires_at = %v, tendría que estar en el futuro", g.LastExpiresAt)
+	}
+}
+
+// El nombre que ve el titular viene del registro del banco, no de lo que la
+// plataforma diga de sí misma: el mismo criterio que la pantalla donde concedió
+// el permiso.
+func TestLaPlataformaApareceConSuNombreRegistrado(t *testing.T) {
+	f := setup(t)
+
+	db, err := sql.Open("postgres", bffDatabaseURL())
+	if err != nil {
+		t.Fatalf("abrir base: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := oauth.NewStore(db)
+	if err := store.Migrate(f.ctx); err != nil {
+		t.Skipf("base no disponible: %v", err)
+	}
+
+	grantee := "plataforma-" + uuid.NewString()[:8]
+	if _, err := store.Register(f.ctx, grantee, "Plataforma de Prueba", []string{oauth.ScopePaymentsWrite}); err != nil {
+		t.Fatalf("registrar integración: %v", err)
+	}
+	f.payUnderMandate(t, grantee, 1_000000)
+
+	withRegistry := httptest.NewServer(bff.NewServer(f.core, f.auth, nil).WithConsents(store).Handler())
+	t.Cleanup(withRegistry.Close)
+
+	home := getHomeHolds(t, f, withRegistry.URL)
+	if len(home.Pending) != 1 || home.Pending[0].Merchant != "Plataforma de Prueba" {
+		t.Errorf("pending = %+v, se esperaba el nombre registrado", home.Pending)
+	}
+}
+
+func bffDatabaseURL() string {
+	if u := os.Getenv("DATABASE_URL"); u != "" {
+		return u
+	}
+	return "postgres://aibank:aibank_dev@localhost:5434/aibank?sslmode=disable"
 }

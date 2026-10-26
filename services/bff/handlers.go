@@ -1,9 +1,11 @@
 package bff
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
@@ -11,9 +13,34 @@ import (
 
 // homeResponse es la pantalla principal en una sola llamada.
 type homeResponse struct {
-	Account   accountJSON    `json:"account"`
-	Balance   moneyJSON      `json:"balance"`
-	Movements []movementJSON `json:"movements"`
+	Account accountJSON `json:"account"`
+	// Balance es lo DISPONIBLE: lo retenido ya salió de aquí.
+	Balance moneyJSON `json:"balance"`
+	// Retained es lo que salió del saldo hacia pagos que todavía no se cobraron
+	// ni volvieron. Cero si no hay ninguno; AUSENTE si no se pudo calcular. La
+	// diferencia importa: "0 retenido" es una afirmación, y no se hace sin saberlo.
+	Retained *moneyJSON `json:"retained,omitempty"`
+	// Pending desglosa lo retenido por plataforma, de mayor a menor.
+	Pending   []pendingGroupJSON `json:"pending,omitempty"`
+	Movements []movementJSON     `json:"movements"`
+}
+
+// pendingGroupJSON es lo retenido para una misma plataforma.
+//
+// Agrupado y no una fila por pago: un agente que paga por llamada deja cientos
+// de retenciones, y lo que una persona necesita saber es cuánto y para quién.
+type pendingGroupJSON struct {
+	// Merchant es el nombre registrado de la integración en el banco, no uno que
+	// ella elija: el mismo criterio que la pantalla de consentimiento. Vacío si
+	// la retención no se hizo bajo un mandato.
+	Merchant string    `json:"merchant"`
+	Count    int64     `json:"count"`
+	Amount   moneyJSON `json:"amount"`
+	// Expired ya venció: sigue retenido hasta que pase el barrendero, pero no se
+	// puede cobrar y vuelve al saldo en breve.
+	Expired moneyJSON `json:"expired"`
+	// LastExpiresAt: antes de esta hora, todo lo retenido o se cobra o vuelve.
+	LastExpiresAt time.Time `json:"last_expires_at"`
 }
 
 // handleHome arma la pantalla principal: cuenta, saldo y últimos movimientos.
@@ -55,11 +82,67 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, p *Principal
 		return
 	}
 
+	retained, pending := s.liveHolds(r.Context(), account.Id, account.Currency)
+
 	writeJSON(w, http.StatusOK, homeResponse{
 		Account:   accountJSON{ID: account.Id, Name: account.Name, Currency: account.Currency},
 		Balance:   moneyJSON{AmountMicros: balance.AmountMicros, Currency: balance.Currency},
+		Retained:  retained,
+		Pending:   pending,
 		Movements: toMovementsJSON(statement.Movements),
 	})
+}
+
+// liveHolds resume lo retenido en la cuenta.
+//
+// Si el core no responde, devuelve nil y la pantalla se arma sin el dato: un
+// inicio sin el desglose es mejor que un inicio que no carga, y la app oculta la
+// fila cuando el dato falta. Lo que nunca hace es contestar "0 retenido" sin
+// saberlo.
+func (s *Server) liveHolds(ctx context.Context, accountID, currency string) (*moneyJSON, []pendingGroupJSON) {
+	groups, err := s.core.SummarizeLiveHolds(ctx, accountID)
+	if err != nil {
+		s.logger.WarnContext(ctx, "no se pudo resumir lo retenido; el inicio sale sin el dato",
+			"account_id", accountID, "error", err)
+		return nil, nil
+	}
+
+	retained := moneyJSON{Currency: currency}
+	pending := make([]pendingGroupJSON, 0, len(groups))
+	for _, g := range groups {
+		if g.Currency != currency {
+			// Una cuenta es de una sola moneda y el core rechaza autorizar en
+			// otra, así que esto no debería ocurrir. Si ocurre, sumarlo mezclaría
+			// monedas: se excluye y queda registrado.
+			s.logger.ErrorContext(ctx, "retención en una moneda distinta a la de la cuenta",
+				"account_id", accountID, "account_currency", currency, "hold_currency", g.Currency)
+			continue
+		}
+		retained.AmountMicros += g.TotalMicros
+		pending = append(pending, pendingGroupJSON{
+			Merchant:      s.merchantName(ctx, g.Grantee),
+			Count:         g.Count,
+			Amount:        moneyJSON{AmountMicros: g.TotalMicros, Currency: g.Currency},
+			Expired:       moneyJSON{AmountMicros: g.ExpiredMicros, Currency: g.Currency},
+			LastExpiresAt: g.LastExpiresAt,
+		})
+	}
+	return &retained, pending
+}
+
+// merchantName traduce el client_id de una integración a su nombre registrado.
+//
+// Si el registro no está disponible se devuelve el client_id: es menos amable,
+// pero sigue identificando de verdad a quien cobra, que es lo que importa.
+func (s *Server) merchantName(ctx context.Context, grantee string) string {
+	if grantee == "" || s.consents == nil {
+		return grantee
+	}
+	client, err := s.consents.FindClient(ctx, grantee)
+	if err != nil || client.Name == "" {
+		return grantee
+	}
+	return client.Name
 }
 
 func (s *Server) handleBalance(w http.ResponseWriter, r *http.Request, p *Principal) {
