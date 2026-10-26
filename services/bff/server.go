@@ -38,13 +38,20 @@ type Server struct {
 	consents *oauth.Store
 	// onboarding habilita el alta de clientes. Opcional, por la misma razón.
 	onboarding *onboardingConfig
+	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
+	// titular. Una sola mientras el banco opera en un país; con más de uno,
+	// saldrá del perfil del cliente.
+	timeZone string
 }
+
+// DefaultTimeZone es la del país ancla.
+const DefaultTimeZone = "America/Lima"
 
 func NewServer(core *coreclient.Client, auth Authenticator, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Server{core: core, auth: auth, logger: logger}
+	return &Server{core: core, auth: auth, logger: logger, timeZone: DefaultTimeZone}
 }
 
 // WithConsents habilita la gestión de permisos delegados en la app.
@@ -130,10 +137,14 @@ type movementJSON struct {
 	Amount moneyJSON `json:"amount"`
 	// Sign es +1 si el movimiento suma al saldo del cliente y -1 si resta.
 	// Se calcula aquí para que la app no tenga que conocer la contabilidad.
-	Sign        int       `json:"sign"`
-	Kind        string    `json:"kind"`
-	Description string    `json:"description"`
-	PostedAt    time.Time `json:"posted_at"`
+	Sign        int    `json:"sign"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	// Merchant es el nombre registrado de la plataforma, en los pagos hechos
+	// con un permiso. Es lo que deja al historial agrupar "120 pagos a
+	// Mercatus" en vez de mostrar 120 filas anónimas.
+	Merchant string    `json:"merchant,omitempty"`
+	PostedAt time.Time `json:"posted_at"`
 }
 
 type errorJSON struct {

@@ -137,6 +137,42 @@ func (c *Client) ListMandates(ctx context.Context, grantedBy string) ([]*Mandate
 	return out, nil
 }
 
+// MandateSpend es lo gastado bajo un mandato, hoy y en el mes en curso.
+type MandateSpend struct {
+	MandateID   string
+	Currency    string
+	TodayMicros int64
+	TodayCount  int64
+	MonthMicros int64
+	MonthCount  int64
+	// InFlightMicros está retenido sin cobrar; incluido en Today y Month.
+	InFlightMicros int64
+}
+
+// SummarizeSpend devuelve el gasto de cada mandato del titular. `timeZone` es la
+// zona IANA de quien mira: "hoy" es su hoy, no el de UTC.
+func (c *Client) SummarizeSpend(ctx context.Context, grantedBy, timeZone string) ([]MandateSpend, error) {
+	var trailer metadata.MD
+	resp, err := c.mandates.SummarizeSpend(ctx,
+		&corev1.SummarizeSpendRequest{GrantedBy: grantedBy, TimeZone: timeZone}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translateMandate(err, trailer)
+	}
+	out := make([]MandateSpend, 0, len(resp.GetMandates()))
+	for _, m := range resp.GetMandates() {
+		out = append(out, MandateSpend{
+			MandateID:      m.GetMandateId(),
+			Currency:       m.GetToday().GetCurrency(),
+			TodayMicros:    m.GetToday().GetAmountMicros(),
+			TodayCount:     m.GetTodayCount(),
+			MonthMicros:    m.GetMonth().GetAmountMicros(),
+			MonthCount:     m.GetMonthCount(),
+			InFlightMicros: m.GetInFlight().GetAmountMicros(),
+		})
+	}
+	return out, nil
+}
+
 // AuthorizeUnderMandate inicia un pago amparado por un mandato.
 //
 // El core comprueba el permiso y retiene el dinero en la misma transacción: no

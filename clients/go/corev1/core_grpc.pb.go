@@ -761,6 +761,7 @@ const (
 	AuthorizationService_GetAuthorization_FullMethodName   = "/aibank.core.v1.AuthorizationService/GetAuthorization"
 	AuthorizationService_ReleaseExpired_FullMethodName     = "/aibank.core.v1.AuthorizationService/ReleaseExpired"
 	AuthorizationService_SummarizeLiveHolds_FullMethodName = "/aibank.core.v1.AuthorizationService/SummarizeLiveHolds"
+	AuthorizationService_LookupHoldGrantees_FullMethodName = "/aibank.core.v1.AuthorizationService/LookupHoldGrantees"
 )
 
 // AuthorizationServiceClient is the client API for AuthorizationService service.
@@ -783,6 +784,10 @@ type AuthorizationServiceClient interface {
 	// llamada deja cientos de retenciones vivas, y un total calculado sumando una
 	// página sería falso en cuanto la lista no cupiera en ella.
 	SummarizeLiveHolds(ctx context.Context, in *SummarizeLiveHoldsRequest, opts ...grpc.CallOption) (*SummarizeLiveHoldsResponse, error)
+	// A qué integración pertenece cada asiento de retención. Para que el
+	// historial diga "pagos a Mercatus" sin acoplar el extracto del ledger a los
+	// mandatos.
+	LookupHoldGrantees(ctx context.Context, in *LookupHoldGranteesRequest, opts ...grpc.CallOption) (*LookupHoldGranteesResponse, error)
 }
 
 type authorizationServiceClient struct {
@@ -853,6 +858,16 @@ func (c *authorizationServiceClient) SummarizeLiveHolds(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *authorizationServiceClient) LookupHoldGrantees(ctx context.Context, in *LookupHoldGranteesRequest, opts ...grpc.CallOption) (*LookupHoldGranteesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LookupHoldGranteesResponse)
+	err := c.cc.Invoke(ctx, AuthorizationService_LookupHoldGrantees_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthorizationServiceServer is the server API for AuthorizationService service.
 // All implementations must embed UnimplementedAuthorizationServiceServer
 // for forward compatibility.
@@ -873,6 +888,10 @@ type AuthorizationServiceServer interface {
 	// llamada deja cientos de retenciones vivas, y un total calculado sumando una
 	// página sería falso en cuanto la lista no cupiera en ella.
 	SummarizeLiveHolds(context.Context, *SummarizeLiveHoldsRequest) (*SummarizeLiveHoldsResponse, error)
+	// A qué integración pertenece cada asiento de retención. Para que el
+	// historial diga "pagos a Mercatus" sin acoplar el extracto del ledger a los
+	// mandatos.
+	LookupHoldGrantees(context.Context, *LookupHoldGranteesRequest) (*LookupHoldGranteesResponse, error)
 	mustEmbedUnimplementedAuthorizationServiceServer()
 }
 
@@ -900,6 +919,9 @@ func (UnimplementedAuthorizationServiceServer) ReleaseExpired(context.Context, *
 }
 func (UnimplementedAuthorizationServiceServer) SummarizeLiveHolds(context.Context, *SummarizeLiveHoldsRequest) (*SummarizeLiveHoldsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SummarizeLiveHolds not implemented")
+}
+func (UnimplementedAuthorizationServiceServer) LookupHoldGrantees(context.Context, *LookupHoldGranteesRequest) (*LookupHoldGranteesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LookupHoldGrantees not implemented")
 }
 func (UnimplementedAuthorizationServiceServer) mustEmbedUnimplementedAuthorizationServiceServer() {}
 func (UnimplementedAuthorizationServiceServer) testEmbeddedByValue()                              {}
@@ -1030,6 +1052,24 @@ func _AuthorizationService_SummarizeLiveHolds_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthorizationService_LookupHoldGrantees_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LookupHoldGranteesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationServiceServer).LookupHoldGrantees(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationService_LookupHoldGrantees_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationServiceServer).LookupHoldGrantees(ctx, req.(*LookupHoldGranteesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthorizationService_ServiceDesc is the grpc.ServiceDesc for AuthorizationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1061,6 +1101,10 @@ var AuthorizationService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "SummarizeLiveHolds",
 			Handler:    _AuthorizationService_SummarizeLiveHolds_Handler,
 		},
+		{
+			MethodName: "LookupHoldGrantees",
+			Handler:    _AuthorizationService_LookupHoldGrantees_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "aibank/core/v1/core.proto",
@@ -1073,6 +1117,7 @@ const (
 	MandateService_FindActiveMandate_FullMethodName     = "/aibank.core.v1.MandateService/FindActiveMandate"
 	MandateService_ListMandates_FullMethodName          = "/aibank.core.v1.MandateService/ListMandates"
 	MandateService_AuthorizeUnderMandate_FullMethodName = "/aibank.core.v1.MandateService/AuthorizeUnderMandate"
+	MandateService_SummarizeSpend_FullMethodName        = "/aibank.core.v1.MandateService/SummarizeSpend"
 )
 
 // MandateServiceClient is the client API for MandateService service.
@@ -1091,6 +1136,8 @@ type MandateServiceClient interface {
 	// Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
 	// transacción.
 	AuthorizeUnderMandate(ctx context.Context, in *AuthorizeUnderMandateRequest, opts ...grpc.CallOption) (*AuthorizeUnderMandateResponse, error)
+	// Lo gastado en cada mandato del titular, hoy y en el mes, en su zona horaria.
+	SummarizeSpend(ctx context.Context, in *SummarizeSpendRequest, opts ...grpc.CallOption) (*SummarizeSpendResponse, error)
 }
 
 type mandateServiceClient struct {
@@ -1161,6 +1208,16 @@ func (c *mandateServiceClient) AuthorizeUnderMandate(ctx context.Context, in *Au
 	return out, nil
 }
 
+func (c *mandateServiceClient) SummarizeSpend(ctx context.Context, in *SummarizeSpendRequest, opts ...grpc.CallOption) (*SummarizeSpendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SummarizeSpendResponse)
+	err := c.cc.Invoke(ctx, MandateService_SummarizeSpend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MandateServiceServer is the server API for MandateService service.
 // All implementations must embed UnimplementedMandateServiceServer
 // for forward compatibility.
@@ -1177,6 +1234,8 @@ type MandateServiceServer interface {
 	// Inicia un pago bajo un mandato: comprueba el permiso y retiene en la misma
 	// transacción.
 	AuthorizeUnderMandate(context.Context, *AuthorizeUnderMandateRequest) (*AuthorizeUnderMandateResponse, error)
+	// Lo gastado en cada mandato del titular, hoy y en el mes, en su zona horaria.
+	SummarizeSpend(context.Context, *SummarizeSpendRequest) (*SummarizeSpendResponse, error)
 	mustEmbedUnimplementedMandateServiceServer()
 }
 
@@ -1204,6 +1263,9 @@ func (UnimplementedMandateServiceServer) ListMandates(context.Context, *ListMand
 }
 func (UnimplementedMandateServiceServer) AuthorizeUnderMandate(context.Context, *AuthorizeUnderMandateRequest) (*AuthorizeUnderMandateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AuthorizeUnderMandate not implemented")
+}
+func (UnimplementedMandateServiceServer) SummarizeSpend(context.Context, *SummarizeSpendRequest) (*SummarizeSpendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SummarizeSpend not implemented")
 }
 func (UnimplementedMandateServiceServer) mustEmbedUnimplementedMandateServiceServer() {}
 func (UnimplementedMandateServiceServer) testEmbeddedByValue()                        {}
@@ -1334,6 +1396,24 @@ func _MandateService_AuthorizeUnderMandate_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MandateService_SummarizeSpend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SummarizeSpendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MandateServiceServer).SummarizeSpend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MandateService_SummarizeSpend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MandateServiceServer).SummarizeSpend(ctx, req.(*SummarizeSpendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MandateService_ServiceDesc is the grpc.ServiceDesc for MandateService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1364,6 +1444,10 @@ var MandateService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AuthorizeUnderMandate",
 			Handler:    _MandateService_AuthorizeUnderMandate_Handler,
+		},
+		{
+			MethodName: "SummarizeSpend",
+			Handler:    _MandateService_SummarizeSpend_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

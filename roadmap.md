@@ -91,9 +91,10 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 |---|---|---|---|---|
 | 1 | La app corre: iOS, Android, portal web; entrada de sandbox; tokens de diseño | Flutter/Go | feat/app-runnable | ✅ |
 | 2 | Disponible frente a retenido, con los pagos en curso agrupados por plataforma | Rust/Go/Flutter | feat/app-saldo-retenido | ✅ |
-| 3 | Alta de nivel 1: DNI verificado, cuenta básica, una persona un alta | Go/Flutter | feat/app-onboarding | 👀 |
+| 3 | Alta de nivel 1: DNI verificado, cuenta básica, una persona un alta | Go/Flutter | feat/app-onboarding | ✅ |
 | 3b | Alta de nivel 2: prueba de vida con la cámara, sube los topes | Swift/Kotlin/Rust | — | ⬜ bloqueado |
-| 4 | Centro de control de agentes: gasto agregado, umbrales de aprobación | Go/Flutter | feat/app-agentes | ⬜ |
+| 4 | Centro de control: gasto de hoy y del mes por plataforma, historial agrupado | Rust/Go/Flutter | feat/app-agentes | 👀 |
+| 4b | Umbral de aprobación por pago y «qué se compró» | Rust/Go/Flutter | — | ⬜ propuesto a Mercatus (AE-09) |
 | 5 | Núcleo de seguridad nativo: passkeys, vinculación, atestación | Swift/Kotlin | feat/app-auth-passkeys | ⬜ |
 
 **Por qué el nivel 2 está bloqueado:** la prueba de vida necesita la cámara y el SDK
@@ -102,9 +103,10 @@ producto de una cuenta —que es lo que sube los topes—. Lo segundo es trabajo
 el core; lo primero espera a elegir proveedor. Tampoco hay todavía aceptación de
 términos en el alta: no existen los términos.
 
-**Visto al verificar el punto 2, para el 4:** el historial de movimientos no agrupa. Un
-agente que hace 120 micropagos deja 120 filas de «−0,001 USD». El desglose de lo retenido
-sí agrupa; el historial tiene que hacer lo mismo.
+**Por qué el 4b espera:** cambia el contrato con Mercatus —un pago que queda pendiente de
+aprobación es un estado nuevo que su cliente tiene que manejar— y **no sirve sin
+notificaciones push**: sin aviso, la persona no se entera de que tiene algo que aprobar y la
+retención vence. Propuesto en el canal (AE-09).
 
 ## Deuda técnica anotada
 

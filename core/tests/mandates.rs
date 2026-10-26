@@ -559,7 +559,7 @@ async fn pagar_y_revocar_a_la_vez_no_deja_un_pago_sin_permiso(pool: PgPool) {
 
 // ---------------------------------------------------------------- lo retenido
 
-/// Lo que ve el titular en la app: cuánto tiene retenido y para quién.
+// Lo que ve el titular en la app: cuánto tiene retenido y para quién.
 
 #[sqlx::test]
 async fn sin_pagos_en_curso_no_hay_nada_retenido(pool: PgPool) {
@@ -708,4 +708,163 @@ async fn una_retencion_sin_mandato_no_se_atribuye_a_nadie(pool: PgPool) {
     // que decir que no se sabe.
     assert_eq!(groups[0].grantee, None);
     assert_eq!(groups[0].total_micros, 2_000000);
+}
+
+// ---------------------------------------------------------------- centro de control
+
+// Lo que ve el titular en el centro de control: cuánto gastó cada plataforma
+// hoy y este mes, y a qué plataforma pertenece cada pago del historial.
+
+async fn backdate(s: &Scene, authorization: Uuid, at: chrono::DateTime<Utc>) {
+    sqlx::query("UPDATE authorizations SET created_at = $2 WHERE id = $1")
+        .bind(authorization)
+        .bind(at)
+        .execute(&s.ctx.pool)
+        .await
+        .unwrap();
+}
+
+fn at(rfc3339: &str) -> chrono::DateTime<Utc> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339).unwrap().with_timezone(&Utc)
+}
+
+#[sqlx::test]
+async fn el_gasto_se_separa_en_hoy_y_en_el_mes(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+
+    let pay = async |amount: i64, when: &str| {
+        let (r, _) = s
+            .mandates
+            .authorize(mandate.id, &payment(s.agent_account, s.payee, amount))
+            .await
+            .unwrap();
+        backdate(&s, r.authorization.id, at(when)).await;
+        r.authorization.id
+    };
+
+    // "Ahora" fijo: 20 de octubre a las 10:00 en Lima (15:00 UTC).
+    let now = at("2026-10-20T15:00:00Z");
+    pay(1_000000, "2026-10-20T14:00:00Z").await; // hoy
+    pay(2_000000, "2026-10-19T15:00:00Z").await; // ayer, mismo mes
+    pay(4_000000, "2026-09-30T15:00:00Z").await; // mes anterior
+
+    let spend = s.mandates.summarize_spend(s.holder, now, "America/Lima").await.unwrap();
+    let m = &spend[0];
+    assert_eq!((m.today_micros, m.today_count), (1_000000, 1));
+    assert_eq!((m.month_micros, m.month_count), (3_000000, 2));
+}
+
+#[sqlx::test]
+async fn hoy_es_el_hoy_de_quien_mira_no_el_de_utc(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let (r, _) = s
+        .mandates
+        .authorize(mandate.id, &payment(s.agent_account, s.payee, 1_000000))
+        .await
+        .unwrap();
+
+    // El pago fue a las 15:00 en Lima. Son las 22:30 en Lima, que en UTC ya es
+    // el día siguiente.
+    backdate(&s, r.authorization.id, at("2026-10-20T20:00:00Z")).await;
+    let now = at("2026-10-21T03:30:00Z");
+
+    let lima = s.mandates.summarize_spend(s.holder, now, "America/Lima").await.unwrap();
+    let utc = s.mandates.summarize_spend(s.holder, now, "UTC").await.unwrap();
+
+    // Para quien vive en Lima, ese pago es de hoy. Calculado en UTC, a esta hora
+    // la persona vería su gasto del día en cero.
+    assert_eq!(lima[0].today_count, 1);
+    assert_eq!(utc[0].today_count, 0);
+}
+
+#[sqlx::test]
+async fn lo_reembolsado_se_descuenta_y_lo_liberado_no_cuenta(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+
+    let mut ids = Vec::new();
+    for amount in [5_000000, 3_000000, 2_000000] {
+        let (r, _) = s
+            .mandates
+            .authorize(mandate.id, &payment(s.agent_account, s.payee, amount))
+            .await
+            .unwrap();
+        ids.push(r.authorization.id);
+    }
+    // 5 cobrado y reembolsado en 1; 3 liberado; 2 sigue retenido.
+    s.auth.capture(ids[0]).await.unwrap();
+    s.auth.refund(ids[0], Some(1_000000)).await.unwrap();
+    s.auth.release(ids[1]).await.unwrap();
+
+    let spend = s.mandates.summarize_spend(s.holder, Utc::now(), "America/Lima").await.unwrap();
+    let m = &spend[0];
+    // La misma regla que el consumo del mandato: la cifra que ve la persona es
+    // la que va agotando su tope.
+    assert_eq!(m.today_micros, 4_000000 + 2_000000);
+    assert_eq!(m.today_count, 2);
+    assert_eq!(m.in_flight_micros, 2_000000);
+
+    let usage = s.mandates.find(mandate.id).await.unwrap().unwrap();
+    assert_eq!(m.month_micros, usage.consumed_micros);
+}
+
+#[sqlx::test]
+async fn un_permiso_sin_pagos_aparece_en_cero(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+
+    let spend = s.mandates.summarize_spend(s.holder, Utc::now(), "America/Lima").await.unwrap();
+    // Que no aparezca haría creer que el permiso no existe.
+    assert_eq!(spend.len(), 1);
+    assert_eq!(spend[0].mandate_id, mandate.id);
+    assert_eq!((spend[0].today_micros, spend[0].month_micros), (0, 0));
+}
+
+#[sqlx::test]
+async fn una_zona_horaria_desconocida_es_un_error_del_llamador(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+
+    let err = s
+        .mandates
+        .summarize_spend(s.holder, Utc::now(), "Lima/Peru")
+        .await
+        .unwrap_err();
+    assert!(matches!(err, MandateError::Invalid(_)), "{err:?}");
+}
+
+#[sqlx::test]
+async fn cada_retencion_bajo_mandato_dice_de_que_plataforma_es(pool: PgPool) {
+    let s = scene(pool, 100_000000).await;
+    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+
+    let (con_mandato, _) = s
+        .mandates
+        .authorize(mandate.id, &payment(s.agent_account, s.payee, 1_000000))
+        .await
+        .unwrap();
+    let sin_mandato = s
+        .auth
+        .authorize(&payment(s.agent_account, s.payee, 1_000000))
+        .await
+        .unwrap();
+
+    let found = s
+        .auth
+        .lookup_hold_grantees(&[
+            con_mandato.authorization.hold_transaction_id,
+            sin_mandato.authorization.hold_transaction_id,
+            Uuid::new_v4(),
+        ])
+        .await
+        .unwrap();
+
+    // Solo la retención hecha bajo un mandato tiene plataforma. Las demás no
+    // aparecen: inventarles una sería peor que no decir nada.
+    assert_eq!(
+        found,
+        vec![(con_mandato.authorization.hold_transaction_id, "mercatus_sandbox".to_string())]
+    );
 }

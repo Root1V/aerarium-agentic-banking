@@ -23,6 +23,10 @@ type homeResponse struct {
 	// Pending desglosa lo retenido por plataforma, de mayor a menor.
 	Pending   []pendingGroupJSON `json:"pending,omitempty"`
 	Movements []movementJSON     `json:"movements"`
+	// HasMore dice si hay movimientos más antiguos que los de esta pantalla.
+	// La app lo necesita para no rotular "10 pagos" una racha que sigue más
+	// allá de lo que se cargó: diría "últimos 10 pagos", que es verdad.
+	HasMore bool `json:"has_more"`
 }
 
 // pendingGroupJSON es lo retenido para una misma plataforma.
@@ -89,7 +93,8 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, p *Principal
 		Balance:   moneyJSON{AmountMicros: balance.AmountMicros, Currency: balance.Currency},
 		Retained:  retained,
 		Pending:   pending,
-		Movements: toMovementsJSON(statement.Movements),
+		Movements: s.toMovementsJSON(r.Context(), statement.Movements),
+		HasMore:   statement.NextCursor != "",
 	})
 }
 
@@ -189,7 +194,7 @@ func (s *Server) handleMovements(w http.ResponseWriter, r *http.Request, p *Prin
 		return
 	}
 	writeJSON(w, http.StatusOK, movementsResponse{
-		Movements:  toMovementsJSON(statement.Movements),
+		Movements:  s.toMovementsJSON(r.Context(), statement.Movements),
 		NextCursor: statement.NextCursor,
 	})
 }
@@ -280,7 +285,45 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 }
 
 // toMovementsJSON convierte movimientos del core al formato del canal.
-func toMovementsJSON(movements []coreclient.Movement) []movementJSON {
+func (s *Server) toMovementsJSON(ctx context.Context, movements []coreclient.Movement) []movementJSON {
+	out := plainMovementsJSON(movements)
+
+	// Los pagos hechos con un permiso se rotulan con su plataforma.
+	var holds []string
+	for _, m := range movements {
+		if m.Kind == "authorization_hold" {
+			holds = append(holds, m.TransactionID)
+		}
+	}
+	if len(holds) == 0 {
+		return out
+	}
+	grantees, err := s.core.LookupHoldGrantees(ctx, holds)
+	if err != nil {
+		// Sin el dato, el historial sale como antes: sin agrupar, pero correcto.
+		s.logger.WarnContext(ctx, "no se pudo resolver la plataforma de los pagos", "error", err)
+		return out
+	}
+
+	// Una consulta al registro por plataforma, no por pago: 120 micropagos de la
+	// misma plataforma son 120 filas y un solo nombre.
+	names := make(map[string]string)
+	for i := range out {
+		grantee, ok := grantees[out[i].ID]
+		if !ok {
+			continue
+		}
+		name, seen := names[grantee]
+		if !seen {
+			name = s.merchantName(ctx, grantee)
+			names[grantee] = name
+		}
+		out[i].Merchant = name
+	}
+	return out
+}
+
+func plainMovementsJSON(movements []coreclient.Movement) []movementJSON {
 	out := make([]movementJSON, 0, len(movements))
 	for _, m := range movements {
 		// La cuenta del cliente es un pasivo del banco: un crédito le SUMA saldo

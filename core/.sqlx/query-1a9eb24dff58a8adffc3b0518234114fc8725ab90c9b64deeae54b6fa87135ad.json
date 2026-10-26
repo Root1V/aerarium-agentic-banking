@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH bounds AS (\n                SELECT date_trunc('day', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3 AS day_start,\n                       date_trunc('month', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3 AS month_start\n            )\n            SELECT m.id AS \"mandate_id!\",\n                   m.currency AS \"currency!\",\n                   COALESCE(SUM(a.amount_micros - a.refunded_micros)\n                            FILTER (WHERE a.created_at >= b.day_start), 0)::BIGINT AS \"today_micros!\",\n                   COUNT(a.id) FILTER (WHERE a.created_at >= b.day_start) AS \"today_count!\",\n                   COALESCE(SUM(a.amount_micros - a.refunded_micros)\n                            FILTER (WHERE a.created_at >= b.month_start), 0)::BIGINT AS \"month_micros!\",\n                   COUNT(a.id) FILTER (WHERE a.created_at >= b.month_start) AS \"month_count!\",\n                   COALESCE(SUM(a.amount_micros)\n                            FILTER (WHERE a.status = 'AUTHORIZED'), 0)::BIGINT AS \"in_flight_micros!\"\n              FROM payment_mandates m\n             CROSS JOIN bounds b\n              LEFT JOIN authorization_mandates am ON am.mandate_id = m.id\n              LEFT JOIN authorizations a ON a.id = am.authorization_id AND a.status <> 'RELEASED'\n             WHERE m.granted_by = $1\n             GROUP BY m.id, m.currency\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mandate_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "today_micros!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "today_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "month_micros!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "month_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "in_flight_micros!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "1a9eb24dff58a8adffc3b0518234114fc8725ab90c9b64deeae54b6fa87135ad"
+}

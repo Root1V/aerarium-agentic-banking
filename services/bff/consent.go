@@ -1,6 +1,7 @@
 package bff
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -94,6 +95,19 @@ type mandateJSON struct {
 	Remaining       *int64     `json:"remaining,omitempty"`
 	ExpiresAt       time.Time  `json:"expires_at"`
 	RevokedAt       *time.Time `json:"revoked_at,omitempty"`
+	// Spend es lo gastado hoy y este mes. Ausente si no se pudo calcular: la
+	// lista de permisos sigue siendo útil sin él, y lo que importa es poder
+	// retirarlos.
+	Spend *mandateSpendJSON `json:"spend,omitempty"`
+}
+
+type mandateSpendJSON struct {
+	Today      moneyJSON `json:"today"`
+	TodayCount int64     `json:"today_count"`
+	Month      moneyJSON `json:"month"`
+	MonthCount int64     `json:"month_count"`
+	// InFlight está retenido sin cobrar; ya va incluido en today y month.
+	InFlight moneyJSON `json:"in_flight"`
 }
 
 // handleApproveConsent otorga el permiso.
@@ -171,7 +185,7 @@ func (s *Server) handleApproveConsent(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, toMandateJSON(mandate))
+	writeJSON(w, http.StatusCreated, s.toMandateJSON(r.Context(), mandate))
 }
 
 // handleRejectConsent rechaza la solicitud sin otorgar nada.
@@ -205,9 +219,28 @@ func (s *Server) handleListMandates(w http.ResponseWriter, r *http.Request, prin
 		return
 	}
 
+	spend := make(map[string]coreclient.MandateSpend)
+	if summary, err := s.core.SummarizeSpend(r.Context(), principal.CustomerID, s.timeZone); err != nil {
+		s.logger.WarnContext(r.Context(), "no se pudo resumir el gasto de los permisos", "error", err)
+	} else {
+		for _, m := range summary {
+			spend[m.MandateID] = m
+		}
+	}
+
 	out := make([]mandateJSON, 0, len(mandates))
 	for _, m := range mandates {
-		out = append(out, toMandateJSON(m))
+		item := s.toMandateJSON(r.Context(), m)
+		if sp, ok := spend[m.ID]; ok {
+			item.Spend = &mandateSpendJSON{
+				Today:      moneyJSON{AmountMicros: sp.TodayMicros, Currency: sp.Currency},
+				TodayCount: sp.TodayCount,
+				Month:      moneyJSON{AmountMicros: sp.MonthMicros, Currency: sp.Currency},
+				MonthCount: sp.MonthCount,
+				InFlight:   moneyJSON{AmountMicros: sp.InFlightMicros, Currency: sp.Currency},
+			}
+		}
+		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"mandates": out})
 }
@@ -231,7 +264,7 @@ func (s *Server) handleRevokeMandate(w http.ResponseWriter, r *http.Request, pri
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "no se pudo retirar el permiso")
 		return
 	}
-	writeJSON(w, http.StatusOK, toMandateJSON(revoked))
+	writeJSON(w, http.StatusOK, s.toMandateJSON(r.Context(), revoked))
 }
 
 // decodeJSON lee el cuerpo con un tope de tamaño y rechaza campos desconocidos.
@@ -248,11 +281,16 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-func toMandateJSON(m *coreclient.Mandate) mandateJSON {
+// toMandateJSON traduce un mandato a lo que ve el titular.
+//
+// `granted_to` es el nombre registrado de la plataforma, no su client_id: la
+// persona concedió el permiso a "Mercatus", no a "mercatus_sandbox", y es por
+// ese nombre por el que lo va a buscar para retirarlo.
+func (s *Server) toMandateJSON(ctx context.Context, m *coreclient.Mandate) mandateJSON {
 	return mandateJSON{
 		MandateID:       m.ID,
 		AccountID:       m.AccountID,
-		GrantedTo:       m.Grantee,
+		GrantedTo:       s.merchantName(ctx, m.Grantee),
 		Currency:        m.Currency,
 		Status:          mandateStatusName(m.Status),
 		MaxPerOperation: m.MaxPerOperation,
