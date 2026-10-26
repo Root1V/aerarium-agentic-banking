@@ -158,14 +158,41 @@ flutter run --dart-define=AIBANK_BFF_URL=http://localhost:8080 \
             --dart-define=AIBANK_TOKEN=... --dart-define=AIBANK_ACCOUNT_ID=...
 ```
 
-Sin sesión fija ni sandbox, la app arranca en **Entrar con passkey**, y el alta
-termina en **Protege tu cuenta**, que registra la primera. El puente con el sistema
-está escrito a mano en Swift (`ios/Runner/AppDelegate.swift`, AuthenticationServices),
-sin paquetes de terceros (doc 14, regla 1). Las pruebas usan un autenticador falso;
-la ceremonia real necesita el dominio asociado (ver el roadmap). En Android el canal
-no tiene módulo todavía y la app lo explica.
+Sin sesión fija ni sandbox, la app entra por `BankEntry` (`lib/entry.dart`):
 
-El token vive solo en memoria: cerrar la app es cerrar la sesión.
+- **Teléfono vinculado:** Face ID al abrir, sin pantalla de login. Si falla o se
+  prefiere, la clave de 6 dígitos.
+- **Teléfono sin vincular:** entrar con passkey o abrir una cuenta. Las dos terminan
+  en **Protege tu cuenta**: crear la clave y activar Face ID, que vincula el teléfono.
+
+El teléfono guarda dos llaves P-256 en el Secure Enclave (`services/devices`): una
+que solo firma tras Face ID —cubre los dos factores— y otra sin biometría que
+acompaña a la clave, para que solo se puedan probar claves desde ese teléfono. La
+clave se verifica en el banco (Argon2id) y cinco errores seguidos bloquean el
+teléfono. Las llaves no se copian a iCloud, a diferencia de las passkeys.
+
+El puente con el sistema está escrito a mano en Swift (`ios/Runner/AppDelegate.swift`,
+CryptoKit, LocalAuthentication y AuthenticationServices), sin paquetes de terceros
+(doc 14, regla 1). En el simulador las llaves son de software, porque el Secure
+Enclave simulado no admite llaves atadas a Face ID; para simular la cara:
+
+```bash
+xcrun simctl spawn booted notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+xcrun simctl spawn booted notifyutil -p com.apple.BiometricKit.enrollmentChanged
+xcrun simctl spawn booted notifyutil -p com.apple.BiometricKit_Sim.pearl.match   # cara reconocida
+```
+
+**En un iPhone de verdad**, conectado por cable y en la misma Wi-Fi que el Mac:
+
+```bash
+app/tool/iphone.sh
+```
+
+Levanta el sandbox con el canal del titular abierto a la red local (con
+`DEV_API_KEY`, para que nadie más en la Wi-Fi use el simulador de titulares) e
+instala la app en modo release apuntando a la IP del Mac.
+
+El token de sesión vive solo en memoria: cerrar la app es cerrar la sesión.
 
 **Para probarla de punta a punta, un comando:**
 
