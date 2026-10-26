@@ -225,3 +225,38 @@ async fn transferencias_cruzadas_simultaneas_no_producen_deadlock() {
     assert_eq!(ctx.accounts.balance_micros(alice).await.unwrap(), 1_000_000000, "10 idas y 10 vueltas se compensan");
     assert_eq!(ctx.accounts.balance_micros(bob).await.unwrap(), 1_000_000000);
 }
+
+// ------------------------------------------------------- 7. cuentas de un cliente
+
+// Un login real sabe quién es la persona, no qué cuenta quiere ver: el core
+// tiene que poder decirle cuáles son las suyas, y solo las suyas.
+#[tokio::test]
+async fn las_cuentas_de_un_cliente_son_solo_las_suyas() {
+    let ctx = setup().await;
+    let product = ctx.simple_product(None, None).await;
+    let ana = Uuid::new_v4();
+    let otro = Uuid::new_v4();
+
+    let primera = ctx
+        .accounts
+        .open_customer_account(&format!("a1-{ana}"), "Principal", ana, &product)
+        .await
+        .unwrap();
+    let segunda = ctx
+        .accounts
+        .open_customer_account(&format!("a2-{ana}"), "Ahorro", ana, &product)
+        .await
+        .unwrap();
+    ctx.accounts
+        .open_customer_account(&format!("b1-{otro}"), "Ajena", otro, &product)
+        .await
+        .unwrap();
+
+    let suyas = ctx.accounts.list_for_customer(ana).await.unwrap();
+    let ids: Vec<_> = suyas.iter().map(|a| a.id).collect();
+    // En orden de apertura: la primera es la principal.
+    assert_eq!(ids, vec![primera.id, segunda.id]);
+    assert!(suyas.iter().all(|a| a.owner == AccountOwner::Customer));
+
+    assert!(ctx.accounts.list_for_customer(Uuid::new_v4()).await.unwrap().is_empty());
+}

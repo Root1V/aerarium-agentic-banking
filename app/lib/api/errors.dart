@@ -23,6 +23,11 @@ enum ApiErrorCode {
   underage,
   rateLimited,
   referenceConflict,
+  // Passkeys.
+  passkeyRejected,
+  ceremonyExpired,
+  notEnrollable,
+  alreadyEnrolled,
   unknown,
 }
 
@@ -53,6 +58,10 @@ class ApiError implements Exception {
         'underage' => ApiErrorCode.underage,
         'rate_limited' => ApiErrorCode.rateLimited,
         'reference_conflict' || 'invalid_reference' => ApiErrorCode.referenceConflict,
+        'passkey_rejected' => ApiErrorCode.passkeyRejected,
+        'ceremony_expired' => ApiErrorCode.ceremonyExpired,
+        'not_enrollable' => ApiErrorCode.notEnrollable,
+        'already_enrolled' => ApiErrorCode.alreadyEnrolled,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -82,6 +91,12 @@ class ApiError implements Exception {
         ApiErrorCode.rateLimited =>
           'Demasiados intentos. Espera un momento y vuelve a intentarlo.',
         ApiErrorCode.referenceConflict => 'Algo salió mal. Intenta de nuevo.',
+        ApiErrorCode.passkeyRejected => 'No pudimos verificar tu passkey.',
+        ApiErrorCode.ceremonyExpired =>
+          'Pasó demasiado tiempo. Vuelve a intentarlo.',
+        ApiErrorCode.notEnrollable =>
+          'No pudimos proteger tu cuenta desde aquí. Escríbenos para ayudarte.',
+        ApiErrorCode.alreadyEnrolled => 'Tu cuenta ya está protegida con una passkey.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',
       };
 

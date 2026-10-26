@@ -1,0 +1,248 @@
+package bff_test
+
+import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	kycsim "github.com/aibank/aibank/adapters/kyc/sim"
+	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/bff"
+	"github.com/aibank/aibank/services/onboarding"
+	"github.com/aibank/aibank/services/passkeys"
+	"github.com/descope/virtualwebauthn"
+	"github.com/google/uuid"
+)
+
+// El recorrido completo de una persona real, por HTTP, contra un core real y un
+// autenticador que firma de verdad: se da de alta, protege su cuenta con una
+// passkey, sale, y vuelve a entrar sin escribir nada.
+
+const passkeyRPID = "aerarium.test"
+
+var passkeyRP = virtualwebauthn.RelyingParty{ID: passkeyRPID, Name: "AIBank", Origin: "https://" + passkeyRPID}
+
+type passkeyEnv struct {
+	srv *httptest.Server
+}
+
+func newPasskeyEnv(t *testing.T) *passkeyEnv {
+	t.Helper()
+	f := setup(t)
+
+	db, err := sql.Open("postgres", bffDatabaseURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	onb := onboarding.NewStore(db)
+	if err := onb.Migrate(f.ctx); err != nil {
+		t.Skipf("base no disponible: %v", err)
+	}
+	pkStore := passkeys.NewStore(db)
+	if err := pkStore.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	product := "BASICA-" + uuid.NewString()[:8]
+	if _, err := f.core.CreateProduct(f.ctx, coreclient.NewProduct{Code: product, Name: "Básica", Currency: "USD"}); err != nil {
+		t.Fatal(err)
+	}
+	onboardingSvc := onboarding.NewService(onb, f.core, kycsim.NewIdentityVerifier(), kycsim.NewSanctionsScreener())
+
+	pk, err := passkeys.NewService(passkeys.Config{
+		RPID: passkeyRPID, RPDisplayName: "AIBank", RPOrigins: []string{"https://" + passkeyRPID},
+	}, pkStore, onb)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	auth := bff.ChainAuthenticator{bff.NewPasskeyAuthenticator(pk)}
+	server := bff.NewServer(f.core, auth, nil).
+		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
+		WithPasskeys(pk)
+	ts := httptest.NewServer(server.Handler())
+	t.Cleanup(ts.Close)
+	return &passkeyEnv{srv: ts}
+}
+
+func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (int, map[string]any) {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		raw, _ := json.Marshal(body)
+		reader = bytes.NewReader(raw)
+	}
+	req, _ := http.NewRequest(method, e.srv.URL+path, reader)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+// phone es un teléfono con su autenticador de plataforma.
+type phone struct {
+	auth virtualwebauthn.Authenticator
+	cred virtualwebauthn.Credential
+	rp   virtualwebauthn.RelyingParty
+}
+
+func newPhone(customerID string) *phone {
+	id := uuid.MustParse(customerID)
+	return &phone{
+		auth: virtualwebauthn.NewAuthenticatorWithOptions(virtualwebauthn.AuthenticatorOptions{UserHandle: id[:]}),
+		cred: virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2),
+		rp:   passkeyRP,
+	}
+}
+
+func (p *phone) create(t *testing.T, options any) json.RawMessage {
+	t.Helper()
+	raw, _ := json.Marshal(options)
+	parsed, err := virtualwebauthn.ParseAttestationOptions(string(raw))
+	if err != nil {
+		t.Fatalf("opciones de registro: %v", err)
+	}
+	return json.RawMessage(virtualwebauthn.CreateAttestationResponse(p.rp, p.auth, p.cred, *parsed))
+}
+
+func (p *phone) get(t *testing.T, options any) json.RawMessage {
+	t.Helper()
+	raw, _ := json.Marshal(options)
+	parsed, err := virtualwebauthn.ParseAssertionOptions(string(raw))
+	if err != nil {
+		t.Fatalf("opciones de login: %v", err)
+	}
+	p.auth.AddCredential(p.cred)
+	p.cred.Counter++
+	return json.RawMessage(virtualwebauthn.CreateAssertionResponse(p.rp, p.auth, p.cred, *parsed))
+}
+
+// onboard da de alta a una persona y registra la passkey de su teléfono.
+func (e *passkeyEnv) onboard(t *testing.T) (token, customer, account string, device *phone) {
+	t.Helper()
+	reference := uuid.NewString()
+	req := applicant(dni())
+	req["reference"] = reference
+	status, alta := e.call(t, http.MethodPost, "/v1/onboarding", "", req)
+	if status != http.StatusOK || alta["status"] != "approved" {
+		t.Fatalf("alta: %d %v", status, alta)
+	}
+	customer, account = alta["customer_id"].(string), alta["account_id"].(string)
+
+	status, begin := e.call(t, http.MethodPost, "/v1/passkeys/enrollment", "", map[string]any{"reference": reference})
+	if status != http.StatusOK {
+		t.Fatalf("empezar registro: %d %v", status, begin)
+	}
+	device = newPhone(customer)
+	status, session := e.call(t, http.MethodPost, "/v1/passkeys/registration", "", map[string]any{
+		"ceremony_id": begin["ceremony_id"], "credential": device.create(t, begin["options"]),
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("terminar registro: %d %v", status, session)
+	}
+	return session["token"].(string), customer, account, device
+}
+
+func (e *passkeyEnv) login(t *testing.T, device *phone) (int, map[string]any) {
+	t.Helper()
+	_, begin := e.call(t, http.MethodPost, "/v1/passkeys/login/options", "", map[string]any{})
+	return e.call(t, http.MethodPost, "/v1/passkeys/login", "", map[string]any{
+		"ceremony_id": begin["ceremony_id"], "credential": device.get(t, begin["options"]),
+	})
+}
+
+func TestDelAltaALaCuentaProtegidaConPasskey(t *testing.T) {
+	e := newPasskeyEnv(t)
+	token, _, account, _ := e.onboard(t)
+
+	// Tras entrar, la app no sabe qué cuenta mostrar: la pide.
+	status, accounts := e.call(t, http.MethodGet, "/v1/accounts", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("cuentas: %d", status)
+	}
+	list := accounts["accounts"].([]any)
+	if len(list) != 1 || list[0].(map[string]any)["id"] != account {
+		t.Fatalf("cuentas = %v, se esperaba la abierta en el alta (%s)", list, account)
+	}
+
+	if status, _ := e.call(t, http.MethodGet, "/v1/home?account_id="+account, token, nil); status != http.StatusOK {
+		t.Errorf("inicio con la sesión de la passkey: %d", status)
+	}
+}
+
+func TestSalirYVolverAEntrarConLaPasskey(t *testing.T) {
+	e := newPasskeyEnv(t)
+	token, customer, account, device := e.onboard(t)
+
+	if status, _ := e.call(t, http.MethodPost, "/v1/session/logout", token, nil); status != http.StatusNoContent {
+		t.Fatalf("salir: %d", status)
+	}
+	if status, _ := e.call(t, http.MethodGet, "/v1/accounts", token, nil); status != http.StatusUnauthorized {
+		t.Errorf("la sesión cerrada sigue sirviendo: %d", status)
+	}
+
+	// Volver a entrar: sin usuario, sin contraseña, sin OTP.
+	status, session := e.login(t, device)
+	if status != http.StatusOK || session["customer_id"] != customer {
+		t.Fatalf("login: %d %v", status, session)
+	}
+	if status, _ := e.call(t, http.MethodGet, "/v1/home?account_id="+account, session["token"].(string), nil); status != http.StatusOK {
+		t.Errorf("inicio tras volver a entrar: %d", status)
+	}
+}
+
+// Una passkey que el banco no conoce y una firma desde un dominio de phishing
+// reciben la misma respuesta: distinguirlas le diría a quien prueba qué existe.
+func TestUnaPasskeyRechazadaNoDiceSiExiste(t *testing.T) {
+	e := newPasskeyEnv(t)
+	_, _, _, device := e.onboard(t)
+
+	phishing := *device
+	phishing.rp.Origin = "https://aerarium-seguro.test"
+	statusA, a := e.login(t, &phishing)
+
+	stranger := newPhone(uuid.NewString())
+	statusB, b := e.login(t, stranger)
+
+	if statusA != http.StatusUnauthorized || statusB != http.StatusUnauthorized {
+		t.Fatalf("estados = %d y %d; se esperaba 401 en los dos", statusA, statusB)
+	}
+	if a["code"] != "passkey_rejected" || a["code"] != b["code"] || a["message"] != b["message"] {
+		t.Errorf("las respuestas se distinguen: %v vs %v", a, b)
+	}
+}
+
+func TestUnaReferenciaAjenaNoRegistraPasskeys(t *testing.T) {
+	e := newPasskeyEnv(t)
+	status, out := e.call(t, http.MethodPost, "/v1/passkeys/enrollment", "", map[string]any{"reference": uuid.NewString()})
+	if status != http.StatusForbidden || out["code"] != "not_enrollable" {
+		t.Errorf("referencia inventada: %d %v", status, out)
+	}
+}
+
+// Sin sesión no se cuelga un segundo dispositivo de la cuenta de nadie.
+func TestAnadirUnDispositivoExigeSesion(t *testing.T) {
+	e := newPasskeyEnv(t)
+	if status, _ := e.call(t, http.MethodPost, "/v1/passkeys/devices", "", nil); status != http.StatusUnauthorized {
+		t.Errorf("sin sesión: %d, se esperaba 401", status)
+	}
+	token, _, _, _ := e.onboard(t)
+	if status, _ := e.call(t, http.MethodPost, "/v1/passkeys/devices", token, nil); status != http.StatusOK {
+		t.Errorf("con sesión: %d, se esperaba 200", status)
+	}
+}

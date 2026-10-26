@@ -100,6 +100,47 @@ impl AccountRepository {
         }))
     }
 
+    /// Las cuentas de un cliente, de la más antigua a la más nueva.
+    ///
+    /// Es lo que necesita un login real: la persona dice quién es con su passkey,
+    /// no qué cuenta quiere ver. Solo cuentas de cliente: las internas del banco
+    /// no tienen titular y no deben aparecer nunca aquí.
+    pub async fn list_for_customer(&self, customer_id: Uuid) -> Result<Vec<Account>, sqlx::Error> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, code, name,
+                   type   as "account_type: AccountType",
+                   owner  as "owner: AccountOwner",
+                   owner_id, product_id, currency,
+                   status as "status: AccountStatus",
+                   allows_overdraft, created_at
+            FROM accounts
+            WHERE owner = 'CUSTOMER' AND owner_id = $1
+            ORDER BY created_at, id
+            "#,
+            customer_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| Account {
+                id: r.id,
+                code: r.code,
+                name: r.name,
+                account_type: r.account_type,
+                owner: r.owner,
+                owner_id: r.owner_id,
+                product_id: r.product_id,
+                currency: r.currency,
+                status: r.status,
+                allows_overdraft: r.allows_overdraft,
+                created_at: r.created_at,
+            })
+            .collect())
+    }
+
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Account>, sqlx::Error> {
         let row = sqlx::query!(
             r#"

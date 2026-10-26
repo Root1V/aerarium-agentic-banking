@@ -9,12 +9,13 @@ import (
 	"testing"
 )
 
-// El canal del titular solo sabe autenticar con el sustituto de desarrollo: las
-// passkeys todavía no existen. Que el binario se niegue a arrancar sin pedirlo
-// explícitamente es lo único que impide que acabe sirviendo datos reales con una
-// autenticación de juguete, y por eso se prueba.
+// Sin una forma de autenticar el canal no arranca. Las passkeys son la forma
+// real; el sustituto de desarrollo hay que pedirlo explícitamente. Es lo que
+// impide que el canal acabe sirviendo datos reales con una autenticación de
+// juguete porque nadie configuró la de verdad.
 func TestNoArrancaSinPedirLaAutenticacionDeDesarrollo(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "")
+	t.Setenv("PASSKEY_RP_ID", "")
 
 	err := run(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err == nil {
@@ -29,9 +30,23 @@ func TestNoArrancaSinPedirLaAutenticacionDeDesarrollo(t *testing.T) {
 // casilla que se marca sola con cualquier cosa que haya en el entorno.
 func TestSoloElValorExactoHabilitaElModoDesarrollo(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "1")
+	t.Setenv("PASSKEY_RP_ID", "")
 
 	if err := run(slog.New(slog.NewTextHandler(io.Discard, nil))); err == nil {
 		t.Fatal("arrancó con ALLOW_DEV_AUTH=1")
+	}
+}
+
+// Las passkeys y las sesiones viven en la base: configurarlas sin ella sería un
+// canal que acepta ceremonias y no puede recordar ninguna.
+func TestLasPasskeysExigenBaseDeDatos(t *testing.T) {
+	t.Setenv("ALLOW_DEV_AUTH", "")
+	t.Setenv("PASSKEY_RP_ID", "aerarium.test")
+	t.Setenv("DATABASE_URL", "")
+
+	err := run(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Fatalf("arranque = %v; se esperaba que pidiera DATABASE_URL", err)
 	}
 }
 

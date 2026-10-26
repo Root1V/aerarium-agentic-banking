@@ -11,7 +11,7 @@ import 'sandbox_client.dart';
 /// `--dart-define=AIBANK_SANDBOX=true`, y sin ese valor el compilador la
 /// elimina de la app — no queda desactivada, deja de existir.
 ///
-/// El login real son passkeys (doc 14, regla 1) y vendrá en su propia rama.
+/// El login real son passkeys (doc 14, regla 1): `LoginScreen`.
 class SandboxEntryScreen extends StatefulWidget {
   const SandboxEntryScreen({
     super.key,

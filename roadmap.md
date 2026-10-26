@@ -93,9 +93,11 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 | 2 | Disponible frente a retenido, con los pagos en curso agrupados por plataforma | Rust/Go/Flutter | feat/app-saldo-retenido | ✅ |
 | 3 | Alta de nivel 1: DNI verificado, cuenta básica, una persona un alta | Go/Flutter | feat/app-onboarding | ✅ |
 | 3b | Alta de nivel 2: prueba de vida con la cámara, sube los topes | Swift/Kotlin/Rust | — | ⬜ bloqueado |
-| 4 | Centro de control: gasto de hoy y del mes por plataforma, historial agrupado | Rust/Go/Flutter | feat/app-agentes | 👀 |
+| 4 | Centro de control: gasto de hoy y del mes por plataforma, historial agrupado | Rust/Go/Flutter | feat/app-agentes | ✅ |
 | 4b | Umbral de aprobación por pago y «qué se compró» | Rust/Go/Flutter | — | ⬜ propuesto a Mercatus (AE-09) |
-| 5 | Núcleo de seguridad nativo: passkeys, vinculación, atestación | Swift/Kotlin | feat/app-auth-passkeys | ⬜ |
+| 5 | Passkeys: el banco como Relying Party, sesiones, entrar y proteger la cuenta en iOS | Go/Rust/Swift/Flutter | feat/app-auth-passkeys | 👀 |
+| 5b | Passkeys en Android | Kotlin | — | ⬜ sin SDK en esta máquina |
+| 5c | Atestación de la app (App Attest, Play Integrity) y vinculación del dispositivo | Swift/Kotlin/Go | — | ⬜ |
 
 **Por qué el nivel 2 está bloqueado:** la prueba de vida necesita la cámara y el SDK
 nativo del proveedor de identidad (Incode, Metamap), y el core no sabe cambiar el
@@ -103,12 +105,29 @@ producto de una cuenta —que es lo que sube los topes—. Lo segundo es trabajo
 el core; lo primero espera a elegir proveedor. Tampoco hay todavía aceptación de
 términos en el alta: no existen los términos.
 
+**Lo que falta para que el 5 funcione en un teléfono:** elegir el dominio del banco. La
+passkey queda atada a él para siempre —cambiarlo después obliga a cada cliente a registrar
+otra—, así que es una decisión de negocio, no de código: está en `PASSKEY_RP_ID`. Con el
+dominio elegido hay que servir `/.well-known/apple-app-site-association` por HTTPS y añadir
+el entitlement `webcredentials:<dominio>` a la app. Hasta entonces el código iOS compila
+pero el sistema rechaza la ceremonia, y la app lo dice («este teléfono todavía no puede
+usar passkeys»). El servidor está probado de punta a punta con un autenticador virtual que
+firma de verdad.
+
 **Por qué el 4b espera:** cambia el contrato con Mercatus —un pago que queda pendiente de
 aprobación es un estado nuevo que su cliente tiene que manejar— y **no sirve sin
 notificaciones push**: sin aviso, la persona no se entera de que tiene algo que aprobar y la
 retención vence. Propuesto en el canal (AE-09).
 
 ## Deuda técnica anotada
+
+- **Una passkey sincronizada no es un dispositivo.** iOS copia las passkeys a los otros
+  equipos de la misma cuenta de iCloud. Firma la persona, con biometría, pero no
+  necesariamente desde el teléfono donde se registró. Para operaciones de alto riesgo
+  hará falta atar la sesión al dispositivo (5c).
+- **Si la app se cierra entre el alta aprobada y «Protege tu cuenta»**, la referencia
+  del alta se pierde (vive en memoria) y la persona queda con cuenta pero sin forma de
+  entrar: hoy, soporte. Guardarla en el llavero del sistema lo resuelve.
 
 - El pool de PostgreSQL del core espera hasta 10 s por una conexión bajo carga en
   vez de fallar rápido: es un precipicio de latencia para el canal móvil. Revisar

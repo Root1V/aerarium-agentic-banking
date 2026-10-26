@@ -38,6 +38,8 @@ type Server struct {
 	consents *oauth.Store
 	// onboarding habilita el alta de clientes. Opcional, por la misma razón.
 	onboarding *onboardingConfig
+	// passkeys habilita el login real y sus ceremonias.
+	passkeys *passkeyConfig
 	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
 	// titular. Una sola mientras el banco opera en un país; con más de uno,
 	// saldrá del perfil del cliente.
@@ -68,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	mux.Handle("GET /v1/accounts", s.requireAuth(s.handleListAccounts))
 	mux.Handle("GET /v1/home", s.requireAuth(s.handleHome))
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
@@ -82,6 +85,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /v1/consent-requests/{handoff}/reject", s.requireAuth(s.handleRejectConsent))
 		mux.Handle("GET /v1/mandates", s.requireAuth(s.handleListMandates))
 		mux.Handle("POST /v1/mandates/{mandateID}/revoke", s.requireAuth(s.handleRevokeMandate))
+	}
+
+	if s.passkeys != nil {
+		s.passkeyRoutes(mux)
 	}
 
 	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.

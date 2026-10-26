@@ -225,6 +225,18 @@ func (c *Client) GetAccount(ctx context.Context, code string) (*corev1.Account, 
 	return account, nil
 }
 
+// ListCustomerAccounts devuelve las cuentas de un cliente, de la más antigua a la
+// más nueva.
+func (c *Client) ListCustomerAccounts(ctx context.Context, customerID string) ([]*corev1.Account, error) {
+	var trailer metadata.MD
+	resp, err := c.accounts.ListCustomerAccounts(ctx,
+		&corev1.ListCustomerAccountsRequest{CustomerId: customerID}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return resp.GetAccounts(), nil
+}
+
 // GetAccountByID busca una cuenta por su identificador interno.
 func (c *Client) GetAccountByID(ctx context.Context, id string) (*corev1.Account, error) {
 	var trailer metadata.MD

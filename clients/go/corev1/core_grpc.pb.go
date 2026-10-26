@@ -219,6 +219,7 @@ const (
 	AccountService_CreateInternalAccount_FullMethodName = "/aibank.core.v1.AccountService/CreateInternalAccount"
 	AccountService_GetAccount_FullMethodName            = "/aibank.core.v1.AccountService/GetAccount"
 	AccountService_GetAccountById_FullMethodName        = "/aibank.core.v1.AccountService/GetAccountById"
+	AccountService_ListCustomerAccounts_FullMethodName  = "/aibank.core.v1.AccountService/ListCustomerAccounts"
 )
 
 // AccountServiceClient is the client API for AccountService service.
@@ -229,6 +230,9 @@ type AccountServiceClient interface {
 	CreateInternalAccount(ctx context.Context, in *CreateInternalAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	GetAccountById(ctx context.Context, in *GetAccountByIdRequest, opts ...grpc.CallOption) (*Account, error)
+	// Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
+	// es, no qué cuenta quiere ver.
+	ListCustomerAccounts(ctx context.Context, in *ListCustomerAccountsRequest, opts ...grpc.CallOption) (*ListCustomerAccountsResponse, error)
 }
 
 type accountServiceClient struct {
@@ -279,6 +283,16 @@ func (c *accountServiceClient) GetAccountById(ctx context.Context, in *GetAccoun
 	return out, nil
 }
 
+func (c *accountServiceClient) ListCustomerAccounts(ctx context.Context, in *ListCustomerAccountsRequest, opts ...grpc.CallOption) (*ListCustomerAccountsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCustomerAccountsResponse)
+	err := c.cc.Invoke(ctx, AccountService_ListCustomerAccounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AccountServiceServer is the server API for AccountService service.
 // All implementations must embed UnimplementedAccountServiceServer
 // for forward compatibility.
@@ -287,6 +301,9 @@ type AccountServiceServer interface {
 	CreateInternalAccount(context.Context, *CreateInternalAccountRequest) (*Account, error)
 	GetAccount(context.Context, *GetAccountRequest) (*Account, error)
 	GetAccountById(context.Context, *GetAccountByIdRequest) (*Account, error)
+	// Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
+	// es, no qué cuenta quiere ver.
+	ListCustomerAccounts(context.Context, *ListCustomerAccountsRequest) (*ListCustomerAccountsResponse, error)
 	mustEmbedUnimplementedAccountServiceServer()
 }
 
@@ -308,6 +325,9 @@ func (UnimplementedAccountServiceServer) GetAccount(context.Context, *GetAccount
 }
 func (UnimplementedAccountServiceServer) GetAccountById(context.Context, *GetAccountByIdRequest) (*Account, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAccountById not implemented")
+}
+func (UnimplementedAccountServiceServer) ListCustomerAccounts(context.Context, *ListCustomerAccountsRequest) (*ListCustomerAccountsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCustomerAccounts not implemented")
 }
 func (UnimplementedAccountServiceServer) mustEmbedUnimplementedAccountServiceServer() {}
 func (UnimplementedAccountServiceServer) testEmbeddedByValue()                        {}
@@ -402,6 +422,24 @@ func _AccountService_GetAccountById_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccountService_ListCustomerAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCustomerAccountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountServiceServer).ListCustomerAccounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccountService_ListCustomerAccounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountServiceServer).ListCustomerAccounts(ctx, req.(*ListCustomerAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AccountService_ServiceDesc is the grpc.ServiceDesc for AccountService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -424,6 +462,10 @@ var AccountService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAccountById",
 			Handler:    _AccountService_GetAccountById_Handler,
+		},
+		{
+			MethodName: "ListCustomerAccounts",
+			Handler:    _AccountService_ListCustomerAccounts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
