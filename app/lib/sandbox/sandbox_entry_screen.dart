@@ -17,6 +17,7 @@ class SandboxEntryScreen extends StatefulWidget {
     super.key,
     required this.client,
     required this.onSession,
+    this.onOpenAccount,
   });
 
   final SandboxClient client;
@@ -24,6 +25,10 @@ class SandboxEntryScreen extends StatefulWidget {
   /// Qué hacer con la sesión creada. La decide quien monta la pantalla, para
   /// que este archivo no tenga que saber cómo se construye el resto de la app.
   final void Function(SandboxSession session) onSession;
+
+  /// Lleva al alta real. Opcional: sin él la pantalla solo ofrece el titular de
+  /// prueba, que es lo que hacía siempre.
+  final VoidCallback? onOpenAccount;
 
   @override
   State<SandboxEntryScreen> createState() => _SandboxEntryScreenState();
@@ -141,6 +146,23 @@ class _SandboxEntryScreenState extends State<SandboxEntryScreen> {
                         )
                       : const Text('Crear titular de prueba'),
                 ),
+                if (widget.onOpenAccount != null) ...[
+                  const SizedBox(height: AppSpacing.xxl),
+                  const Divider(),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'O recorre el alta de verdad: DNI, verificación de identidad '
+                    'y cuenta básica.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  OutlinedButton(
+                    onPressed: _busy ? null : widget.onOpenAccount,
+                    child: const Text('Abrir una cuenta'),
+                  ),
+                ],
               ],
             ),
           ),

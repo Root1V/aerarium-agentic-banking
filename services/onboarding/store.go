@@ -59,6 +59,25 @@ func (s *Store) ByExternalRef(ctx context.Context, ref string) (*Application, er
 	return s.queryOne(ctx, `WHERE external_ref = $1`, ref)
 }
 
+// HasOtherLiveApplication dice si el mismo documento tiene OTRA alta que no
+// terminó en rechazo: aprobada, en curso o en revisión.
+//
+// Las rechazadas no cuentan: quien fue rechazado por una foto borrosa tiene que
+// poder intentarlo de nuevo.
+func (s *Store) HasOtherLiveApplication(ctx context.Context, app *Application) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM onboarding.applications
+			 WHERE country_code = $1 AND document_type = $2 AND document_number = $3
+			   AND id <> $4 AND status <> $5
+		)`,
+		app.Applicant.CountryCode, app.Applicant.DocumentType, app.Applicant.DocumentNumber,
+		app.ID, StatusRejected,
+	).Scan(&exists)
+	return exists, err
+}
+
 func (s *Store) queryOne(ctx context.Context, where string, arg any) (*Application, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, external_ref, customer_id, product_code, status,

@@ -90,10 +90,17 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 | # | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|---|
 | 1 | La app corre: iOS, Android, portal web; entrada de sandbox; tokens de diseño | Flutter/Go | feat/app-runnable | ✅ |
-| 2 | Disponible frente a retenido, con los pagos en curso agrupados por plataforma | Rust/Go/Flutter | feat/app-saldo-retenido | 👀 |
-| 3 | Alta por niveles: sin esto nadie puede hacerse cliente | Go/Flutter | feat/app-onboarding | ⬜ |
+| 2 | Disponible frente a retenido, con los pagos en curso agrupados por plataforma | Rust/Go/Flutter | feat/app-saldo-retenido | ✅ |
+| 3 | Alta de nivel 1: DNI verificado, cuenta básica, una persona un alta | Go/Flutter | feat/app-onboarding | 👀 |
+| 3b | Alta de nivel 2: prueba de vida con la cámara, sube los topes | Swift/Kotlin/Rust | — | ⬜ bloqueado |
 | 4 | Centro de control de agentes: gasto agregado, umbrales de aprobación | Go/Flutter | feat/app-agentes | ⬜ |
 | 5 | Núcleo de seguridad nativo: passkeys, vinculación, atestación | Swift/Kotlin | feat/app-auth-passkeys | ⬜ |
+
+**Por qué el nivel 2 está bloqueado:** la prueba de vida necesita la cámara y el SDK
+nativo del proveedor de identidad (Incode, Metamap), y el core no sabe cambiar el
+producto de una cuenta —que es lo que sube los topes—. Lo segundo es trabajo nuestro en
+el core; lo primero espera a elegir proveedor. Tampoco hay todavía aceptación de
+términos en el alta: no existen los términos.
 
 **Visto al verificar el punto 2, para el 4:** el historial de movimientos no agrupa. Un
 agente que hace 120 micropagos deja 120 filas de «−0,001 USD». El desglose de lo retenido
@@ -110,6 +117,10 @@ sí agrupa; el historial tiene que hacer lo mismo.
   retiene con sus propios asientos, fuera de la tabla de autorizaciones del core. Hoy no
   importa —las tarjetas no están en la app—, pero el día que entren, «retenido» tiene que
   sumarlas o mentirá por omisión.
+- **El límite del alta identifica el origen por la IP de la conexión.** Detrás de un
+  proxy todas las peticiones llegan con la IP del proxy y comparten el límite. Hay que
+  leer la IP real desde una cabecera que ponga el proxy —nunca desde una que pueda
+  escribir el cliente— antes de publicar el alta detrás de Caddy.
 - El límite de tasa de la API de socio es POR INSTANCIA. Con más de una réplica el
   límite efectivo se multiplica; hay que moverlo a un almacén compartido antes de
   escalar horizontalmente — o antes de abrir el sandbox alojado a un segundo socio.

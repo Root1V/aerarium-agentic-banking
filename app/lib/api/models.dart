@@ -298,3 +298,63 @@ class Mandate {
             : DateTime.parse(json['revoked_at'] as String),
       );
 }
+
+
+/// Datos del alta de nivel 1: lo justo para verificar a la persona con la fuente
+/// oficial. Cada campo de más es gente que abandona el formulario.
+class OnboardingRequest {
+  /// La genera el dispositivo y se CONSERVA en cada reintento del mismo alta.
+  final String reference;
+  final String documentNumber;
+  final String firstNames;
+  final String lastNames;
+  final DateTime dateOfBirth;
+
+  const OnboardingRequest({
+    required this.reference,
+    required this.documentNumber,
+    required this.firstNames,
+    required this.lastNames,
+    required this.dateOfBirth,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'reference': reference,
+        'document_number': documentNumber,
+        'first_names': firstNames,
+        'last_names': lastNames,
+        'date_of_birth': '${dateOfBirth.year.toString().padLeft(4, '0')}-'
+            '${dateOfBirth.month.toString().padLeft(2, '0')}-'
+            '${dateOfBirth.day.toString().padLeft(2, '0')}',
+      };
+}
+
+enum OnboardingStatus { approved, inReview, rejected, inProgress }
+
+class OnboardingResult {
+  final String reference;
+  final OnboardingStatus status;
+
+  /// Solo cuando la cuenta está abierta.
+  final String? customerId;
+  final String? accountId;
+
+  const OnboardingResult({
+    required this.reference,
+    required this.status,
+    this.customerId,
+    this.accountId,
+  });
+
+  factory OnboardingResult.fromJson(Map<String, dynamic> json) => OnboardingResult(
+        reference: json['reference'] as String,
+        status: switch (json['status']) {
+          'approved' => OnboardingStatus.approved,
+          'in_review' => OnboardingStatus.inReview,
+          'rejected' => OnboardingStatus.rejected,
+          _ => OnboardingStatus.inProgress,
+        },
+        customerId: json['customer_id'] as String?,
+        accountId: json['account_id'] as String?,
+      );
+}

@@ -102,5 +102,34 @@ class SandboxClient {
     }
   }
 
+  /// Sesión para un cliente que ya existe —recién aprobado en el alta—.
+  ///
+  /// Es el hueco que en producción ocupará el registro de la passkey del
+  /// dispositivo: hoy el sandbox no tiene otra forma de autenticar a nadie.
+  Future<String> createSession(String customerId) async {
+    final http.Response response;
+    try {
+      response = await _http
+          .post(
+            baseUrl.replace(path: '/dev/sessions'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (devKey.isNotEmpty) 'X-Dev-Key': devKey,
+            },
+            body: jsonEncode({'customer_id': customerId}),
+          )
+          .timeout(_timeout);
+    } on Exception {
+      throw const SandboxException(SandboxFailure.unreachable);
+    }
+    if (response.statusCode == 401) {
+      throw const SandboxException(SandboxFailure.wrongDevKey);
+    }
+    if (response.statusCode != 201) {
+      throw const SandboxException(SandboxFailure.unknown);
+    }
+    return (jsonDecode(response.body) as Map<String, dynamic>)['token'] as String;
+  }
+
   void close() => _http.close();
 }

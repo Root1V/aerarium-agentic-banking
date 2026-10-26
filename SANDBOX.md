@@ -195,6 +195,39 @@ que pedir una nueva.
 
 ---
 
+## 5b. Alta de clientes
+
+El canal del titular trae el alta de nivel 1: DNI, nombres, apellidos y fecha de
+nacimiento contra el proveedor de identidad, y una cuenta básica de topes bajos. La
+máquina de estados es la real; el proveedor está simulado, con **DNI de prueba fijos**
+para ensayar cada desenlace, como las tarjetas de prueba de una pasarela:
+
+| DNI | Desenlace |
+|---|---|
+| `00000000` | Identidad no superada → `rejected` |
+| `11111111` | Verificación no concluyente → `in_review` |
+| `22222222` | Coincidencia en listas de sanciones → `in_review` |
+| Cualquier otro de 8 dígitos | `approved`, con cuenta abierta |
+
+```bash
+curl -X POST http://localhost:8080/v1/onboarding -H 'Content-Type: application/json' \
+  -d '{"reference":"<uuid generado por el cliente>","document_number":"45678912",
+       "first_names":"Ana María","last_names":"Pérez Quispe","date_of_birth":"1995-03-14"}'
+```
+
+Tres cosas del contrato que no son obvias:
+
+- **`11111111` y `22222222` responden exactamente igual.** La normativa contra el lavado
+  prohíbe avisarle a alguien de que coincide con una lista; la respuesta no distingue una
+  foto borrosa de una coincidencia en la OFAC. El motivo real queda en el expediente, para
+  cumplimiento.
+- **Un mismo DNI no puede tener dos altas vivas.** La segunda va a revisión, sin abrir
+  cuenta y sin decir por qué: responder «ese DNI ya es cliente» le diría a cualquiera
+  quién tiene cuenta en el banco.
+- **La `reference` la genera el cliente y se conserva en cada reintento.** Es lo que
+  impide abrir dos cuentas tras un corte de red, y lo único que permite consultar el
+  alta después (`GET /v1/onboarding` con la cabecera `X-Onboarding-Reference`).
+
 ## 6. Reiniciar de cero
 
 ```bash

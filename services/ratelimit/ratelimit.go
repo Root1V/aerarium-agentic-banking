@@ -1,22 +1,16 @@
-package mercatus
+// Package ratelimit limita peticiones por clave con un cubo de fichas.
+//
+// Vive aparte porque lo necesitan dos canales que no deben depender uno del
+// otro: la API de socio (por integración y por cuenta pagadora) y el canal del
+// titular (el alta, que es pública y dispara verificaciones que se pagan).
+//
+// El estado está en memoria: el límite es POR INSTANCIA. Con más de una réplica
+// se multiplica, y hay que llevarlo a un almacén compartido antes de escalar.
+package ratelimit
 
 import (
 	"sync"
 	"time"
-)
-
-// Límites por defecto.
-//
-// 50 peticiones por segundo sostenidas es lo publicado en la respuesta a
-// Mercatus. El límite por sub-cuenta es más bajo a propósito: la integración
-// entera comparte una credencial, así que un agente en bucle podría consumir la
-// cuota de todos los demás. Acotarlo por cuenta convierte ese incidente en un
-// problema de un solo agente.
-const (
-	DefaultClientRate   = 50
-	DefaultClientBurst  = 100
-	DefaultAccountRate  = 10
-	DefaultAccountBurst = 20
 )
 
 // bucket es un cubo de fichas: se rellena a `rate` por segundo hasta `burst`.

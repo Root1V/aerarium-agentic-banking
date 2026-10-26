@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS onboarding.applications (
 
 CREATE INDEX IF NOT EXISTS idx_applications_status ON onboarding.applications (status);
 
+-- Para detectar a la misma persona en dos altas distintas. Sin esta comprobación,
+-- quien quisiera saltarse los topes de una cuenta básica abriría varias.
+CREATE INDEX IF NOT EXISTS idx_applications_document
+    ON onboarding.applications (country_code, document_type, document_number);
+
 -- Un paso por verificación. Se conserva el resultado para no repetir trabajo ya
 -- pagado al proveedor y para sustentar la decisión ante el supervisor.
 CREATE TABLE IF NOT EXISTS onboarding.application_steps (

@@ -36,6 +36,8 @@ type Server struct {
 	// plataformas. Así el canal móvil no queda acoplado a que exista una
 	// integración de socio.
 	consents *oauth.Store
+	// onboarding habilita el alta de clientes. Opcional, por la misma razón.
+	onboarding *onboardingConfig
 }
 
 func NewServer(core *coreclient.Client, auth Authenticator, logger *slog.Logger) *Server {
@@ -73,6 +75,13 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("POST /v1/consent-requests/{handoff}/reject", s.requireAuth(s.handleRejectConsent))
 		mux.Handle("GET /v1/mandates", s.requireAuth(s.handleListMandates))
 		mux.Handle("POST /v1/mandates/{mandateID}/revoke", s.requireAuth(s.handleRevokeMandate))
+	}
+
+	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.
+	// Sus defensas están en onboarding.go.
+	if s.onboarding != nil {
+		mux.HandleFunc("POST /v1/onboarding", s.handleSubmitOnboarding)
+		mux.HandleFunc("GET /v1/onboarding", s.handleOnboardingStatus)
 	}
 
 	// El middleware recupera el contexto de traza entrante y abre un span por

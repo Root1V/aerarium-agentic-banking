@@ -20,6 +20,7 @@
 package mercatus
 
 import (
+	"github.com/aibank/aibank/services/ratelimit"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -76,8 +77,8 @@ type Server struct {
 	store     *oauth.Store
 	cfg       Config
 	log       *slog.Logger
-	byClient  *Limiter
-	byAccount *Limiter
+	byClient  *ratelimit.Limiter
+	byAccount *ratelimit.Limiter
 }
 
 func NewServer(core *coreclient.Client, oauthSrv *oauth.Server, store *oauth.Store, cfg Config, log *slog.Logger) *Server {
@@ -91,8 +92,8 @@ func NewServer(core *coreclient.Client, oauthSrv *oauth.Server, store *oauth.Sto
 		store:     store,
 		cfg:       cfg,
 		log:       log,
-		byClient:  NewLimiter(cfg.ClientRate, cfg.ClientBurst),
-		byAccount: NewLimiter(cfg.AccountRate, cfg.AccountBurst),
+		byClient:  ratelimit.NewLimiter(cfg.ClientRate, cfg.ClientBurst),
+		byAccount: ratelimit.NewLimiter(cfg.AccountRate, cfg.AccountBurst),
 	}
 }
 
