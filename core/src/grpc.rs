@@ -359,6 +359,22 @@ impl AccountService for AccountApi {
         Ok(Response::new(account_to_pb(account)))
     }
 
+    async fn list_customer_accounts(
+        &self,
+        request: Request<pb::ListCustomerAccountsRequest>,
+    ) -> Result<Response<pb::ListCustomerAccountsResponse>, Status> {
+        let customer = parse_uuid(&request.into_inner().customer_id, "customer_id")?;
+        let accounts = self
+            .accounts
+            .list_for_customer(customer)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?
+            .into_iter()
+            .map(account_to_pb)
+            .collect();
+        Ok(Response::new(pb::ListCustomerAccountsResponse { accounts }))
+    }
+
     async fn get_account_by_id(
         &self,
         request: Request<pb::GetAccountByIdRequest>,

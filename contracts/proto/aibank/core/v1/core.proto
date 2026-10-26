@@ -194,11 +194,23 @@ message GetAccountByIdRequest {
   string id = 1;
 }
 
+message ListCustomerAccountsRequest {
+  string customer_id = 1;
+}
+
+message ListCustomerAccountsResponse {
+  // De la más antigua a la más nueva. Solo cuentas de cliente.
+  repeated Account accounts = 1;
+}
+
 service AccountService {
   rpc OpenCustomerAccount(OpenCustomerAccountRequest) returns (Account);
   rpc CreateInternalAccount(CreateInternalAccountRequest) returns (Account);
   rpc GetAccount(GetAccountRequest) returns (Account);
   rpc GetAccountById(GetAccountByIdRequest) returns (Account);
+  // Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
+  // es, no qué cuenta quiere ver.
+  rpc ListCustomerAccounts(ListCustomerAccountsRequest) returns (ListCustomerAccountsResponse);
 }
 
 // ---------------------------------------------------------------- productos
