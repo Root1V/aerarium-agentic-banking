@@ -238,7 +238,12 @@ app/tool/iphone.sh
 
 La app arranca como la real: abres una cuenta con un DNI de 8 dígitos (KYC simulado:
 los de prueba de arriba siguen valiendo), creas tu clave, activas Face ID, y desde ahí
-entras con la cara. La primera vez el iPhone pide activar el Modo desarrollador y
+entras con la cara. Un DNI que ya abrió cuenta en este sandbox queda en revisión: la
+regla de una persona, un alta.
+
+Con **Añadir saldo de prueba** recibes 250 USD y un destinatario, Juan Pérez (prueba).
+Enviarle por primera vez pide confirmar con la cara mostrando monto y nombre; los
+envíos siguientes de menos de 200, ya no. La primera vez el iPhone pide activar el Modo desarrollador y
 confiar en el Mac.
 
 ## 6. Reiniciar de cero

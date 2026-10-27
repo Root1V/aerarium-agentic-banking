@@ -194,6 +194,18 @@ instala la app en modo release apuntando a la IP del Mac.
 
 El token de sesión vive solo en memoria: cerrar la app es cerrar la sesión.
 
+**Operaciones de riesgo** (`services/stepup`): una transferencia a un destinatario
+nuevo, o de 200 o más, no se ejecuta con la sesión sola. El banco responde `428
+confirmation_required` con un desafío que lleva dentro el monto, el destino y la
+clave de idempotencia; el teléfono lo firma con Face ID («Envías 50,00 USD a Juan
+Pérez») —o con la clave si la cara no puede— y la app repite la misma petición con
+la firma. Si lo firmado no es exactamente lo que se pide ejecutar, se rechaza: la
+confirmación de 50 no sirve para mover 900. Tras una transferencia confirmada, el
+destinatario queda conocido y los envíos chicos ya no la piden.
+
+En el sandbox, «Añadir saldo de prueba» acredita 250 (bajo el tope por operación de
+la cuenta de nivel 1) y crea un destinatario de prueba para enviarle.
+
 **Para probarla de punta a punta, un comando:**
 
 ```bash
