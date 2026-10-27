@@ -203,3 +203,23 @@ bool isWeakPin(String pin) {
   bool all(bool Function(int i) f) => [for (var i = 1; i < d.length; i++) f(i)].every((x) => x);
   return all((i) => d[i] == d[0]) || all((i) => d[i] == d[i - 1] + 1) || all((i) => d[i] == d[i - 1] - 1);
 }
+
+
+/// Firma con el teléfono la confirmación de una operación de riesgo.
+class TransferConfirmer {
+  const TransferConfirmer({required this.keys});
+
+  final DeviceKeys keys;
+
+  /// Con la cara (`DeviceUnlock.biometric`) o con la clave (`DeviceUnlock.pin`,
+  /// que firma con la llave de posesión y lleva la clave al banco).
+  Future<TransferConfirmation> confirm(
+    ConfirmationChallenge challenge,
+    DeviceUnlock method, {
+    String? pin,
+    required String reason,
+  }) async {
+    final signature = await keys.sign(method, challenge.payload, reason: reason);
+    return TransferConfirmation(challengeId: challenge.id, method: method, signature: signature, pin: pin);
+  }
+}

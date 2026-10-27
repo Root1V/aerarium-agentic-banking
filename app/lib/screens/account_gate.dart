@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../auth/device_keys.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
@@ -11,11 +12,18 @@ import 'home_screen.dart';
 /// La passkey dice quién es la persona, no qué cuenta quiere ver: se piden sus
 /// cuentas y se abre la primera. Con varias cuentas, aquí irá el selector.
 class AccountGate extends StatefulWidget {
-  const AccountGate({super.key, required this.client, required this.onSignOut, this.onUnlink});
+  const AccountGate({
+    super.key,
+    required this.client,
+    required this.onSignOut,
+    this.onUnlink,
+    this.confirmer,
+  });
 
   final BffClient client;
   final VoidCallback onSignOut;
   final Future<void> Function()? onUnlink;
+  final TransferConfirmer? confirmer;
 
   @override
   State<AccountGate> createState() => _AccountGateState();
@@ -23,6 +31,18 @@ class AccountGate extends StatefulWidget {
 
 class _AccountGateState extends State<AccountGate> {
   late Future<List<Account>> _accounts = widget.client.listAccounts();
+
+  /// Si el banco es un sandbox con saldo de prueba. Se pregunta en paralelo.
+  late final Future<bool> _sandbox = widget.client.sandboxAvailable();
+  bool _offerTestFunds = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sandbox.then((available) {
+      if (mounted && available) setState(() => _offerTestFunds = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +59,8 @@ class _AccountGateState extends State<AccountGate> {
             accountId: accounts.first.id,
             onSignOut: widget.onSignOut,
             onUnlink: widget.onUnlink,
+            confirmer: widget.confirmer,
+            offerTestFunds: _offerTestFunds,
           );
         }
 

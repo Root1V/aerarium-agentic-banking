@@ -85,7 +85,7 @@ class Movement {
         // El cobro de tarjeta solo toca la cuenta por la diferencia con lo
         // retenido: propinas, combustible.
         'card_clearing' => 'Ajuste de compra con tarjeta',
-        'sandbox_funding' => 'Saldo inicial de prueba',
+        'sandbox_funding' => 'Saldo de prueba',
         _ => 'Movimiento',
       };
 }
@@ -484,4 +484,73 @@ class LinkedDevice {
   final SessionGrant session;
 
   const LinkedDevice({required this.deviceId, required this.session});
+}
+
+
+/// Lo que el banco pide confirmar antes de mover el dinero.
+class ConfirmationChallenge {
+  final String id;
+
+  /// Los bytes exactos que firma el teléfono, en base64url. Llevan dentro el
+  /// monto y el destino: la firma vale para esta operación y ninguna otra.
+  final String payload;
+  final int amountMicros;
+  final String currency;
+  final String toName;
+
+  const ConfirmationChallenge({
+    required this.id,
+    required this.payload,
+    required this.amountMicros,
+    required this.currency,
+    required this.toName,
+  });
+
+  factory ConfirmationChallenge.fromJson(Map<String, dynamic> json) {
+    final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    return ConfirmationChallenge(
+      id: json['challenge_id'] as String,
+      payload: json['payload'] as String,
+      amountMicros: (summary['amount_micros'] as num?)?.toInt() ?? 0,
+      currency: summary['currency'] as String? ?? '',
+      toName: summary['to_name'] as String? ?? '',
+    );
+  }
+}
+
+/// La firma de una confirmación, para repetir la operación con ella.
+class TransferConfirmation {
+  final String challengeId;
+  final DeviceUnlock method;
+  final String signature;
+  final String? pin;
+
+  const TransferConfirmation({
+    required this.challengeId,
+    required this.method,
+    required this.signature,
+    this.pin,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'challenge_id': challengeId,
+        'method': method.name,
+        'signature': signature,
+        if (pin != null) 'pin': pin,
+      };
+}
+
+/// Saldo de prueba recién acreditado, con alguien a quien enviarle.
+class TestFunds {
+  final int amountMicros;
+  final String currency;
+  final Account payee;
+
+  const TestFunds({required this.amountMicros, required this.currency, required this.payee});
+
+  factory TestFunds.fromJson(Map<String, dynamic> json) => TestFunds(
+        amountMicros: (json['amount_micros'] as num).toInt(),
+        currency: json['currency'] as String,
+        payee: Account.fromJson(json['payee'] as Map<String, dynamic>),
+      );
 }

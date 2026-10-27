@@ -113,6 +113,7 @@ class _BankEntryState extends State<BankEntry> {
   void _enter(BuildContext context, SessionGrant session) {
     _replace(context, (context) => AccountGate(
           client: _client(session.token),
+          confirmer: TransferConfirmer(keys: widget.keys),
           onSignOut: () => _restart(context, autoPrompt: false),
           onUnlink: () async {
             final status = await widget.keys.status();

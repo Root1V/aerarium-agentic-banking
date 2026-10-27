@@ -46,6 +46,7 @@ class BffClient {
     required int amountMicros,
     required String currency,
     String description = '',
+    TransferConfirmation? confirmation,
   }) async {
     final json = await _post(
       '/v1/transfers',
@@ -56,6 +57,7 @@ class BffClient {
         'amount_micros': amountMicros,
         'currency': currency,
         'description': description,
+        if (confirmation != null) 'confirmation': confirmation.toJson(),
       },
     );
     return TransferResult.fromJson(json);
@@ -121,6 +123,23 @@ class BffClient {
   /// Cierra la sesión en el banco, no solo en el teléfono: un token olvidado en
   /// memoria tiene que dejar de valer también del otro lado.
   Future<void> logout() => _postNoContent('/v1/session/logout');
+
+  // --------------------------------------------------------------- sandbox
+
+  /// Si el banco ofrece saldo de prueba. Solo el sandbox lo ofrece; en
+  /// cualquier otro entorno la ruta no existe y la respuesta es `false`.
+  Future<bool> sandboxAvailable() async {
+    try {
+      final json = await _send(() => _http.get(baseUrl.replace(path: '/v1/sandbox')));
+      return json['available'] == true;
+    } on ApiError {
+      return false;
+    }
+  }
+
+  /// Acredita saldo de prueba en la cuenta y crea un destinatario de prueba.
+  Future<TestFunds> addTestFunds(String accountId) async =>
+      TestFunds.fromJson(await _post('/v1/sandbox/funds', headers: const {}, body: {'account_id': accountId}));
 
   // ---------------------------------------------------- teléfono vinculado
 
@@ -278,10 +297,12 @@ class BffClient {
 
     String? code;
     int? remaining;
+    var details = const <String, dynamic>{};
     var detail = 'HTTP ${response.statusCode}';
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
+        details = decoded;
         code = decoded['code'] as String?;
         detail = '${decoded['message'] ?? detail}';
         remaining = (decoded['remaining_attempts'] as num?)?.toInt();
@@ -296,7 +317,7 @@ class BffClient {
       // confundiría.
       return throw ApiError(ApiErrorCode.unauthenticated, detail);
     }
-    throw ApiError.fromResponse(code, detail, remainingAttempts: remaining);
+    throw ApiError.fromResponse(code, detail, remainingAttempts: remaining, details: details);
   }
 }
 

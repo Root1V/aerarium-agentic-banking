@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../auth/device_keys.dart';
 import '../history.dart';
+import '../money.dart';
 import '../theme.dart';
 import 'mandates_screen.dart';
 import 'pending_payments_screen.dart';
@@ -21,6 +23,8 @@ class HomeScreen extends StatefulWidget {
     required this.accountId,
     this.onSignOut,
     this.onUnlink,
+    this.confirmer,
+    this.offerTestFunds = false,
   });
 
   final BffClient client;
@@ -33,6 +37,12 @@ class HomeScreen extends StatefulWidget {
   /// Desvincula este teléfono de la cuenta. Sin él no se ofrece.
   final Future<void> Function()? onUnlink;
 
+  /// Firma con el teléfono las operaciones de riesgo.
+  final TransferConfirmer? confirmer;
+
+  /// Mostrar el botón de saldo de prueba. Solo cuando el banco es un sandbox.
+  final bool offerTestFunds;
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -41,6 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Home? _home;
   ApiError? _error;
   bool _loading = true;
+  bool _funding = false;
+
+  /// El destinatario de prueba que creó el sandbox junto con el saldo.
+  Account? _testPayee;
 
   @override
   void initState() {
@@ -112,6 +126,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _addTestFunds() async {
+    setState(() => _funding = true);
+    try {
+      final funds = await widget.client.addTestFunds(widget.accountId);
+      _testPayee = funds.payee;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Añadimos ${Money(funds.amountMicros, funds.currency).format()} de prueba. '
+            'Puedes enviarle a ${funds.payee.name}.'),
+      ));
+      await _load();
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+    } finally {
+      if (mounted) setState(() => _funding = false);
+    }
+  }
+
   Future<void> _signOut() async {
     try {
       await widget.client.logout();
@@ -173,6 +206,17 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _BalanceCard(home: home, onOpenPending: _openPending),
+        if (widget.offerTestFunds) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _funding ? null : _addTestFunds,
+              icon: const Icon(Icons.science_outlined),
+              label: const Text('Añadir saldo de prueba'),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         Text('Movimientos', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -197,6 +241,8 @@ class _HomeScreenState extends State<HomeScreen> {
           client: widget.client,
           fromAccountId: widget.accountId,
           currency: _home!.balance.currency,
+          confirmer: widget.confirmer,
+          suggestedPayee: _testPayee,
         ),
       ),
     );

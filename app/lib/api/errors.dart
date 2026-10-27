@@ -33,6 +33,10 @@ enum ApiErrorCode {
   deviceLocked,
   deviceRejected,
   weakPin,
+  // Confirmación de operaciones de riesgo.
+  confirmationRequired,
+  confirmationRejected,
+  confirmationUnavailable,
   unknown,
 }
 
@@ -43,12 +47,17 @@ class ApiError implements Exception {
   /// contener detalle del servidor que no le sirve a la persona usuaria.
   final String detail;
 
-  const ApiError(this.code, this.detail, {this.remainingAttempts});
+  const ApiError(this.code, this.detail, {this.remainingAttempts, this.details = const {}});
+
+  /// El cuerpo completo de la respuesta, para los errores que traen datos con
+  /// los que seguir —el desafío de una confirmación, por ejemplo—.
+  final Map<String, dynamic> details;
 
   /// Con `pinIncorrect`: cuántos intentos quedan antes del bloqueo.
   final int? remainingAttempts;
 
-  factory ApiError.fromResponse(String? code, String detail, {int? remainingAttempts}) {
+  factory ApiError.fromResponse(String? code, String detail,
+      {int? remainingAttempts, Map<String, dynamic> details = const {}}) {
     return ApiError(
       switch (code) {
         'unauthenticated' => ApiErrorCode.unauthenticated,
@@ -74,10 +83,14 @@ class ApiError implements Exception {
         'device_locked' => ApiErrorCode.deviceLocked,
         'device_rejected' => ApiErrorCode.deviceRejected,
         'weak_pin' => ApiErrorCode.weakPin,
+        'confirmation_required' => ApiErrorCode.confirmationRequired,
+        'confirmation_rejected' => ApiErrorCode.confirmationRejected,
+        'confirmation_unavailable' => ApiErrorCode.confirmationUnavailable,
         _ => ApiErrorCode.unknown,
       },
       detail,
       remainingAttempts: remainingAttempts,
+      details: details,
     );
   }
 
@@ -118,6 +131,10 @@ class ApiError implements Exception {
         ApiErrorCode.deviceLocked =>
           'Bloqueamos este teléfono por seguridad. Entra con tu passkey o escríbenos.',
         ApiErrorCode.deviceRejected => 'Este teléfono ya no está vinculado a tu cuenta.',
+        ApiErrorCode.confirmationRequired => 'Confirma la operación con tu teléfono.',
+        ApiErrorCode.confirmationRejected => 'No pudimos confirmar la operación. No se envió nada.',
+        ApiErrorCode.confirmationUnavailable =>
+          'Para esta operación, confirma desde tu teléfono vinculado.',
         ApiErrorCode.weakPin =>
           'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',
