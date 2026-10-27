@@ -421,3 +421,94 @@ func TestUnTelefonoDesconocidoSeRechaza(t *testing.T) {
 		}
 	}
 }
+
+// -------------------------------------------------------------- confirmar
+
+var transferOp = []byte("transfer\nfrom=a\nto=b\namount=500000000\ncurrency=USD\nkey=k1")
+
+func (e *env) confirmWith(t *testing.T, p *phone, customer string, signed, executed []byte, method devices.Method, pin string) error {
+	t.Helper()
+	c, err := e.svc.BeginConfirmation(e.ctx, customer, p.id, signed)
+	if err != nil {
+		t.Fatalf("desafío de confirmación: %v", err)
+	}
+	key := p.bio
+	if method == devices.MethodPIN {
+		key = p.possession
+	}
+	return e.svc.Confirm(e.ctx, customer, p.id, c.ID, executed, method, sign(key, c.Payload), pin)
+}
+
+func TestConfirmarUnaOperacionConLaCara(t *testing.T) {
+	e := setup(t)
+	p, customer := e.enrolled(t)
+	if err := e.confirmWith(t, p, customer, transferOp, transferOp, devices.MethodBiometric, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// El vínculo dinámico: lo firmado tiene que ser exactamente lo que se ejecuta.
+func TestLaFirmaDeUnaOperacionNoSirveParaOtra(t *testing.T) {
+	e := setup(t)
+	p, customer := e.enrolled(t)
+	other := []byte("transfer\nfrom=a\nto=b\namount=5000000000\ncurrency=USD\nkey=k1")
+	if err := e.confirmWith(t, p, customer, transferOp, other, devices.MethodBiometric, ""); !errors.Is(err, devices.ErrRejected) {
+		t.Errorf("monto cambiado: %v, se esperaba rechazo", err)
+	}
+	thief := []byte("transfer\nfrom=a\nto=ladron\namount=500000000\ncurrency=USD\nkey=k1")
+	if err := e.confirmWith(t, p, customer, transferOp, thief, devices.MethodBiometric, ""); !errors.Is(err, devices.ErrRejected) {
+		t.Errorf("destino cambiado: %v, se esperaba rechazo", err)
+	}
+}
+
+func TestUnaConfirmacionSirveUnaVez(t *testing.T) {
+	e := setup(t)
+	p, customer := e.enrolled(t)
+	c, _ := e.svc.BeginConfirmation(e.ctx, customer, p.id, transferOp)
+	sig := sign(p.bio, c.Payload)
+	if err := e.svc.Confirm(e.ctx, customer, p.id, c.ID, transferOp, devices.MethodBiometric, sig, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Confirm(e.ctx, customer, p.id, c.ID, transferOp, devices.MethodBiometric, sig, ""); !errors.Is(err, devices.ErrChallengeNotFound) {
+		t.Errorf("repetición: %v", err)
+	}
+}
+
+// Un desafío emitido para un teléfono no lo puede firmar otro, ni siquiera otro
+// del mismo cliente; y nadie pide confirmaciones con el teléfono de otro cliente.
+func TestLaConfirmacionEsDeUnTelefono(t *testing.T) {
+	e := setup(t)
+	p, customer := e.enrolled(t)
+	second := newPhone()
+	res, err := e.svc.AddDevice(e.ctx, customer, e.registration(t, second, "907251"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.id = res.DeviceID
+
+	c, _ := e.svc.BeginConfirmation(e.ctx, customer, p.id, transferOp)
+	if err := e.svc.Confirm(e.ctx, customer, second.id, c.ID, transferOp, devices.MethodBiometric, sign(second.bio, c.Payload), ""); !errors.Is(err, devices.ErrRejected) {
+		t.Errorf("firmado por otro teléfono: %v", err)
+	}
+	if _, err := e.svc.BeginConfirmation(e.ctx, uuid.NewString(), p.id, transferOp); !errors.Is(err, devices.ErrRejected) {
+		t.Errorf("confirmación con el teléfono de otro cliente: %v", err)
+	}
+}
+
+func TestConfirmarConLaClaveCuentaLosIntentos(t *testing.T) {
+	e := setup(t)
+	p, customer := e.enrolled(t)
+	if err := e.confirmWith(t, p, customer, transferOp, transferOp, devices.MethodPIN, goodPIN); err != nil {
+		t.Fatalf("clave buena: %v", err)
+	}
+	err := e.confirmWith(t, p, customer, transferOp, transferOp, devices.MethodPIN, "135790")
+	var wrong *devices.WrongPINError
+	if !errors.As(err, &wrong) || wrong.Remaining != 4 {
+		t.Errorf("clave mala: %v", err)
+	}
+	// La llave de posesión sola, sin clave, no confirma como si fuera la cara.
+	c, _ := e.svc.BeginConfirmation(e.ctx, customer, p.id, transferOp)
+	if err := e.svc.Confirm(e.ctx, customer, p.id, c.ID, transferOp, devices.MethodBiometric, sign(p.possession, c.Payload), ""); !errors.Is(err, devices.ErrRejected) {
+		t.Errorf("posesión haciéndose pasar por biometría: %v", err)
+	}
+}

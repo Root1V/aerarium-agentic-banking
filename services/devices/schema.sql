@@ -39,9 +39,15 @@ CREATE INDEX IF NOT EXISTS idx_devices_customer ON identity.devices (customer_id
 -- Desafíos emitidos y todavía sin usar. Uno vale una vez, para un propósito.
 CREATE TABLE IF NOT EXISTS identity.device_challenges (
     id           UUID PRIMARY KEY,
-    purpose      TEXT NOT NULL CHECK (purpose IN ('register', 'login')),
+    purpose      TEXT NOT NULL,
     device_id    UUID REFERENCES identity.devices (id),
     payload      BYTEA NOT NULL,
     expires_at   TIMESTAMPTZ NOT NULL,
     consumed_at  TIMESTAMPTZ
 );
+
+-- 'confirm': firmar una operación concreta (monto, destino) antes de ejecutarla.
+-- La restricción se rehace para que una base creada antes la acepte.
+ALTER TABLE identity.device_challenges DROP CONSTRAINT IF EXISTS device_challenges_purpose_check;
+ALTER TABLE identity.device_challenges ADD CONSTRAINT device_challenges_purpose_check
+    CHECK (purpose IN ('register', 'login', 'confirm'));
