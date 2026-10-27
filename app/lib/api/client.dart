@@ -132,6 +132,33 @@ class BffClient {
         .toList();
   }
 
+  // ------------------------------------------------------ tarjeta de crédito
+
+  /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
+  /// tarjetas (la ruta no existe).
+  Future<CreditCard?> creditCard() async {
+    try {
+      return CreditCard.fromJson(await _get('/v1/credit/card', const {}));
+    } on ApiError catch (e) {
+      if (e.code == ApiErrorCode.noCreditCard) return null;
+      rethrow;
+    }
+  }
+
+  /// Pide la tarjeta: el banco evalúa los movimientos de esta cuenta.
+  Future<CreditDecision> applyForCredit(String accountId) async =>
+      CreditDecision.fromJson(await _post('/v1/credit/applications', headers: const {}, body: {'account_id': accountId}));
+
+  /// Pasa dinero de la tarjeta a una cuenta propia.
+  Future<void> drawFromCard(String accountId, int amountMicros, {required String idempotencyKey}) =>
+      _post('/v1/credit/card/draws',
+          headers: {'Idempotency-Key': idempotencyKey}, body: {'account_id': accountId, 'amount_micros': amountMicros});
+
+  /// Paga la tarjeta desde una cuenta propia.
+  Future<void> payCard(String accountId, int amountMicros, {required String idempotencyKey}) =>
+      _post('/v1/credit/card/payments',
+          headers: {'Idempotency-Key': idempotencyKey}, body: {'account_id': accountId, 'amount_micros': amountMicros});
+
   // --------------------------------------------------------------- sandbox
 
   /// Si el banco ofrece saldo de prueba. Solo el sandbox lo ofrece; en

@@ -132,6 +132,16 @@ void main() {
       expect(movement(1, counterparty: juan).label, 'De Juan Pérez');
       expect(movement(-1).label, 'Transferencia', reason: 'sin contraparte, el tipo');
     });
+
+    test('con la tarjeta propia dice qué fue, no el nombre del propio titular', () {
+      final self = {'id': 'card', 'name': 'Carmen Huaman Díaz', 'currency': 'USD'};
+      Movement own(String kind, int sign) => Movement.fromJson({
+            'id': 'm', 'cursor': 'm', 'amount': {'amount_micros': 1, 'currency': 'USD'}, 'sign': sign,
+            'kind': kind, 'description': '', 'posted_at': '2026-10-27T12:00:00Z', 'counterparty': self,
+          });
+      expect(own('credit_drawdown', 1).label, 'Desde tu tarjeta de crédito');
+      expect(own('credit_payment', -1).label, 'Pago de tu tarjeta de crédito');
+    });
   });
 
   test('formato y reconocimiento de celulares', () {
