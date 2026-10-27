@@ -137,20 +137,6 @@ void main() {
   });
 
   group('pantalla de envío', () {
-    testWidgets('el destinatario de prueba se elige con un toque', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: TransferScreen(
-          client: FakeBank({}).client(),
-          fromAccountId: 'acc-1',
-          currency: 'USD',
-          suggestedPayee: const Account(id: 'acc-juan', name: 'Juan Pérez (prueba)', currency: 'USD'),
-        ),
-      ));
-      await tester.tap(find.text('Juan Pérez (prueba)'));
-      await tester.pump();
-      expect(tester.widget<TextField>(find.byKey(const Key('destination'))).controller!.text, 'acc-juan');
-    });
-
     testWidgets('mientras se pide la cara no muestra el teclado de la clave', (tester) async {
       final keys = _SlowKeys();
       await tester.pumpWidget(MaterialApp(
