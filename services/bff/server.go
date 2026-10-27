@@ -23,6 +23,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
+	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/sessions"
 )
@@ -51,6 +52,8 @@ type Server struct {
 	sandbox *sandboxConfig
 	// aliases habilita el directorio de celulares.
 	aliases *aliasConfig
+	// credit habilita la tarjeta de crédito.
+	credit *credit.Service
 	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
 	// titular. Una sola mientras el banco opera en un país; con más de uno,
 	// saldrá del perfil del cliente.
@@ -113,6 +116,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.aliases != nil {
 		s.aliasRoutes(mux)
+	}
+	if s.credit != nil {
+		s.creditRoutes(mux)
 	}
 
 	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.
@@ -211,6 +217,12 @@ func (s *Server) writeCoreError(w http.ResponseWriter, r *http.Request, err erro
 		writeError(w, http.StatusUnprocessableEntity, "balance_cap_exceeded", "se superaría el límite de saldo de la cuenta")
 	case errors.Is(err, coreclient.ErrTransactionCapExceeded):
 		writeError(w, http.StatusUnprocessableEntity, "transaction_cap_exceeded", "el monto supera el límite por operación")
+	case errors.Is(err, coreclient.ErrCreditLimitExceeded):
+		writeError(w, http.StatusUnprocessableEntity, "credit_limit_exceeded", "supera lo disponible en tu tarjeta")
+	case errors.Is(err, coreclient.ErrCreditLineInactive):
+		writeError(w, http.StatusUnprocessableEntity, "credit_line_inactive", "tu tarjeta está bloqueada; puedes pagarla")
+	case errors.Is(err, coreclient.ErrOverpayment):
+		writeError(w, http.StatusUnprocessableEntity, "overpayment", "el pago supera lo que debes")
 	case errors.Is(err, coreclient.ErrIdempotencyConflict):
 		writeError(w, http.StatusConflict, "idempotency_conflict", "esa clave ya se usó con otra operación")
 	case errors.Is(err, coreclient.ErrInvalid):

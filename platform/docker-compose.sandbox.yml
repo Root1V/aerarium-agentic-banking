@@ -127,11 +127,29 @@ services:
       # Orígenes del portal web, separados por coma. Vacío = sin CORS, que es lo
       # correcto mientras solo lo use la app móvil.
       CORS_ALLOWED_ORIGINS: ${HOLDER_CORS_ORIGINS:-}
+      # El motor de riesgo, para la tarjeta de crédito.
+      RISK_URL: http://risk:8090
     ports:
       - "${HOLDER_PUBLISH:-8080}:8080"
     depends_on:
       bootstrap:
         condition: service_completed_successfully
+      risk:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # El motor de riesgo: decide a quién se le da tarjeta de crédito y con qué
+  # límite. Solo lo consulta el canal del titular; no se publica.
+  risk:
+    image: ${AIBANK_IMAGE_PREFIX:-aibank}/sandbox-risk:${AIBANK_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: platform/risk.Dockerfile
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   # Sin esto, una retención que nadie captura inmoviliza el dinero para siempre.
