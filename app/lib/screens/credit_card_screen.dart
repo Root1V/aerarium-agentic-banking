@@ -169,9 +169,18 @@ class _CreditApplyScreenState extends State<CreditApplyScreen> {
 
 /// La tarjeta: cuánto se debe, cuánto queda, y mover dinero entre ella y la cuenta.
 class CreditCardScreen extends StatefulWidget {
-  const CreditCardScreen({super.key, required this.client, required this.accountId, required this.card});
+  const CreditCardScreen({
+    super.key,
+    required this.client,
+    required this.accountId,
+    required this.card,
+    this.sandbox = false,
+  });
 
   final BffClient client;
+
+  /// Muestra los atajos del ciclo, que solo existen en el sandbox.
+  final bool sandbox;
 
   /// La cuenta que recibe lo que se pasa de la tarjeta y desde la que se paga.
   final String accountId;
@@ -198,6 +207,7 @@ class _CreditCardScreenState extends State<CreditCardScreen> {
         hint: draw ? 'Disponible ${_card.available.format()}' : 'Debes ${_card.outstanding.format()}',
         action: draw ? 'Pasar' : 'Pagar',
         fullAmount: draw ? null : _card.outstanding,
+        minimumAmount: draw ? null : _card.statement?.minimumLeft,
       ),
     );
     if (amount == null || !mounted) return;
@@ -218,6 +228,22 @@ class _CreditCardScreenState extends State<CreditCardScreen> {
             ? 'Pasamos ${Money(amount, _card.limit.currency).format()} a tu cuenta.'
             : 'Pagaste ${Money(amount, _card.limit.currency).format()}.'),
       ));
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Atajos del sandbox: cortar ahora, o fingir que pasó el vencimiento.
+  Future<void> _sandbox(Future<void> Function() action, String done) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+      final card = await widget.client.creditCard();
+      if (!mounted) return;
+      setState(() => _card = card ?? _card);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
     } on ApiError catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
     } finally {
@@ -267,6 +293,26 @@ class _CreditCardScreenState extends State<CreditCardScreen> {
                 ),
               ],
             ),
+            if (card.statement case final statement?) ...[
+              const SizedBox(height: AppSpacing.xl),
+              _StatementCard(statement: statement),
+            ],
+            if (widget.sandbox) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Text('Entorno de pruebas', style: theme.textTheme.labelLarge),
+              TextButton.icon(
+                onPressed: _busy ? null : () => _sandbox(widget.client.closeCycleNow, 'Cortamos tu estado de cuenta.'),
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Cortar el estado de cuenta ahora'),
+              ),
+              TextButton.icon(
+                onPressed: _busy || card.statement == null
+                    ? null
+                    : () => _sandbox(widget.client.passDueDate, 'Hicimos como si hubiera pasado el vencimiento.'),
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Simular que pasó el vencimiento'),
+              ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             const Divider(),
             ListTile(contentPadding: EdgeInsets.zero, title: const Text('Tasa efectiva anual (TEA)'), trailing: Text(card.annualRate)),
@@ -279,14 +325,23 @@ class _CreditCardScreenState extends State<CreditCardScreen> {
   }
 }
 
-/// Pide un monto. Para pagar ofrece "Pagar todo".
+/// Pide un monto. Para pagar ofrece "Pagar el mínimo" y "Pagar todo".
 class _AmountSheet extends StatefulWidget {
-  const _AmountSheet({required this.title, required this.hint, required this.action, this.fullAmount});
+  const _AmountSheet({
+    required this.title,
+    required this.hint,
+    required this.action,
+    this.fullAmount,
+    this.minimumAmount,
+  });
 
   final String title;
   final String hint;
   final String action;
   final Money? fullAmount;
+
+  /// Lo que falta del pago mínimo del último estado de cuenta.
+  final Money? minimumAmount;
 
   @override
   State<_AmountSheet> createState() => _AmountSheetState();
@@ -331,6 +386,14 @@ class _AmountSheetState extends State<_AmountSheet> {
             decoration: InputDecoration(labelText: 'Monto', errorText: _error),
             onSubmitted: (_) => _submit(),
           ),
+          if (widget.minimumAmount case final minimum? when minimum.amountMicros > 0)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(minimum.amountMicros),
+                child: Text('Pagar el mínimo (${minimum.format()})'),
+              ),
+            ),
           if (widget.fullAmount case final full?)
             Align(
               alignment: Alignment.centerLeft,
@@ -368,6 +431,51 @@ class _SandboxNote extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// El último estado de cuenta: cuánto se debía al corte, el mínimo y hasta cuándo.
+class _StatementCard extends StatelessWidget {
+  const _StatementCard({required this.statement});
+
+  final CreditStatement statement;
+
+  static String _date(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final s = statement;
+    final (label, color) = switch (s.status) {
+      'paid' => ('Pagado', context.moneyColors.positive),
+      'minimum_paid' => ('Mínimo pagado', context.moneyColors.positive),
+      'past_due' => ('Vencido', scheme.error),
+      _ => ('Pendiente', scheme.onSurfaceVariant),
+    };
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Estado de cuenta al ${_date(s.periodEnd.toLocal())}', style: theme.textTheme.titleSmall)),
+                Text(label, key: const Key('statement-status'), style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('Total a pagar: ${s.closing.format()}', style: theme.textTheme.titleMedium),
+            Text('Pago mínimo: ${s.minimumPayment.format()}'),
+            Text('Vence el ${_date(s.dueDate)}'),
+            if (s.interest.amountMicros > 0) Text('Incluye ${s.interest.format()} de intereses'),
+            if (s.paidSinceCut.amountMicros > 0) Text('Ya pagaste ${s.paidSinceCut.format()}'),
+          ],
+        ),
       ),
     );
   }

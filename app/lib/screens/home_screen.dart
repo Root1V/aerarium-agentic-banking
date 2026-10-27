@@ -162,7 +162,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ));
     } else {
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => CreditCardScreen(client: widget.client, accountId: widget.accountId, card: card),
+        builder: (_) => CreditCardScreen(
+          client: widget.client,
+          accountId: widget.accountId,
+          card: card,
+          sandbox: widget.offerTestFunds,
+        ),
       ));
     }
     // Pedirla o usarla cambia la tarjeta y el saldo.

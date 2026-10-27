@@ -159,6 +159,12 @@ class BffClient {
       _post('/v1/credit/card/payments',
           headers: {'Idempotency-Key': idempotencyKey}, body: {'account_id': accountId, 'amount_micros': amountMicros});
 
+  /// Sandbox: corta el estado de cuenta ahora.
+  Future<void> closeCycleNow() => _post('/v1/sandbox/credit/close-cycle', headers: const {}, body: const {});
+
+  /// Sandbox: revisa la mora como si ya hubiera pasado el vencimiento.
+  Future<void> passDueDate() => _post('/v1/sandbox/credit/pass-due-date', headers: const {}, body: const {});
+
   // --------------------------------------------------------------- sandbox
 
   /// Si el banco ofrece saldo de prueba. Solo el sandbox lo ofrece; en
