@@ -45,6 +45,9 @@ type sandboxFundsResponse struct {
 	AmountMicros int64       `json:"amount_micros"`
 	Currency     string      `json:"currency"`
 	Payee        accountJSON `json:"payee"`
+	// PayeePhone es el celular de prueba del destinatario, para probar el envío
+	// a un número. Vacío si el directorio de celulares no está habilitado.
+	PayeePhone string `json:"payee_phone,omitempty"`
 }
 
 func (s *Server) handleSandboxFunds(w http.ResponseWriter, r *http.Request, p *Principal) {
@@ -90,9 +93,18 @@ func (s *Server) handleSandboxFunds(w http.ResponseWriter, r *http.Request, p *P
 		return
 	}
 
-	writeJSON(w, http.StatusOK, sandboxFundsResponse{
+	resp := sandboxFundsResponse{
 		AmountMicros: SandboxFundsMicros,
 		Currency:     currency,
 		Payee:        accountJSON{ID: payee.Id, Name: payee.Name, Currency: payee.Currency},
-	})
+	}
+	if s.aliases != nil {
+		phone, err := s.aliases.svc.RegisterVerified(ctx, payeeID, payee.Id, sandboxPhone())
+		if err != nil {
+			s.aliasError(w, r, err)
+			return
+		}
+		resp.PayeePhone = phone
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

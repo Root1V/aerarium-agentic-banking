@@ -49,6 +49,8 @@ type Server struct {
 	stepUp *stepUpConfig
 	// sandbox habilita el saldo de prueba. Solo en el sandbox.
 	sandbox *sandboxConfig
+	// aliases habilita el directorio de celulares.
+	aliases *aliasConfig
 	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
 	// titular. Una sola mientras el banco opera en un país; con más de uno,
 	// saldrá del perfil del cliente.
@@ -108,6 +110,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.sandbox != nil {
 		s.sandboxRoutes(mux)
+	}
+	if s.aliases != nil {
+		s.aliasRoutes(mux)
 	}
 
 	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.
@@ -169,8 +174,12 @@ type movementJSON struct {
 	// Merchant es el nombre registrado de la plataforma, en los pagos hechos
 	// con un permiso. Es lo que deja al historial agrupar "120 pagos a
 	// Mercatus" en vez de mostrar 120 filas anónimas.
-	Merchant string    `json:"merchant,omitempty"`
-	PostedAt time.Time `json:"posted_at"`
+	Merchant string `json:"merchant,omitempty"`
+	// Counterparty es la otra persona de una transferencia: a quién se le envió
+	// o de quién se recibió. Es lo que deja al historial decir "A Juan Pérez" en
+	// vez de "Transferencia".
+	Counterparty *accountJSON `json:"counterparty,omitempty"`
+	PostedAt     time.Time    `json:"posted_at"`
 }
 
 type errorJSON struct {
