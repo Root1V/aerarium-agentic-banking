@@ -253,3 +253,50 @@ func TestElClienteHTTPDelMotor(t *testing.T) {
 		t.Errorf("motor que rechaza: %v", err)
 	}
 }
+
+// El ciclo desde el servicio: cortar, ver el estado de cuenta, caer en mora y
+// salir de ella pagando, que desbloquea en el momento.
+func TestElCicloDeLaTarjeta(t *testing.T) {
+	e := setup(t, credit.Config{})
+	customer, account := e.customer(t, 500_000_000)
+	if _, err := e.svc.Apply(e.ctx, customer, account, "Ana Pérez"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.PassDueDate(e.ctx, customer); !errors.Is(err, credit.ErrNoStatement) {
+		t.Errorf("sin estado de cuenta: %v", err)
+	}
+	if _, err := e.svc.Draw(e.ctx, customer, account, 200_000_000, "d1"); err != nil {
+		t.Fatal(err)
+	}
+
+	statement, err := e.svc.CloseCycleNow(e.ctx, customer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statement.Closing.AmountMicros != 200_000_000 || statement.MinimumPayment.AmountMicros != 10_000_000 {
+		t.Errorf("estado de cuenta = cierre %d, mínimo %d", statement.Closing.AmountMicros, statement.MinimumPayment.AmountMicros)
+	}
+
+	line, err := e.svc.PassDueDate(e.ctx, customer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if line.Status != corev1.CreditLineStatus_CREDIT_LINE_STATUS_BLOCKED {
+		t.Fatalf("sin pagar el mínimo tras el vencimiento: %v", line.Status)
+	}
+	if _, err := e.svc.Draw(e.ctx, customer, account, 1_000_000, "d2"); !errors.Is(err, coreclient.ErrCreditLineInactive) {
+		t.Errorf("usar bloqueada: %v", err)
+	}
+
+	if _, err := e.svc.Pay(e.ctx, customer, account, 10_000_000, "p1"); err != nil {
+		t.Fatal(err)
+	}
+	line, _ = e.svc.Line(e.ctx, customer)
+	if line.Status != corev1.CreditLineStatus_CREDIT_LINE_STATUS_ACTIVE {
+		t.Errorf("tras pagar el mínimo sigue %v", line.Status)
+	}
+	statements, _ := e.svc.Statements(e.ctx, customer, 5)
+	if len(statements) != 1 || statements[0].PaidSinceCut.AmountMicros != 10_000_000 {
+		t.Errorf("estados de cuenta = %v", statements)
+	}
+}
