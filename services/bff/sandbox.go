@@ -1,0 +1,98 @@
+package bff
+
+import (
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/google/uuid"
+)
+
+// Saldo de prueba, para recorrer la app con dinero sin pasar por un depósito
+// real. SOLO existe en el sandbox: el binario lo monta únicamente con la
+// autenticación de desarrollo, y fuera de ella esta ruta no existe.
+//
+// Además del saldo crea un destinatario de prueba: sin alguien a quien enviarle,
+// la confirmación de operaciones no se puede probar desde el teléfono.
+
+// SandboxFundsMicros es lo que se acredita cada vez: 250, bajo el tope por
+// operación de la cuenta de nivel 1 (300). Se puede pedir varias veces, hasta su
+// tope de saldo.
+const SandboxFundsMicros int64 = 250_000_000
+
+type sandboxConfig struct {
+	cashPrefix    string
+	productPrefix string
+}
+
+// WithSandboxFunds habilita el saldo de prueba. `cashPrefix` + moneda es la caja
+// que lo financia; `productPrefix` + moneda, el producto del destinatario.
+func (s *Server) WithSandboxFunds(cashPrefix, productPrefix string) *Server {
+	s.sandbox = &sandboxConfig{cashPrefix: cashPrefix, productPrefix: productPrefix}
+	return s
+}
+
+func (s *Server) sandboxRoutes(mux *http.ServeMux) {
+	// La app pregunta si existe para decidir si muestra el botón.
+	mux.HandleFunc("GET /v1/sandbox", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"available": true, "amount_micros": SandboxFundsMicros})
+	})
+	mux.Handle("POST /v1/sandbox/funds", s.requireAuth(s.handleSandboxFunds))
+}
+
+type sandboxFundsResponse struct {
+	AmountMicros int64       `json:"amount_micros"`
+	Currency     string      `json:"currency"`
+	Payee        accountJSON `json:"payee"`
+}
+
+func (s *Server) handleSandboxFunds(w http.ResponseWriter, r *http.Request, p *Principal) {
+	var body struct {
+		AccountID string `json:"account_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	ctx := r.Context()
+	account, err := s.authorizeAccount(ctx, p, body.AccountID)
+	if err != nil {
+		s.writeCoreError(w, r, err)
+		return
+	}
+	currency := account.Currency
+
+	cash, err := s.core.GetAccount(ctx, s.sandbox.cashPrefix+currency)
+	if err != nil {
+		s.writeCoreError(w, r, err)
+		return
+	}
+	if _, err := s.core.Post(ctx, "sandbox-funds-"+uuid.NewString(), "sandbox_funding", []coreclient.Entry{
+		coreclient.Debit(cash.Id, SandboxFundsMicros, currency),
+		coreclient.Credit(account.Id, SandboxFundsMicros, currency),
+	}, "saldo de prueba"); err != nil {
+		s.writeCoreError(w, r, err)
+		return
+	}
+
+	product := s.sandbox.productPrefix + currency
+	if _, err := s.core.CreateProduct(ctx, coreclient.NewProduct{
+		Code: product, Name: "Cuenta personal " + currency, Currency: currency,
+	}); err != nil && !errors.Is(err, coreclient.ErrAlreadyExists) {
+		s.writeCoreError(w, r, err)
+		return
+	}
+	payeeID := uuid.NewString()
+	payee, err := s.core.OpenCustomerAccount(ctx, "PAYEE-"+strings.ToUpper(payeeID[:8]),
+		"Juan Pérez (prueba)", payeeID, product)
+	if err != nil {
+		s.writeCoreError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, sandboxFundsResponse{
+		AmountMicros: SandboxFundsMicros,
+		Currency:     currency,
+		Payee:        accountJSON{ID: payee.Id, Name: payee.Name, Currency: payee.Currency},
+	})
+}

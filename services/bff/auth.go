@@ -15,6 +15,9 @@ type Principal struct {
 	CustomerID string
 	// DeviceID permite exigir vinculación de dispositivo en operaciones sensibles.
 	DeviceID string
+	// Factor es cómo entró: passkey, device_biometric o device_pin. Vacío solo
+	// con el sustituto de desarrollo del sandbox.
+	Factor string
 }
 
 // Authenticator resuelve un token a la identidad del cliente.

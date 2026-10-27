@@ -9,6 +9,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"github.com/aibank/aibank/services/stepup"
 )
 
 // homeResponse es la pantalla principal en una sola llamada.
@@ -206,6 +207,9 @@ type transferRequest struct {
 	AmountMicros  int64  `json:"amount_micros"`
 	Currency      string `json:"currency"`
 	Description   string `json:"description"`
+	// Confirmation llega en el segundo intento, cuando la operación pidió
+	// confirmarse con el teléfono.
+	Confirmation *transferConfirmation `json:"confirmation,omitempty"`
 }
 
 type transferResponse struct {
@@ -265,6 +269,18 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
+	confirmed, ok := s.stepUpTransfer(w, r, p, stepup.Transfer{
+		CustomerID:     p.CustomerID,
+		FromAccountID:  req.FromAccountID,
+		ToAccountID:    req.ToAccountID,
+		AmountMicros:   req.AmountMicros,
+		Currency:       req.Currency,
+		IdempotencyKey: idempotencyKey,
+	}, destination.Name, req.Confirmation)
+	if !ok {
+		return
+	}
+
 	// La clave se prefija con el cliente: dos personas pueden usar la misma clave
 	// sin colisionar, y nadie puede afectar la operación de otro adivinándola.
 	key := "bff:transfer:" + p.CustomerID + ":" + idempotencyKey
@@ -276,6 +292,15 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 	if err != nil {
 		s.writeCoreError(w, r, err)
 		return
+	}
+
+	if confirmed {
+		// Desde ahora es un destinatario conocido: los envíos chicos ya no piden
+		// la cara. Si no se pudo anotar, la próxima vez se vuelve a confirmar, que
+		// es el lado seguro del error.
+		if err := s.stepUp.policy.Remember(r.Context(), p.CustomerID, req.ToAccountID); err != nil {
+			s.logger.ErrorContext(r.Context(), "anotar destinatario conocido", "error", err)
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, transferResponse{

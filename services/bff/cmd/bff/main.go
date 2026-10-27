@@ -38,6 +38,7 @@ import (
 	"github.com/aibank/aibank/services/bff/sim"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
+	"github.com/aibank/aibank/services/stepup"
 	_ "github.com/lib/pq"
 )
 
@@ -110,10 +111,14 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		chain = append(chain, bff.NewSessionAuthenticator(sessionStore))
+		policy := stepup.NewService(db, stepup.DefaultPolicy())
+		if err := policy.Migrate(ctx); err != nil {
+			return err
+		}
 		setup = append(setup, func(s *bff.Server) *bff.Server {
-			return s.WithSessions(sessionStore).WithDevices(deviceSvc)
+			return s.WithSessions(sessionStore).WithDevices(deviceSvc).WithStepUp(policy, deviceSvc)
 		})
-		log.Info("teléfonos vinculados habilitados")
+		log.Info("teléfonos vinculados y confirmación de operaciones de riesgo habilitados")
 
 		if rpID != "" {
 			pk, err := setupPasskeys(ctx, db, onboardingStore, sessionStore, rpID)
@@ -149,6 +154,10 @@ func run(log *slog.Logger) error {
 	if devAuth {
 		simAuth = sim.NewAuthenticator()
 		chain = append(chain, simAuth)
+		// Saldo de prueba desde la app. Fuera del sandbox la ruta no existe.
+		setup = append(setup, func(s *bff.Server) *bff.Server {
+			return s.WithSandboxFunds(sandboxCashPrefix, holderProductPrefix)
+		})
 	}
 
 	server := bff.NewServer(core, chain, log)
