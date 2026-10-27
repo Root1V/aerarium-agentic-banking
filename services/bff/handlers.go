@@ -241,7 +241,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 	if req.FromAccountID == req.ToAccountID {
-		writeError(w, http.StatusBadRequest, "invalid_request", "origen y destino no pueden coincidir")
+		writeError(w, http.StatusBadRequest, "same_account", "origen y destino no pueden coincidir")
 		return
 	}
 
@@ -358,14 +358,19 @@ func plainMovementsJSON(movements []coreclient.Movement) []movementJSON {
 		if m.Direction == corev1.Direction_DIRECTION_DEBIT {
 			sign = -1
 		}
+		var counterparty *accountJSON
+		if m.CounterpartyAccountID != "" {
+			counterparty = &accountJSON{ID: m.CounterpartyAccountID, Name: m.CounterpartyName, Currency: m.Currency}
+		}
 		out = append(out, movementJSON{
-			ID:          m.TransactionID,
-			Cursor:      m.Cursor,
-			Amount:      moneyJSON{AmountMicros: m.AmountMicros, Currency: m.Currency},
-			Sign:        sign,
-			Kind:        m.Kind,
-			Description: m.Description,
-			PostedAt:    m.PostedAt,
+			ID:           m.TransactionID,
+			Cursor:       m.Cursor,
+			Amount:       moneyJSON{AmountMicros: m.AmountMicros, Currency: m.Currency},
+			Sign:         sign,
+			Kind:         m.Kind,
+			Description:  m.Description,
+			Counterparty: counterparty,
+			PostedAt:     m.PostedAt,
 		})
 	}
 	return out

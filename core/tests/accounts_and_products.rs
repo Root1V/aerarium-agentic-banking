@@ -260,3 +260,31 @@ async fn las_cuentas_de_un_cliente_son_solo_las_suyas() {
 
     assert!(ctx.accounts.list_for_customer(Uuid::new_v4()).await.unwrap().is_empty());
 }
+
+// ------------------------------------------------------- 8. la otra persona
+
+// El extracto dice a quién se le envió y de quién se recibió. Solo en una
+// transferencia entre dos clientes: al otro lado de un depósito hay una cuenta
+// interna del banco, y esa no se muestra.
+#[tokio::test]
+async fn el_extracto_dice_quien_esta_del_otro_lado() {
+    let ctx = setup().await;
+    let product = ctx.simple_product(None, None).await;
+    let (cash, alice) = ctx.cash_and_customer(&product).await;
+    let bob = ctx.customer_account(&product).await;
+
+    ctx.posting.post(&deposit(cash, alice, 100_000000, &format!("dep-{}", Uuid::new_v4()))).await.unwrap();
+    ctx.posting.post(&transfer(alice, bob, 30_000000, &format!("xf-{}", Uuid::new_v4()))).await.unwrap();
+
+    let bob_name = ctx.accounts.find_by_id(bob).await.unwrap().unwrap().name;
+    let alice_name = ctx.accounts.find_by_id(alice).await.unwrap().unwrap().name;
+
+    let de_alice = ctx.accounts.list_entries(alice, 10, None).await.unwrap();
+    let envio = de_alice[0].counterparty.as_ref().expect("la transferencia dice a quién");
+    assert_eq!((envio.account_id, envio.name.as_str()), (bob, bob_name.as_str()));
+    assert!(de_alice[1].counterparty.is_none(), "el depósito no expone la caja del banco");
+
+    let de_bob = ctx.accounts.list_entries(bob, 10, None).await.unwrap();
+    let recibo = de_bob[0].counterparty.as_ref().expect("y de quién se recibió");
+    assert_eq!((recibo.account_id, recibo.name.as_str()), (alice, alice_name.as_str()));
+}

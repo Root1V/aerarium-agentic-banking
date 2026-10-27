@@ -75,7 +75,7 @@ void main() {
   testWidgets('sin recientes se escribe la cuenta, como antes', (tester) async {
     final bank = await pumpTransfer(tester);
     expect(find.text('Recientes'), findsNothing);
-    expect(find.text('Cuenta de destino'), findsOneWidget);
+    expect(find.text('Celular o cuenta'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('destination')), 'acc-otra');
     await tester.enterText(find.byKey(const Key('amount')), '5');

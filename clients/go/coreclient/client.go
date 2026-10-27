@@ -156,6 +156,9 @@ type Movement struct {
 	Kind         string
 	Description  string
 	PostedAt     time.Time
+	// La otra persona de una transferencia entre clientes. Vacíos en lo demás.
+	CounterpartyAccountID string
+	CounterpartyName      string
 }
 
 // Statement es una página del extracto.
@@ -186,6 +189,9 @@ func (c *Client) ListMovements(ctx context.Context, accountID string, limit int3
 			Kind:          e.Kind,
 			Description:   e.Description,
 			PostedAt:      e.PostedAt.AsTime(),
+
+			CounterpartyAccountID: e.CounterpartyAccountId,
+			CounterpartyName:      e.CounterpartyName,
 		})
 	}
 	return &Statement{Movements: movements, NextCursor: resp.NextCursor}, nil

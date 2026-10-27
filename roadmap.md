@@ -99,8 +99,10 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 | 5b | Passkeys en Android | Kotlin | — | ⬜ sin SDK en esta máquina |
 | 5c | Teléfono vinculado: llave en el Secure Enclave, Face ID al abrir, clave de 6 dígitos con bloqueo | Go/Swift/Flutter | feat/app-device-binding | ✅ probado en iPhone 17 Pro |
 | 5d | Confirmar con Face ID las operaciones de riesgo (monto y destinatario firmados); saldo de prueba en el sandbox | Go/Flutter | feat/app-step-up | ✅ probado en iPhone 17 Pro |
-| 5g | Destinatarios recientes: enviar sin escribir una cuenta | Go/Flutter | feat/app-recent-payees | 👀 |
-| 6 | Enviar a un número de celular o CCI; el historial dice «A Juan Pérez» y no «Transferencia» | Go/Flutter | — | ⬜ |
+| 5g | Destinatarios recientes: enviar sin escribir una cuenta | Go/Flutter | feat/app-recent-payees | ✅ probado en iPhone 17 Pro |
+| 6 | Enviar a un celular (directorio con verificación por SMS); el historial dice «A Juan Pérez» | Rust/Go/Flutter | feat/app-phone-alias | 👀 |
+| 6b | CCI y transferencias a otros bancos | Go | — | ⬜ necesita los rieles de la CCE |
+| 6c | Proveedor de SMS real para el directorio | Go | — | ⬜ hoy solo el sandbox, con códigos visibles |
 | 5e | Atestación de la app (App Attest, Play Integrity) | Swift/Kotlin/Go | — | ⬜ |
 | 5f | Passkey de respaldo desde «Seguridad» y recuperación en un teléfono nuevo | Flutter/Go | — | ⬜ necesita el dominio |
 
@@ -139,6 +141,9 @@ retención vence. Propuesto en el canal (AE-09).
 - **La confirmación cubre transferencias.** Conceder un permiso de pago a un agente
   (modelo B) también es de riesgo y todavía no la pide; tampoco cambiar datos de
   seguridad.
+- **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
+  "Carmen H.": con tres palabras o más, la penúltima). Falla con dos nombres y un
+  apellido. Lo correcto es guardar nombres y apellidos por separado desde el alta.
 - **El umbral de confirmación (200) es fijo** y en la moneda de la cuenta. Con más de
   una moneda o niveles de cuenta, tendrá que ser por producto.
 - **Si la app se cierra entre el alta aprobada y «Protege tu cuenta»**, la referencia

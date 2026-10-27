@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/bff/sim"
 	"github.com/aibank/aibank/services/oauth"
@@ -119,6 +120,20 @@ func run(log *slog.Logger) error {
 			return s.WithSessions(sessionStore).WithDevices(deviceSvc).WithStepUp(policy, deviceSvc)
 		})
 		log.Info("teléfonos vinculados y confirmación de operaciones de riesgo habilitados")
+
+		// El directorio de celulares necesita mandar SMS para verificar números.
+		// Sin proveedor de SMS, solo el sandbox lo tiene, con códigos visibles.
+		if devAuth {
+			sender := aliases.NewSandboxSender()
+			directory := aliases.NewService(db, sender)
+			if err := directory.Migrate(ctx); err != nil {
+				return err
+			}
+			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithAliases(directory, sender) })
+			log.Info("directorio de celulares habilitado con SMS SIMULADO: el código vuelve en la respuesta")
+		} else {
+			log.Warn("directorio de celulares deshabilitado: no hay proveedor de SMS")
+		}
 
 		if rpID != "" {
 			pk, err := setupPasskeys(ctx, db, onboardingStore, sessionStore, rpID)

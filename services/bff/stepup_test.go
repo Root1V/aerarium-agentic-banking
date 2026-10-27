@@ -171,11 +171,32 @@ func TestLosDestinatariosRecientes(t *testing.T) {
 		t.Errorf("reciente = %v", first)
 	}
 
-	// Pedir confirmación sin darla no lo hace reciente.
-	_, other := e.call(t, http.MethodPost, "/v1/sandbox/funds", token, map[string]any{"account_id": account})
-	stranger := other["payee"].(map[string]any)["id"].(string)
+	// Pedir confirmación sin darla no lo hace reciente. El destinatario de prueba
+	// de otra cuenta es, para esta, alguien nuevo.
+	_, _, _, stranger := e.linkedWithFunds(t)
 	e.send(t, token, uuid.NewString(), account, stranger, 10_000_000, nil)
 	if _, out := e.call(t, http.MethodGet, "/v1/payees/recent", token, nil); len(out["payees"].([]any)) != 1 {
 		t.Errorf("un envío sin confirmar entró en recientes: %v", out["payees"])
+	}
+}
+
+// Pedir saldo de prueba varias veces da siempre el mismo destinatario, con el
+// mismo celular: los recientes no se llenan de Juanes repetidos.
+func TestElDestinatarioDePruebaEsSiempreElMismo(t *testing.T) {
+	e := newPasskeyEnv(t)
+	_, token, account, payee := e.linkedWithFunds(t)
+	_, first := e.call(t, http.MethodPost, "/v1/sandbox/funds", token, map[string]any{"account_id": account})
+	_, second := e.call(t, http.MethodPost, "/v1/sandbox/funds", token, map[string]any{"account_id": account})
+
+	for _, funds := range []map[string]any{first, second} {
+		if funds["payee"].(map[string]any)["id"] != payee {
+			t.Errorf("otro destinatario: %v, se esperaba %s", funds["payee"], payee)
+		}
+	}
+	if first["payee_phone"] == "" || first["payee_phone"] != second["payee_phone"] {
+		t.Errorf("el celular cambió: %v y %v", first["payee_phone"], second["payee_phone"])
+	}
+	if got := e.balance(t, token, account); got != 750_000_000 {
+		t.Errorf("tres saldos de prueba = %v, se esperaban 750", got)
 	}
 }
