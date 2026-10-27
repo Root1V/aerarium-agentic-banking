@@ -249,6 +249,13 @@ cuenta** y verás «Juan P.» antes de enviar. Para recibir con tu número: **M�
 número para recibir**; el código del «SMS» aparece en pantalla. La primera vez el iPhone pide activar el Modo desarrollador y
 confiar en el Mac.
 
+## 5d. Tarjeta de crédito
+
+En el inicio, **Pide tu tarjeta de crédito**. El motor de riesgo de verdad evalúa tu
+cuenta; como en el sandbox es nueva, se le suman seis meses de un sueldo simulado (la
+decisión lo dice). Con la tarjeta aprobada puedes **pasar dinero a tu cuenta** y
+**pagarla**. El límite lo hace cumplir el core: no se puede usar más ni pagar de más.
+
 ## 6. Reiniciar de cero
 
 ```bash

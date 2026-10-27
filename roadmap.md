@@ -37,7 +37,9 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
 | Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | ✅ |
-| Originación: límite, disposición y ciclo de tarjeta de crédito | Rust/Go | feat/credit-origination | ⬜ |
+| Originación: solicitud con el motor de riesgo, línea con límite en el core, disposición y pago (en la app) | Rust/Go/Python/Flutter | feat/credit-origination | 👀 |
+| Ciclo de la tarjeta: corte, estado de cuenta, intereses, pago mínimo, vencimiento y mora | Rust/Go/Flutter | feat/credit-cycle | ⬜ siguiente |
+| Compras con la tarjeta de crédito por la red de tarjetas (hoy solo disposición a la cuenta) | Go/Rust | — | ⬜ |
 
 ## Integración Mercatus (riel de pago para agentes de IA)
 
@@ -144,6 +146,14 @@ retención vence. Propuesto en el canal (AE-09).
 - **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
   "Carmen H.": con tres palabras o más, la penúltima). Falla con dos nombres y un
   apellido. Lo correcto es guardar nombres y apellidos por separado desde el alta.
+- **La TEA de las tarjetas (45 %) y el plazo de pago (20 días) son provisionales**: los
+  fija el negocio dentro del tope de tasas del BCRP. Están en la configuración del
+  servicio de crédito, no en el código del core.
+- **El sandbox aprueba tarjetas con un historial sintético** (seis meses de un sueldo de
+  1.500): una cuenta recién abierta nunca califica, y es correcto. La decisión queda
+  marcada (`synthetic_history`) y la app lo dice.
+- **Disponer de la tarjeta no pide confirmación con la cara**: el dinero va a una cuenta
+  propia y sacarlo de ahí sí la pide. Revisarlo si la disposición pasa a ir a terceros.
 - **El umbral de confirmación (200) es fijo** y en la moneda de la cuenta. Con más de
   una moneda o niveles de cuenta, tendrá que ser por producto.
 - **Si la app se cierra entre el alta aprobada y «Protege tu cuenta»**, la referencia
