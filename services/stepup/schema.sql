@@ -13,3 +13,7 @@ CREATE TABLE IF NOT EXISTS identity.known_payees (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (customer_id, account_id)
 );
+
+-- Cuándo se le envió por última vez: ordena la lista de destinatarios recientes.
+ALTER TABLE identity.known_payees ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_known_payees_recent ON identity.known_payees (customer_id, last_used_at DESC);

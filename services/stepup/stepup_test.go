@@ -74,3 +74,30 @@ func TestLoQueSeFirmaDescribeLaOperacionEntera(t *testing.T) {
 		}
 	}
 }
+
+func TestLosRecientesVanDelUltimoAlPrimero(t *testing.T) {
+	svc, ctx := setup(t)
+	customer := uuid.NewString()
+	for _, account := range []string{"ana", "beto", "carla"} {
+		if err := svc.Remember(ctx, customer, account); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Volver a enviarle a Ana la sube al principio, sin duplicarla.
+	if err := svc.Remember(ctx, customer, "ana"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Recent(ctx, customer, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "ana,carla,beto" {
+		t.Errorf("recientes = %v", got)
+	}
+	if got, _ := svc.Recent(ctx, customer, 2); len(got) != 2 {
+		t.Errorf("con límite 2: %v", got)
+	}
+	if got, _ := svc.Recent(ctx, uuid.NewString(), 10); len(got) != 0 {
+		t.Errorf("los recientes de otro cliente: %v", got)
+	}
+}
