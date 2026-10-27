@@ -243,7 +243,7 @@ regla de una persona, un alta.
 
 Con **Añadir saldo de prueba** recibes 250 USD y un destinatario, Juan Pérez (prueba).
 Enviarle por primera vez pide confirmar con la cara mostrando monto y nombre; los
-envíos siguientes de menos de 200, ya no. La primera vez el iPhone pide activar el Modo desarrollador y
+envíos siguientes de menos de 200, ya no, y Juan aparece en **Recientes** al enviar. La primera vez el iPhone pide activar el Modo desarrollador y
 confiar en el Mac.
 
 ## 6. Reiniciar de cero

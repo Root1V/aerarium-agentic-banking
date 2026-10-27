@@ -84,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
+	mux.Handle("GET /v1/payees/recent", s.requireAuth(s.handleRecentPayees))
 
 	// Permisos delegados (modelo B). Solo se montan si el servicio los tiene
 	// configurados: una ruta que devolvería siempre error es peor que una ruta

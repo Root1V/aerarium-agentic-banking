@@ -98,7 +98,9 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 | 5 | Passkeys: el banco como Relying Party, sesiones, entrar y proteger la cuenta en iOS | Go/Rust/Swift/Flutter | feat/app-auth-passkeys | 👀 |
 | 5b | Passkeys en Android | Kotlin | — | ⬜ sin SDK en esta máquina |
 | 5c | Teléfono vinculado: llave en el Secure Enclave, Face ID al abrir, clave de 6 dígitos con bloqueo | Go/Swift/Flutter | feat/app-device-binding | ✅ probado en iPhone 17 Pro |
-| 5d | Confirmar con Face ID las operaciones de riesgo (monto y destinatario firmados); saldo de prueba en el sandbox | Go/Flutter | feat/app-step-up | 👀 |
+| 5d | Confirmar con Face ID las operaciones de riesgo (monto y destinatario firmados); saldo de prueba en el sandbox | Go/Flutter | feat/app-step-up | ✅ probado en iPhone 17 Pro |
+| 5g | Destinatarios recientes: enviar sin escribir una cuenta | Go/Flutter | feat/app-recent-payees | 👀 |
+| 6 | Enviar a un número de celular o CCI; el historial dice «A Juan Pérez» y no «Transferencia» | Go/Flutter | — | ⬜ |
 | 5e | Atestación de la app (App Attest, Play Integrity) | Swift/Kotlin/Go | — | ⬜ |
 | 5f | Passkey de respaldo desde «Seguridad» y recuperación en un teléfono nuevo | Flutter/Go | — | ⬜ necesita el dominio |
 

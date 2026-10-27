@@ -55,23 +55,23 @@ type confirmationSummary struct {
 }
 
 // stepUpTransfer decide si la transferencia necesita confirmación y, si la
-// trae, la verifica. Devuelve si quedó confirmada, y `ok=false` cuando ya
-// respondió y la transferencia no debe seguir.
-func (s *Server) stepUpTransfer(w http.ResponseWriter, r *http.Request, p *Principal, t stepup.Transfer, toName string, c *transferConfirmation) (confirmed, ok bool) {
+// trae, la verifica. Devuelve `false` cuando ya respondió y la transferencia no
+// debe seguir.
+func (s *Server) stepUpTransfer(w http.ResponseWriter, r *http.Request, p *Principal, t stepup.Transfer, toName string, c *transferConfirmation) bool {
 	// Sin política, o con el sustituto de desarrollo del sandbox (que no tiene
 	// teléfono que firme), no hay confirmación que pedir.
 	if s.stepUp == nil || p.Factor == "" {
-		return false, true
+		return true
 	}
 	ctx := r.Context()
 	reason, err := s.stepUp.policy.Required(ctx, t)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "política de confirmación", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
-		return false, false
+		return false
 	}
 	if reason == stepup.ReasonNone {
-		return false, true
+		return true
 	}
 
 	isDevice := p.Factor == string(sessions.FactorDeviceBiometric) || p.Factor == string(sessions.FactorDevicePIN)
@@ -80,14 +80,14 @@ func (s *Server) stepUpTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		// teléfono con la que firmar la operación.
 		writeError(w, http.StatusForbidden, "confirmation_unavailable",
 			"confirma esta operación desde tu teléfono vinculado")
-		return false, false
+		return false
 	}
 
 	if c == nil {
 		challenge, err := s.stepUp.devices.BeginConfirmation(ctx, p.CustomerID, p.DeviceID, t.Operation())
 		if err != nil {
 			s.deviceError(w, r, "desafío de confirmación", err)
-			return false, false
+			return false
 		}
 		writeJSON(w, http.StatusPreconditionRequired, confirmationRequired{
 			Code:        "confirmation_required",
@@ -97,13 +97,13 @@ func (s *Server) stepUpTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 			Reason:      string(reason),
 			Summary:     confirmationSummary{AmountMicros: t.AmountMicros, Currency: t.Currency, ToName: toName},
 		})
-		return false, false
+		return false
 	}
 
 	signature, err := base64.RawURLEncoding.DecodeString(c.Signature)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "firma ilegible")
-		return false, false
+		return false
 	}
 	err = s.stepUp.devices.Confirm(ctx, p.CustomerID, p.DeviceID, c.ChallengeID, t.Operation(),
 		devices.Method(c.Method), signature, c.PIN)
@@ -112,11 +112,36 @@ func (s *Server) stepUpTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		// rechazo. Para afuera no se distingue; para adentro, va al log.
 		s.logger.WarnContext(ctx, "confirmación rechazada", "cliente", p.CustomerID)
 		writeError(w, http.StatusForbidden, "confirmation_rejected", "no pudimos confirmar la operación")
-		return false, false
+		return false
 	}
 	if err != nil {
 		s.deviceError(w, r, "confirmar", err)
-		return false, false
+		return false
 	}
-	return true, true
+	return true
 }
+
+// handleRecentPayees devuelve a quién le envió dinero el titular, del más
+// reciente al más antiguo. Es lo que permite enviar sin escribir una cuenta.
+func (s *Server) handleRecentPayees(w http.ResponseWriter, r *http.Request, p *Principal) {
+	payees := []accountJSON{}
+	if s.stepUp != nil {
+		ids, err := s.stepUp.policy.Recent(r.Context(), p.CustomerID, recentPayeesLimit)
+		if err != nil {
+			s.logger.ErrorContext(r.Context(), "destinatarios recientes", "error", err)
+			writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
+			return
+		}
+		for _, id := range ids {
+			account, err := s.core.GetAccountByID(r.Context(), id)
+			if err != nil {
+				// Una cuenta que ya no existe o no responde no tumba la lista.
+				continue
+			}
+			payees = append(payees, accountJSON{ID: account.Id, Name: account.Name, Currency: account.Currency})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"payees": payees})
+}
+
+const recentPayeesLimit = 10

@@ -145,3 +145,37 @@ func TestFueraDelSandboxNoHaySaldoDePrueba(t *testing.T) {
 		t.Errorf("POST /v1/sandbox/funds = %d", resp.StatusCode)
 	}
 }
+
+func TestLosDestinatariosRecientes(t *testing.T) {
+	e := newPasskeyEnv(t)
+	h, token, account, payee := e.linkedWithFunds(t)
+
+	if status, out := e.call(t, http.MethodGet, "/v1/payees/recent", token, nil); status != http.StatusOK || len(out["payees"].([]any)) != 0 {
+		t.Fatalf("sin envíos: %d %v", status, out)
+	}
+
+	key := uuid.NewString()
+	_, need := e.send(t, token, key, account, payee, 50_000_000, nil)
+	e.send(t, token, key, account, payee, 50_000_000, map[string]any{
+		"challenge_id": need["challenge_id"], "method": "biometric",
+		"signature": signB64(t, h.bio, need["payload"]),
+	})
+
+	_, out := e.call(t, http.MethodGet, "/v1/payees/recent", token, nil)
+	payees := out["payees"].([]any)
+	if len(payees) != 1 {
+		t.Fatalf("recientes = %v", payees)
+	}
+	first := payees[0].(map[string]any)
+	if first["id"] != payee || first["name"] != "Juan Pérez (prueba)" {
+		t.Errorf("reciente = %v", first)
+	}
+
+	// Pedir confirmación sin darla no lo hace reciente.
+	_, other := e.call(t, http.MethodPost, "/v1/sandbox/funds", token, map[string]any{"account_id": account})
+	stranger := other["payee"].(map[string]any)["id"].(string)
+	e.send(t, token, uuid.NewString(), account, stranger, 10_000_000, nil)
+	if _, out := e.call(t, http.MethodGet, "/v1/payees/recent", token, nil); len(out["payees"].([]any)) != 1 {
+		t.Errorf("un envío sin confirmar entró en recientes: %v", out["payees"])
+	}
+}

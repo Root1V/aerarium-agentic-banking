@@ -124,6 +124,14 @@ class BffClient {
   /// memoria tiene que dejar de valer también del otro lado.
   Future<void> logout() => _postNoContent('/v1/session/logout');
 
+  /// A quién se le envió dinero, del más reciente al más antiguo.
+  Future<List<Account>> recentPayees() async {
+    final json = await _get('/v1/payees/recent', const {});
+    return ((json['payees'] as List<dynamic>?) ?? const [])
+        .map((a) => Account.fromJson(a as Map<String, dynamic>))
+        .toList();
+  }
+
   // --------------------------------------------------------------- sandbox
 
   /// Si el banco ofrece saldo de prueba. Solo el sandbox lo ofrece; en

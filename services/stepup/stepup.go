@@ -95,10 +95,36 @@ func (s *Service) Required(ctx context.Context, t Transfer) (Reason, error) {
 	return ReasonNone, nil
 }
 
-// Remember anota el destinatario como conocido tras una transferencia confirmada.
+// Remember anota el destinatario tras una transferencia hecha: queda conocido y
+// pasa al principio de los recientes.
+//
+// Se llama tras CUALQUIER transferencia con sesión real, no solo las
+// confirmadas: a un destinatario desconocido solo se llega confirmando, así que
+// si no hubo confirmación es que ya era conocido y esto solo actualiza la fecha.
 func (s *Service) Remember(ctx context.Context, customerID, accountID string) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO identity.known_payees (customer_id, account_id) VALUES ($1, $2)
-		ON CONFLICT DO NOTHING`, customerID, accountID)
+		ON CONFLICT (customer_id, account_id) DO UPDATE SET last_used_at = now()`, customerID, accountID)
 	return err
+}
+
+// Recent devuelve las cuentas a las que el cliente envió dinero, de la más
+// reciente a la más antigua.
+func (s *Service) Recent(ctx context.Context, customerID string, limit int) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT account_id FROM identity.known_payees
+		 WHERE customer_id = $1 ORDER BY last_used_at DESC LIMIT $2`, customerID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
 }

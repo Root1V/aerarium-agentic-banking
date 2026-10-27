@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/client.dart';
+import '../api/errors.dart';
 import '../api/models.dart';
 import '../auth/device_keys.dart';
 import '../money.dart';
@@ -30,8 +31,8 @@ class TransferScreen extends StatefulWidget {
   /// Firma con el teléfono las operaciones de riesgo.
   final TransferConfirmer? confirmer;
 
-  /// Un destinatario a mano —en el sandbox, el de prueba— para no tener que
-  /// escribir un identificador de cuenta en el teléfono.
+  /// Un destinatario más para la lista —en el sandbox, el de prueba recién
+  /// creado— aunque todavía no se le haya enviado nada.
   final Account? suggestedPayee;
 
   @override
@@ -48,10 +49,33 @@ class _TransferScreenState extends State<TransferScreen> {
 
   String? _amountError;
 
+  /// A quién se le envía, elegido de los recientes. Mientras sea null, se
+  /// escribe la cuenta a mano.
+  Account? _payee;
+  List<Account> _recent = const [];
+
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onControllerChanged);
+    if (widget.suggestedPayee case final payee?) _recent = [payee];
+    _loadRecent();
+  }
+
+  /// Si la lista no carga, se escribe la cuenta a mano: no es motivo para no
+  /// poder enviar.
+  Future<void> _loadRecent() async {
+    try {
+      final recent = await widget.client.recentPayees();
+      if (!mounted) return;
+      final suggested = widget.suggestedPayee;
+      setState(() => _recent = [
+            if (suggested != null) suggested,
+            ...recent.where((a) => a.id != suggested?.id),
+          ]);
+    } on ApiError {
+      // Se queda con lo que había.
+    }
   }
 
   @override
@@ -89,27 +113,39 @@ class _TransferScreenState extends State<TransferScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.suggestedPayee case final payee?)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ActionChip(
-                    avatar: const Icon(Icons.person_outline, size: 18),
-                    label: Text(payee.name),
-                    onPressed: sending ? null : () => _destinationField.text = payee.id,
+            if (_payee case final payee?)
+              _ChosenPayee(
+                payee: payee,
+                onChange: sending ? null : () => setState(() => _payee = null),
+              )
+            else ...[
+              if (_recent.isNotEmpty) ...[
+                Text('Recientes', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  height: 92,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _recent.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+                    itemBuilder: (_, i) => _RecentPayee(
+                      payee: _recent[i],
+                      onTap: sending ? null : () => setState(() => _payee = _recent[i]),
+                    ),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              TextField(
+                key: const Key('destination'),
+                controller: _destinationField,
+                enabled: !sending,
+                decoration: InputDecoration(
+                  labelText: _recent.isEmpty ? 'Cuenta de destino' : 'U otra cuenta',
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            TextField(
-              key: const Key('destination'),
-              controller: _destinationField,
-              enabled: !sending,
-              decoration: const InputDecoration(
-                labelText: 'Cuenta de destino',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            ],
             const SizedBox(height: 16),
             TextField(
               key: const Key('amount'),
@@ -179,7 +215,7 @@ class _TransferScreenState extends State<TransferScreen> {
 
     await _controller.send(
       fromAccountId: widget.fromAccountId,
-      toAccountId: _destinationField.text.trim(),
+      toAccountId: _payee?.id ?? _destinationField.text.trim(),
       amountMicros: amountMicros,
       currency: widget.currency,
       description: _descriptionField.text.trim(),
@@ -244,4 +280,81 @@ class _ConfirmWithPin extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Un destinatario reciente: sus iniciales en un círculo y su nombre.
+class _RecentPayee extends StatelessWidget {
+  const _RecentPayee({required this.payee, required this.onTap});
+
+  final Account payee;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: scheme.secondaryContainer,
+              foregroundColor: scheme.onSecondaryContainer,
+              child: Text(initials(payee.name)),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              payee.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// El destinatario elegido, con la opción de cambiarlo.
+class _ChosenPayee extends StatelessWidget {
+  const _ChosenPayee({required this.payee, required this.onChange});
+
+  final Account payee;
+  final VoidCallback? onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: scheme.secondaryContainer,
+          foregroundColor: scheme.onSecondaryContainer,
+          child: Text(initials(payee.name)),
+        ),
+        title: Text(payee.name),
+        subtitle: const Text('Para'),
+        trailing: TextButton(onPressed: onChange, child: const Text('Cambiar')),
+      ),
+    );
+  }
+}
+
+/// Las iniciales de un nombre, para el círculo: "Juan Pérez (prueba)" → "JP".
+String initials(String name) {
+  final words = name
+      .replaceAll(RegExp(r'\(.*?\)'), '')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
+  if (words.isEmpty) return '?';
+  final first = words.first.characters.first;
+  final last = words.length > 1 ? words.last.characters.first : '';
+  return (first + last).toUpperCase();
 }

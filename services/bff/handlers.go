@@ -269,7 +269,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
-	confirmed, ok := s.stepUpTransfer(w, r, p, stepup.Transfer{
+	ok := s.stepUpTransfer(w, r, p, stepup.Transfer{
 		CustomerID:     p.CustomerID,
 		FromAccountID:  req.FromAccountID,
 		ToAccountID:    req.ToAccountID,
@@ -294,12 +294,12 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
-	if confirmed {
-		// Desde ahora es un destinatario conocido: los envíos chicos ya no piden
-		// la cara. Si no se pudo anotar, la próxima vez se vuelve a confirmar, que
-		// es el lado seguro del error.
+	if s.stepUp != nil && p.Factor != "" {
+		// Queda conocido —los envíos chicos ya no piden la cara— y arriba en los
+		// recientes. Si no se pudo anotar, la próxima vez se vuelve a confirmar,
+		// que es el lado seguro del error.
 		if err := s.stepUp.policy.Remember(r.Context(), p.CustomerID, req.ToAccountID); err != nil {
-			s.logger.ErrorContext(r.Context(), "anotar destinatario conocido", "error", err)
+			s.logger.ErrorContext(r.Context(), "anotar destinatario", "error", err)
 		}
 	}
 
