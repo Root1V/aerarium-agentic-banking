@@ -37,8 +37,9 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Feature | Lenguaje | Rama | Estado |
 |---|---|---|---|
 | Scoring crediticio con datos transaccionales, explicable y auditable (45 tests) | Python | feat/credit-scoring | ✅ |
-| Originación: solicitud con el motor de riesgo, línea con límite en el core, disposición y pago (en la app) | Rust/Go/Python/Flutter | feat/credit-origination | 👀 |
-| Ciclo de la tarjeta: corte, estado de cuenta, intereses, pago mínimo, vencimiento y mora | Rust/Go/Flutter | feat/credit-cycle | ⬜ siguiente |
+| Originación: solicitud con el motor de riesgo, línea con límite en el core, disposición y pago (en la app) | Rust/Go/Python/Flutter | feat/credit-origination | ✅ |
+| Ciclo de la tarjeta: corte, estado de cuenta, intereses, pago mínimo, vencimiento y mora | Rust/Go/Flutter | feat/credit-cycle | 👀 |
+| Subir el límite por buen comportamiento (re-evaluar con el motor) | Go/Python | — | ⬜ |
 | Compras con la tarjeta de crédito por la red de tarjetas (hoy solo disposición a la cuenta) | Go/Rust | — | ⬜ |
 
 ## Integración Mercatus (riel de pago para agentes de IA)
@@ -152,6 +153,14 @@ retención vence. Propuesto en el canal (AE-09).
 - **El sandbox aprueba tarjetas con un historial sintético** (seis meses de un sueldo de
   1.500): una cuenta recién abierta nunca califica, y es correcto. La decisión queda
   marcada (`synthetic_history`) y la app lo dice.
+- **Los intereses se calculan sobre lo que quedó sin pagar del estado anterior**, por
+  los días del periodo (TEA a 360 días). Es más simple que el saldo promedio diario y
+  exacto para quien no pagó; los usos del periodo de quien perdió el periodo de gracia
+  todavía no generan interés desde su fecha. Revisarlo con un especialista de producto
+  antes de cartera real.
+- **El pago mínimo (5 % + intereses, piso de 10) es provisional**, como la TEA.
+- **El corte y la mora usan la fecha UTC**, no la de Lima: un corte puede caer cinco
+  horas antes o después de la medianoche local.
 - **Disponer de la tarjeta no pide confirmación con la cara**: el dinero va a una cuenta
   propia y sacarlo de ahí sí la pide. Revisarlo si la disposición pasa a ir a terceros.
 - **El umbral de confirmación (200) es fijo** y en la moneda de la cuenta. Con más de
