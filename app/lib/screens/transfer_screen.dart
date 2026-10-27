@@ -52,6 +52,11 @@ class _TransferScreenState extends State<TransferScreen> {
   /// A quién se le envía, elegido de los recientes. Mientras sea null, se
   /// escribe la cuenta a mano.
   Account? _payee;
+
+  /// El número con el que se encontró al destinatario, si fue por celular.
+  String? _payeePhone;
+  String? _destinationError;
+  bool _lookingUp = false;
   List<Account> _recent = const [];
 
   @override
@@ -116,7 +121,14 @@ class _TransferScreenState extends State<TransferScreen> {
             if (_payee case final payee?)
               _ChosenPayee(
                 payee: payee,
-                onChange: sending ? null : () => setState(() => _payee = null),
+                phone: _payeePhone,
+                onChange: sending
+                    ? null
+                    : () => setState(() {
+                          _payee = null;
+                          _payeePhone = null;
+                          _destinationField.clear();
+                        }),
               )
             else ...[
               if (_recent.isNotEmpty) ...[
@@ -130,7 +142,12 @@ class _TransferScreenState extends State<TransferScreen> {
                     separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
                     itemBuilder: (_, i) => _RecentPayee(
                       payee: _recent[i],
-                      onTap: sending ? null : () => setState(() => _payee = _recent[i]),
+                      onTap: sending
+                          ? null
+                          : () => setState(() {
+                                _payee = _recent[i];
+                                _payeePhone = null;
+                              }),
                     ),
                   ),
                 ),
@@ -140,8 +157,17 @@ class _TransferScreenState extends State<TransferScreen> {
                 key: const Key('destination'),
                 controller: _destinationField,
                 enabled: !sending,
+                keyboardType: TextInputType.phone,
+                onChanged: _onDestinationChanged,
                 decoration: InputDecoration(
-                  labelText: _recent.isEmpty ? 'Cuenta de destino' : 'U otra cuenta',
+                  labelText: _recent.isEmpty ? 'Celular o cuenta' : 'U otro celular o cuenta',
+                  errorText: _destinationError,
+                  suffixIcon: _lookingUp
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : null,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -201,6 +227,26 @@ class _TransferScreenState extends State<TransferScreen> {
         ),
       ),
     );
+  }
+
+  /// Al completar un celular, se busca a quién pertenece y se muestra su nombre
+  /// antes de enviar: nadie debería mandar dinero a un número sin ver a quién.
+  Future<void> _onDestinationChanged(String value) async {
+    if (_destinationError != null) setState(() => _destinationError = null);
+    if (!looksLikePhone(value)) return;
+    setState(() => _lookingUp = true);
+    try {
+      final match = await widget.client.lookupPhone(value);
+      if (!mounted || _destinationField.text != value) return;
+      setState(() {
+        _payee = match.account;
+        _payeePhone = match.phone;
+      });
+    } on ApiError catch (e) {
+      if (mounted) setState(() => _destinationError = e.userMessage);
+    } finally {
+      if (mounted) setState(() => _lookingUp = false);
+    }
   }
 
   Future<void> _send() async {
@@ -322,10 +368,13 @@ class _RecentPayee extends StatelessWidget {
 
 /// El destinatario elegido, con la opción de cambiarlo.
 class _ChosenPayee extends StatelessWidget {
-  const _ChosenPayee({required this.payee, required this.onChange});
+  const _ChosenPayee({required this.payee, required this.onChange, this.phone});
 
   final Account payee;
   final VoidCallback? onChange;
+
+  /// El celular con el que se lo encontró, para que se vea a qué número va.
+  final String? phone;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +388,7 @@ class _ChosenPayee extends StatelessWidget {
           child: Text(initials(payee.name)),
         ),
         title: Text(payee.name),
-        subtitle: const Text('Para'),
+        subtitle: Text(phone == null ? 'Para' : 'Para · ${formatPhone(phone!)}'),
         trailing: TextButton(onPressed: onChange, child: const Text('Cambiar')),
       ),
     );

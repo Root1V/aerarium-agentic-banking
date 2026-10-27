@@ -32,6 +32,10 @@ class Movement {
   /// Nombre registrado de la plataforma, en los pagos hechos con un permiso.
   /// Vacío en todo lo demás.
   final String merchant;
+
+  /// La otra persona de una transferencia: a quién se le envió o de quién se
+  /// recibió. Null en todo lo demás.
+  final Account? counterparty;
   final DateTime postedAt;
 
   const Movement({
@@ -43,6 +47,7 @@ class Movement {
     required this.description,
     required this.postedAt,
     this.merchant = '',
+    this.counterparty,
   });
 
   factory Movement.fromJson(Map<String, dynamic> json) => Movement(
@@ -53,6 +58,9 @@ class Movement {
         kind: json['kind'] as String,
         description: (json['description'] as String?) ?? '',
         merchant: (json['merchant'] as String?) ?? '',
+        counterparty: json['counterparty'] == null
+            ? null
+            : Account.fromJson(json['counterparty'] as Map<String, dynamic>),
         postedAt: DateTime.parse(json['posted_at'] as String),
       );
 
@@ -63,8 +71,12 @@ class Movement {
   /// Si es un pago hecho por una plataforma con permiso, con plataforma conocida.
   bool get isPlatformPayment => kind == 'authorization_hold' && merchant.isNotEmpty;
 
-  /// Etiqueta legible del tipo de movimiento.
-  String get label => isPlatformPayment ? 'Pago a $merchant' : _kindLabel;
+  /// Etiqueta legible: a quién o de quién, si se sabe; si no, el tipo.
+  String get label => switch (counterparty) {
+        _ when isPlatformPayment => 'Pago a $merchant',
+        final Account who? => sign < 0 ? 'A ${who.name}' : 'De ${who.name}',
+        null => _kindLabel,
+      };
 
   String get _kindLabel => switch (kind) {
         'deposit' => 'Depósito',
@@ -546,11 +558,58 @@ class TestFunds {
   final String currency;
   final Account payee;
 
-  const TestFunds({required this.amountMicros, required this.currency, required this.payee});
+  /// El celular de prueba del destinatario, si el banco tiene directorio.
+  final String? payeePhone;
+
+  const TestFunds({required this.amountMicros, required this.currency, required this.payee, this.payeePhone});
 
   factory TestFunds.fromJson(Map<String, dynamic> json) => TestFunds(
         amountMicros: (json['amount_micros'] as num).toInt(),
         currency: json['currency'] as String,
         payee: Account.fromJson(json['payee'] as Map<String, dynamic>),
+        payeePhone: json['payee_phone'] as String?,
       );
 }
+
+
+/// Un código enviado por SMS para registrar un número.
+class PhoneVerification {
+  final String id;
+  final String phone;
+
+  /// Solo en el sandbox, donde no hay SMS: el código que se habría enviado.
+  final String? sandboxCode;
+
+  const PhoneVerification({required this.id, required this.phone, this.sandboxCode});
+
+  factory PhoneVerification.fromJson(Map<String, dynamic> json) => PhoneVerification(
+        id: json['verification_id'] as String,
+        phone: json['phone'] as String,
+        sandboxCode: json['sandbox_code'] as String?,
+      );
+}
+
+/// A quién llega lo que se envía a un número: su cuenta y el nombre a medias.
+class PhoneMatch {
+  final String phone;
+  final Account account;
+
+  const PhoneMatch({required this.phone, required this.account});
+
+  factory PhoneMatch.fromJson(Map<String, dynamic> json) => PhoneMatch(
+        phone: json['phone'] as String,
+        account: Account.fromJson(json['account'] as Map<String, dynamic>),
+      );
+}
+
+/// "+51987654321" → "+51 987 654 321"; "987654321" → "987 654 321".
+String formatPhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  final local = digits.length == 11 && digits.startsWith('51') ? digits.substring(2) : digits;
+  if (local.length != 9) return phone;
+  final grouped = '${local.substring(0, 3)} ${local.substring(3, 6)} ${local.substring(6)}';
+  return phone.startsWith('+') ? '+51 $grouped' : grouped;
+}
+
+/// Si lo escrito es un celular peruano: nueve dígitos que empiezan por 9.
+bool looksLikePhone(String input) => RegExp(r'^9\d{8}$').hasMatch(input.replaceAll(RegExp(r'[\s-]'), ''));

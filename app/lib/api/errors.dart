@@ -37,6 +37,11 @@ enum ApiErrorCode {
   confirmationRequired,
   confirmationRejected,
   confirmationUnavailable,
+  // Celulares.
+  invalidPhone,
+  phoneNotFound,
+  codeIncorrect,
+  codeLocked,
   unknown,
 }
 
@@ -86,6 +91,10 @@ class ApiError implements Exception {
         'confirmation_required' => ApiErrorCode.confirmationRequired,
         'confirmation_rejected' => ApiErrorCode.confirmationRejected,
         'confirmation_unavailable' => ApiErrorCode.confirmationUnavailable,
+        'invalid_phone' => ApiErrorCode.invalidPhone,
+        'phone_not_found' => ApiErrorCode.phoneNotFound,
+        'code_incorrect' => ApiErrorCode.codeIncorrect,
+        'code_locked' => ApiErrorCode.codeLocked,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -135,6 +144,14 @@ class ApiError implements Exception {
         ApiErrorCode.confirmationRejected => 'No pudimos confirmar la operación. No se envió nada.',
         ApiErrorCode.confirmationUnavailable =>
           'Para esta operación, confirma desde tu teléfono vinculado.',
+        ApiErrorCode.invalidPhone => 'Escribe un celular de 9 dígitos.',
+        ApiErrorCode.phoneNotFound => 'Ese número no tiene cuenta en AIBank.',
+        ApiErrorCode.codeIncorrect => switch (remainingAttempts) {
+            1 => 'Código incorrecto. Te queda 1 intento.',
+            final n? => 'Código incorrecto. Te quedan $n intentos.',
+            null => 'Código incorrecto.',
+          },
+        ApiErrorCode.codeLocked => 'Demasiados intentos. Pide un código nuevo.',
         ApiErrorCode.weakPin =>
           'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',

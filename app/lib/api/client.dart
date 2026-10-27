@@ -200,8 +200,38 @@ class BffClient {
       }));
 
   /// Desvincula un teléfono de la cuenta.
-  Future<void> revokeDevice(String deviceId) async {
-    final uri = baseUrl.replace(path: '/v1/devices/$deviceId');
+  Future<void> revokeDevice(String deviceId) => _deleteNoContent('/v1/devices/$deviceId');
+
+  // --------------------------------------------------------------- celulares
+
+  /// El número propio para recibir, o null si no hay uno registrado.
+  Future<String?> myPhone() async {
+    try {
+      return (await _get('/v1/aliases/phone', const {}))['phone'] as String;
+    } on ApiError catch (e) {
+      if (e.code == ApiErrorCode.notFound) return null;
+      rethrow;
+    }
+  }
+
+  /// Envía un código por SMS para registrar el número en esta cuenta.
+  Future<PhoneVerification> startPhoneAlias(String accountId, String phone) async =>
+      PhoneVerification.fromJson(
+          await _post('/v1/aliases/phone', headers: const {}, body: {'account_id': accountId, 'phone': phone}));
+
+  /// Comprueba el código. Devuelve el número registrado.
+  Future<String> verifyPhoneAlias(String verificationId, String code) async =>
+      (await _post('/v1/aliases/phone/verify',
+          headers: const {}, body: {'verification_id': verificationId, 'code': code}))['phone'] as String;
+
+  Future<void> removePhoneAlias() => _deleteNoContent('/v1/aliases/phone');
+
+  /// A quién llega lo que se envía a un número.
+  Future<PhoneMatch> lookupPhone(String phone) async =>
+      PhoneMatch.fromJson(await _get('/v1/directory/phone/${phone.replaceAll(RegExp(r'[\s-]'), '')}', const {}));
+
+  Future<void> _deleteNoContent(String path) async {
+    final uri = baseUrl.replace(path: path);
     try {
       final response = await _http.delete(uri, headers: _headers()).timeout(_timeout);
       if (response.statusCode >= 200 && response.statusCode < 300) return;

@@ -9,6 +9,7 @@ import '../money.dart';
 import '../theme.dart';
 import 'mandates_screen.dart';
 import 'pending_payments_screen.dart';
+import 'phone_alias_screen.dart';
 import 'transfer_screen.dart';
 
 /// Pantalla principal: saldo y últimos movimientos.
@@ -103,13 +104,14 @@ class _HomeScreenState extends State<HomeScreen> {
               tooltip: 'Salir',
               onPressed: _signOut,
             ),
-          if (widget.onUnlink != null)
-            PopupMenuButton<void>(
-              tooltip: 'Más',
-              itemBuilder: (_) => [
+          PopupMenuButton<void>(
+            tooltip: 'Más',
+            itemBuilder: (_) => [
+              PopupMenuItem(onTap: _openPhoneAlias, child: const Text('Mi número para recibir')),
+              if (widget.onUnlink != null)
                 PopupMenuItem(onTap: _confirmUnlink, child: const Text('Desvincular este teléfono')),
-              ],
-            ),
+            ],
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -134,7 +136,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Añadimos ${Money(funds.amountMicros, funds.currency).format()} de prueba. '
-            'Puedes enviarle a ${funds.payee.name}.'),
+            'Puedes enviarle a ${funds.payee.name}'
+            '${funds.payeePhone == null ? '' : ' al ${formatPhone(funds.payeePhone!)}'}.'),
       ));
       await _load();
     } on ApiError catch (e) {
@@ -171,6 +174,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (confirmed == true) await widget.onUnlink!();
+  }
+
+  void _openPhoneAlias() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PhoneAliasScreen(client: widget.client, accountId: widget.accountId),
+    ));
   }
 
   void _openPending() {
@@ -373,7 +382,11 @@ class _MovementTile extends StatelessWidget {
         child: Icon(incoming ? Icons.south_west : Icons.north_east),
       ),
       title: Text(movement.label),
-      subtitle: movement.description.isEmpty ? null : Text(movement.description),
+      // El concepto, salvo que repita el título ("Saldo de prueba" / "saldo de prueba").
+      subtitle: movement.description.isEmpty ||
+              movement.description.toLowerCase() == movement.label.toLowerCase()
+          ? null
+          : Text(movement.description),
       trailing: Text(
         movement.signedAmount.format(withSign: true),
         style: TextStyle(
