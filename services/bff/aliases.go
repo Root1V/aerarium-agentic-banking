@@ -140,6 +140,12 @@ func (s *Server) handleLookupPhone(w http.ResponseWriter, r *http.Request, p *Pr
 		s.writeCoreError(w, r, err)
 		return
 	}
+	// El número propio: enviarse a uno mismo no es una transferencia. Se dice
+	// aquí, al buscar, y no después como un error genérico al enviar.
+	if account.OwnerId == p.CustomerID {
+		writeError(w, http.StatusConflict, "own_phone", "ese es tu número")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"phone":   alias.Phone,
 		"account": accountJSON{ID: account.Id, Name: aliases.MaskName(account.Name), Currency: account.Currency},

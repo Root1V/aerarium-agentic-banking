@@ -241,7 +241,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 	if req.FromAccountID == req.ToAccountID {
-		writeError(w, http.StatusBadRequest, "invalid_request", "origen y destino no pueden coincidir")
+		writeError(w, http.StatusBadRequest, "same_account", "origen y destino no pueden coincidir")
 		return
 	}
 

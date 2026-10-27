@@ -108,3 +108,20 @@ func TestEnviarAlCelularDelDestinatarioYVerloEnElHistorial(t *testing.T) {
 		}
 	}
 }
+
+// Buscar el número propio lo dice, en vez de dejar que el envío falle después.
+func TestBuscarMiPropioNumeroLoDice(t *testing.T) {
+	e := newPasskeyEnv(t)
+	_, token, account, _ := e.linkedWithFunds(t)
+	number := randomPhone()
+	_, started := e.call(t, http.MethodPost, "/v1/aliases/phone", token, map[string]any{"account_id": account, "phone": number})
+	e.call(t, http.MethodPost, "/v1/aliases/phone/verify", token, map[string]any{
+		"verification_id": started["verification_id"], "code": started["sandbox_code"],
+	})
+	if status, out := e.call(t, http.MethodGet, "/v1/directory/phone/"+number, token, nil); status != http.StatusConflict || out["code"] != "own_phone" {
+		t.Errorf("mi propio número: %d %v", status, out)
+	}
+	if status, out := e.send(t, token, uuid.NewString(), account, account, 1_000_000, nil); status != http.StatusBadRequest || out["code"] != "same_account" {
+		t.Errorf("enviarme a mí mismo: %d %v", status, out)
+	}
+}

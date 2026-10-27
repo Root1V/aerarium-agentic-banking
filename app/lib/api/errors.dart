@@ -42,6 +42,8 @@ enum ApiErrorCode {
   phoneNotFound,
   codeIncorrect,
   codeLocked,
+  ownPhone,
+  sameAccount,
   unknown,
 }
 
@@ -95,6 +97,8 @@ class ApiError implements Exception {
         'phone_not_found' => ApiErrorCode.phoneNotFound,
         'code_incorrect' => ApiErrorCode.codeIncorrect,
         'code_locked' => ApiErrorCode.codeLocked,
+        'own_phone' => ApiErrorCode.ownPhone,
+        'same_account' => ApiErrorCode.sameAccount,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -152,6 +156,8 @@ class ApiError implements Exception {
             null => 'Código incorrecto.',
           },
         ApiErrorCode.codeLocked => 'Demasiados intentos. Pide un código nuevo.',
+        ApiErrorCode.ownPhone => 'Ese es tu número: no puedes enviarte dinero a ti mismo.',
+        ApiErrorCode.sameAccount => 'No puedes enviarte dinero a la misma cuenta.',
         ApiErrorCode.weakPin =>
           'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',

@@ -68,6 +68,7 @@ void main() {
             }),
         'GET /v1/directory/phone/987000000': (_) =>
             json({'code': 'phone_not_found', 'message': 'no'}, 404),
+        'GET /v1/directory/phone/999111222': (_) => json({'code': 'own_phone', 'message': 'ese es tu número'}, 409),
         'POST /v1/transfers': _sent,
       });
       await tester.pumpWidget(MaterialApp(
@@ -95,6 +96,14 @@ void main() {
       await tester.tap(find.byKey(const Key('send')));
       await tester.pumpAndSettle();
       expect(bank.received['POST /v1/transfers']!['to_account_id'], 'acc-juan');
+    });
+
+    testWidgets('el número propio lo dice antes de enviar', (tester) async {
+      await pump(tester);
+      await tester.enterText(find.byKey(const Key('destination')), '999111222');
+      await tester.pumpAndSettle();
+      expect(find.text('Ese es tu número: no puedes enviarte dinero a ti mismo.'), findsOneWidget);
+      expect(find.text('Cambiar'), findsNothing, reason: 'no queda elegido como destinatario');
     });
 
     testWidgets('un número que no es cliente lo dice en el campo', (tester) async {
