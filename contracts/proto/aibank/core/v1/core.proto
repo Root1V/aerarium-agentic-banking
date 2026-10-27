@@ -130,6 +130,11 @@ message AccountEntry {
   string kind = 5;
   string description = 6;
   google.protobuf.Timestamp posted_at = 7;
+  // La otra persona de una transferencia entre dos cuentas de clientes: su
+  // cuenta y su nombre. Vacíos en todo lo demás (depósitos, cobros, pagos), donde
+  // al otro lado hay una cuenta interna del banco que no se muestra.
+  string counterparty_account_id = 8;
+  string counterparty_name = 9;
 }
 
 message ListEntriesRequest {

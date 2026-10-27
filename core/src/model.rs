@@ -122,6 +122,17 @@ pub struct AccountEntry {
     pub kind: String,
     pub description: Option<String>,
     pub posted_at: DateTime<Utc>,
+    /// La otra persona de una transferencia entre dos cuentas de clientes. Vacío
+    /// en todo lo demás: un depósito o un cobro tienen al otro lado una cuenta
+    /// interna del banco, que no se muestra.
+    pub counterparty: Option<Counterparty>,
+}
+
+/// La otra cuenta de una transferencia entre personas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Counterparty {
+    pub account_id: Uuid,
+    pub name: String,
 }
 
 /// Saldo materializado y su contador de asientos, para auditarlo contra la proyección.

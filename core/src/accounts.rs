@@ -205,9 +205,22 @@ impl AccountRepository {
             SELECT e.id, e.transaction_id,
                    e.direction as "direction: Direction",
                    e.amount_micros, e.currency,
-                   t.kind, t.description, t.posted_at
+                   t.kind, t.description, t.posted_at,
+                   cp.id as "counterparty_id?", cp.name as "counterparty_name?"
             FROM ledger_entries e
             JOIN ledger_transactions t ON t.id = e.transaction_id
+            -- La otra persona, solo si la transacción es de exactamente dos
+            -- asientos y el otro es la cuenta de un cliente.
+            LEFT JOIN LATERAL (
+                SELECT a.id, a.name
+                FROM ledger_entries o
+                JOIN accounts a ON a.id = o.account_id
+                WHERE o.transaction_id = e.transaction_id
+                  AND o.account_id <> e.account_id
+                  AND a.owner = 'CUSTOMER'
+                  AND (SELECT count(*) FROM ledger_entries c WHERE c.transaction_id = e.transaction_id) = 2
+                LIMIT 1
+            ) cp ON true
             WHERE e.account_id = $1 AND ($2::bigint IS NULL OR e.id < $2)
             ORDER BY e.id DESC
             LIMIT $3
@@ -230,6 +243,10 @@ impl AccountRepository {
                 kind: r.kind,
                 description: r.description,
                 posted_at: r.posted_at,
+                counterparty: match (r.counterparty_id, r.counterparty_name) {
+                    (Some(account_id), Some(name)) => Some(Counterparty { account_id, name }),
+                    _ => None,
+                },
             })
             .collect())
     }

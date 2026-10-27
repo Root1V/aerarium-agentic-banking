@@ -263,6 +263,12 @@ impl LedgerService for LedgerApi {
                     kind: e.kind,
                     description: e.description.unwrap_or_default(),
                     posted_at: Some(to_timestamp(e.posted_at)),
+                    counterparty_account_id: e
+                        .counterparty
+                        .as_ref()
+                        .map(|c| c.account_id.to_string())
+                        .unwrap_or_default(),
+                    counterparty_name: e.counterparty.map(|c| c.name).unwrap_or_default(),
                 })
                 .collect(),
             next_cursor,

@@ -1005,11 +1005,16 @@ type AccountEntry struct {
 	Direction     Direction `protobuf:"varint,3,opt,name=direction,proto3,enum=aibank.core.v1.Direction" json:"direction,omitempty"`
 	Amount        *Money    `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	// "deposit", "p2p_transfer", "rail_inbound_credit", ...
-	Kind          string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
-	Description   string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
-	PostedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=posted_at,json=postedAt,proto3" json:"posted_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Kind        string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
+	Description string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	PostedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=posted_at,json=postedAt,proto3" json:"posted_at,omitempty"`
+	// La otra persona de una transferencia entre dos cuentas de clientes: su
+	// cuenta y su nombre. Vacíos en todo lo demás (depósitos, cobros, pagos), donde
+	// al otro lado hay una cuenta interna del banco que no se muestra.
+	CounterpartyAccountId string `protobuf:"bytes,8,opt,name=counterparty_account_id,json=counterpartyAccountId,proto3" json:"counterparty_account_id,omitempty"`
+	CounterpartyName      string `protobuf:"bytes,9,opt,name=counterparty_name,json=counterpartyName,proto3" json:"counterparty_name,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *AccountEntry) Reset() {
@@ -1089,6 +1094,20 @@ func (x *AccountEntry) GetPostedAt() *timestamppb.Timestamp {
 		return x.PostedAt
 	}
 	return nil
+}
+
+func (x *AccountEntry) GetCounterpartyAccountId() string {
+	if x != nil {
+		return x.CounterpartyAccountId
+	}
+	return ""
+}
+
+func (x *AccountEntry) GetCounterpartyName() string {
+	if x != nil {
+		return x.CounterpartyName
+	}
+	return ""
 }
 
 type ListEntriesRequest struct {
@@ -3869,7 +3888,7 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\abalance\x18\x01 \x01(\v2\x15.aibank.core.v1.MoneyR\abalance\x12\x1f\n" +
 	"\ventry_count\x18\x02 \x01(\x03R\n" +
 	"entryCount\x12B\n" +
-	"\x11projected_balance\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x10projectedBalance\"\xa4\x02\n" +
+	"\x11projected_balance\x18\x03 \x01(\v2\x15.aibank.core.v1.MoneyR\x10projectedBalance\"\x89\x03\n" +
 	"\fAccountEntry\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x127\n" +
@@ -3877,7 +3896,9 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x06amount\x18\x04 \x01(\v2\x15.aibank.core.v1.MoneyR\x06amount\x12\x12\n" +
 	"\x04kind\x18\x05 \x01(\tR\x04kind\x12 \n" +
 	"\vdescription\x18\x06 \x01(\tR\vdescription\x127\n" +
-	"\tposted_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\bpostedAt\"a\n" +
+	"\tposted_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\bpostedAt\x126\n" +
+	"\x17counterparty_account_id\x18\b \x01(\tR\x15counterpartyAccountId\x12+\n" +
+	"\x11counterparty_name\x18\t \x01(\tR\x10counterpartyName\"a\n" +
 	"\x12ListEntriesRequest\x12\x1d\n" +
 	"\n" +
 	"account_id\x18\x01 \x01(\tR\taccountId\x12\x14\n" +
