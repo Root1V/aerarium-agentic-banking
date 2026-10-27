@@ -217,6 +217,24 @@ SMS, el directorio solo se monta en el sandbox y el código vuelve en la respues
 El historial dice **a quién y de quién**: el core devuelve la otra cuenta de una
 transferencia entre dos clientes (nunca una cuenta interna del banco).
 
+**Tarjeta de crédito** (`services/credit`, `core/src/credit.rs`, `risk/`):
+
+- **Pedirla.** El banco le pasa al motor de riesgo (Python, `aibank_risk.server`) los
+  movimientos de la cuenta; el motor decide resultado, límite y motivos, y el
+  expediente completo se archiva en `credit.applications`. Si se aprueba, el core abre
+  la línea.
+- **La línea.** Es una cuenta del cliente de tipo ACTIVO (lo que debe) más su contrato:
+  límite, TEA y día de corte. El límite, el bloqueo por mora y el "no pagar de más" los
+  hace cumplir el mismo trigger diferido que el sobregiro (AB010–AB012), así que ningún
+  camino se los salta.
+- **Disponer y pagar** son asientos normales.
+- **Si no se aprueba**, la app dice qué falta, nunca el puntaje.
+
+```bash
+cd risk && python3 -m pytest           # motor y su servicio HTTP
+python3 -m aibank_risk.server --port 8090   # el servicio, para RISK_URL
+```
+
 En el sandbox, «Añadir saldo de prueba» acredita 250 (bajo el tope por operación de
 la cuenta de nivel 1) y crea un destinatario de prueba para enviarle.
 

@@ -26,6 +26,7 @@ type Client struct {
 	products       corev1.ProductServiceClient
 	authorizations corev1.AuthorizationServiceClient
 	mandates       corev1.MandateServiceClient
+	credit         corev1.CreditServiceClient
 }
 
 // Dial abre una conexión con el core.
@@ -50,6 +51,7 @@ func Dial(_ context.Context, target string) (*Client, error) {
 		products:       corev1.NewProductServiceClient(conn),
 		authorizations: corev1.NewAuthorizationServiceClient(conn),
 		mandates:       corev1.NewMandateServiceClient(conn),
+		credit:         corev1.NewCreditServiceClient(conn),
 	}, nil
 }
 

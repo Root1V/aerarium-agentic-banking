@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.id, l.account_id, l.customer_id, a.currency, l.limit_micros,\n                   b.balance_micros as outstanding_micros, l.annual_rate_bps, l.cycle_day,\n                   l.payment_days, l.status as \"status: CreditLineStatus\", l.decision_ref, l.opened_at\n            FROM credit_lines l\n            JOIN accounts a ON a.id = l.account_id\n            JOIN account_balances b ON b.account_id = l.account_id\n            WHERE l.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "limit_micros",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "outstanding_micros",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "annual_rate_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "cycle_day",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "payment_days",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 9,
+        "name": "status: CreditLineStatus",
+        "type_info": {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "decision_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c002da29836b6aa4490b26418727e42de2625d8b1cbd397b45b181bf51d4b952"
+}

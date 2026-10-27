@@ -46,6 +46,9 @@ fn to_status(err: PostingError) -> Status {
         PostingError::TransactionCapExceeded(_) => {
             (tonic::Code::FailedPrecondition, R::TransactionCapExceeded)
         }
+        PostingError::CreditLimitExceeded(_) => (tonic::Code::FailedPrecondition, R::CreditLimitExceeded),
+        PostingError::CreditLineInactive(_) => (tonic::Code::FailedPrecondition, R::CreditLineInactive),
+        PostingError::Overpayment(_) => (tonic::Code::FailedPrecondition, R::Overpayment),
         PostingError::Conflict(_) => (tonic::Code::AlreadyExists, R::AlreadyExists),
         // Fallo de infraestructura: el llamador SÍ puede reintentar.
         PostingError::Database(_) => (tonic::Code::Unavailable, R::Unspecified),
@@ -627,6 +630,9 @@ fn clone_posting_error(err: &PostingError) -> PostingError {
         PostingError::InsufficientFunds(_) => PostingError::InsufficientFunds(msg),
         PostingError::BalanceCapExceeded(_) => PostingError::BalanceCapExceeded(msg),
         PostingError::TransactionCapExceeded(_) => PostingError::TransactionCapExceeded(msg),
+        PostingError::CreditLimitExceeded(_) => PostingError::CreditLimitExceeded(msg),
+        PostingError::CreditLineInactive(_) => PostingError::CreditLineInactive(msg),
+        PostingError::Overpayment(_) => PostingError::Overpayment(msg),
         PostingError::Conflict(_) => PostingError::Conflict(msg),
         PostingError::Database(_) => PostingError::Database(sqlx::Error::Protocol(msg)),
     }
@@ -1118,4 +1124,81 @@ impl MandateService for MandateApi {
 fn from_timestamp(ts: prost_types::Timestamp) -> Result<chrono::DateTime<chrono::Utc>, Status> {
     chrono::DateTime::from_timestamp(ts.seconds, ts.nanos.max(0) as u32)
         .ok_or_else(|| Status::invalid_argument("timestamp out of range"))
+}
+
+// ---------------------------------------------------------------- crédito
+
+pub struct CreditApi {
+    credit: crate::credit::CreditRepository,
+}
+
+impl CreditApi {
+    pub fn new(credit: crate::credit::CreditRepository) -> Self {
+        Self { credit }
+    }
+}
+
+fn credit_line_to_pb(line: crate::credit::CreditLine) -> pb::CreditLine {
+    use crate::credit::CreditLineStatus as S;
+    let money = |amount_micros: i64| Some(pb::Money { amount_micros, currency: line.currency.clone() });
+    pb::CreditLine {
+        id: line.id.to_string(),
+        account_id: line.account_id.to_string(),
+        customer_id: line.customer_id.to_string(),
+        limit: money(line.limit_micros),
+        outstanding: money(line.outstanding_micros),
+        available: money(line.available_micros()),
+        annual_rate_bps: line.annual_rate_bps,
+        cycle_day: line.cycle_day.into(),
+        payment_days: line.payment_days.into(),
+        status: match line.status {
+            S::Active => pb::CreditLineStatus::Active,
+            S::Blocked => pb::CreditLineStatus::Blocked,
+            S::Closed => pb::CreditLineStatus::Closed,
+        } as i32,
+        decision_ref: line.decision_ref.clone(),
+        opened_at: Some(to_timestamp(line.opened_at)),
+    }
+}
+
+#[tonic::async_trait]
+impl pb::credit_service_server::CreditService for CreditApi {
+    async fn open_credit_line(
+        &self,
+        request: Request<pb::OpenCreditLineRequest>,
+    ) -> Result<Response<pb::CreditLine>, Status> {
+        let req = request.into_inner();
+        let small = |v: i32, field: &str| {
+            i16::try_from(v).map_err(|_| Status::invalid_argument(format!("{field} out of range")))
+        };
+        let line = self
+            .credit
+            .open(&crate::credit::NewCreditLine {
+                customer_id: parse_uuid(&req.customer_id, "customer_id")?,
+                name: req.name,
+                currency: req.currency,
+                limit_micros: req.limit_micros,
+                annual_rate_bps: req.annual_rate_bps,
+                cycle_day: small(req.cycle_day, "cycle_day")?,
+                payment_days: small(req.payment_days, "payment_days")?,
+                decision_ref: req.decision_ref,
+            })
+            .await
+            .map_err(to_status)?;
+        Ok(Response::new(credit_line_to_pb(line)))
+    }
+
+    async fn get_customer_credit_line(
+        &self,
+        request: Request<pb::GetCustomerCreditLineRequest>,
+    ) -> Result<Response<pb::CreditLine>, Status> {
+        let customer_id = parse_uuid(&request.into_inner().customer_id, "customer_id")?;
+        let line = self
+            .credit
+            .find_open_for_customer(customer_id)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?
+            .ok_or_else(|| Status::not_found("the customer has no open credit line"))?;
+        Ok(Response::new(credit_line_to_pb(line)))
+    }
 }

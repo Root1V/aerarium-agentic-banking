@@ -261,6 +261,12 @@ const (
 	PostingErrorReason_POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED PostingErrorReason = 5
 	// Ya existe un registro con esa clave (código de cuenta o de producto repetido).
 	PostingErrorReason_POSTING_ERROR_REASON_ALREADY_EXISTS PostingErrorReason = 6
+	// La deuda superaría el límite de la línea de crédito.
+	PostingErrorReason_POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED PostingErrorReason = 7
+	// La línea de crédito está bloqueada o cerrada: no admite usos.
+	PostingErrorReason_POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE PostingErrorReason = 8
+	// El pago supera lo que se debe.
+	PostingErrorReason_POSTING_ERROR_REASON_OVERPAYMENT PostingErrorReason = 9
 )
 
 // Enum value maps for PostingErrorReason.
@@ -273,6 +279,9 @@ var (
 		4: "POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED",
 		5: "POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED",
 		6: "POSTING_ERROR_REASON_ALREADY_EXISTS",
+		7: "POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED",
+		8: "POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE",
+		9: "POSTING_ERROR_REASON_OVERPAYMENT",
 	}
 	PostingErrorReason_value = map[string]int32{
 		"POSTING_ERROR_REASON_UNSPECIFIED":              0,
@@ -282,6 +291,9 @@ var (
 		"POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED":     4,
 		"POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED": 5,
 		"POSTING_ERROR_REASON_ALREADY_EXISTS":           6,
+		"POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED":    7,
+		"POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE":     8,
+		"POSTING_ERROR_REASON_OVERPAYMENT":              9,
 	}
 )
 
@@ -634,6 +646,59 @@ func (x MandateErrorReason) Number() protoreflect.EnumNumber {
 // Deprecated: Use MandateErrorReason.Descriptor instead.
 func (MandateErrorReason) EnumDescriptor() ([]byte, []int) {
 	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{9}
+}
+
+type CreditLineStatus int32
+
+const (
+	CreditLineStatus_CREDIT_LINE_STATUS_UNSPECIFIED CreditLineStatus = 0
+	CreditLineStatus_CREDIT_LINE_STATUS_ACTIVE      CreditLineStatus = 1
+	// Por mora: se puede pagar, no usar.
+	CreditLineStatus_CREDIT_LINE_STATUS_BLOCKED CreditLineStatus = 2
+	CreditLineStatus_CREDIT_LINE_STATUS_CLOSED  CreditLineStatus = 3
+)
+
+// Enum value maps for CreditLineStatus.
+var (
+	CreditLineStatus_name = map[int32]string{
+		0: "CREDIT_LINE_STATUS_UNSPECIFIED",
+		1: "CREDIT_LINE_STATUS_ACTIVE",
+		2: "CREDIT_LINE_STATUS_BLOCKED",
+		3: "CREDIT_LINE_STATUS_CLOSED",
+	}
+	CreditLineStatus_value = map[string]int32{
+		"CREDIT_LINE_STATUS_UNSPECIFIED": 0,
+		"CREDIT_LINE_STATUS_ACTIVE":      1,
+		"CREDIT_LINE_STATUS_BLOCKED":     2,
+		"CREDIT_LINE_STATUS_CLOSED":      3,
+	}
+)
+
+func (x CreditLineStatus) Enum() *CreditLineStatus {
+	p := new(CreditLineStatus)
+	*p = x
+	return p
+}
+
+func (x CreditLineStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CreditLineStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_aibank_core_v1_core_proto_enumTypes[10].Descriptor()
+}
+
+func (CreditLineStatus) Type() protoreflect.EnumType {
+	return &file_aibank_core_v1_core_proto_enumTypes[10]
+}
+
+func (x CreditLineStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CreditLineStatus.Descriptor instead.
+func (CreditLineStatus) EnumDescriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{10}
 }
 
 // Importe monetario en MICRAS: millonésimas (10^-6) de la unidad mayor.
@@ -3859,6 +3924,289 @@ func (x *AuthorizeUnderMandateResponse) GetMandate() *Mandate {
 	return nil
 }
 
+type CreditLine struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// La cuenta de la línea: se usa como origen de una disposición y como destino
+	// de un pago.
+	AccountId  string `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	CustomerId string `protobuf:"bytes,3,opt,name=customer_id,json=customerId,proto3" json:"customer_id,omitempty"`
+	Limit      *Money `protobuf:"bytes,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Lo que se debe hoy.
+	Outstanding *Money `protobuf:"bytes,5,opt,name=outstanding,proto3" json:"outstanding,omitempty"`
+	// Lo que todavía se puede usar.
+	Available *Money `protobuf:"bytes,6,opt,name=available,proto3" json:"available,omitempty"`
+	// Tasa efectiva anual del contrato, en puntos básicos (4500 = 45 %).
+	AnnualRateBps int32            `protobuf:"varint,7,opt,name=annual_rate_bps,json=annualRateBps,proto3" json:"annual_rate_bps,omitempty"`
+	CycleDay      int32            `protobuf:"varint,8,opt,name=cycle_day,json=cycleDay,proto3" json:"cycle_day,omitempty"`
+	PaymentDays   int32            `protobuf:"varint,9,opt,name=payment_days,json=paymentDays,proto3" json:"payment_days,omitempty"`
+	Status        CreditLineStatus `protobuf:"varint,10,opt,name=status,proto3,enum=aibank.core.v1.CreditLineStatus" json:"status,omitempty"`
+	// Referencia al expediente de la decisión de crédito que la otorgó.
+	DecisionRef   string                 `protobuf:"bytes,11,opt,name=decision_ref,json=decisionRef,proto3" json:"decision_ref,omitempty"`
+	OpenedAt      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=opened_at,json=openedAt,proto3" json:"opened_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreditLine) Reset() {
+	*x = CreditLine{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreditLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreditLine) ProtoMessage() {}
+
+func (x *CreditLine) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreditLine.ProtoReflect.Descriptor instead.
+func (*CreditLine) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *CreditLine) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CreditLine) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *CreditLine) GetCustomerId() string {
+	if x != nil {
+		return x.CustomerId
+	}
+	return ""
+}
+
+func (x *CreditLine) GetLimit() *Money {
+	if x != nil {
+		return x.Limit
+	}
+	return nil
+}
+
+func (x *CreditLine) GetOutstanding() *Money {
+	if x != nil {
+		return x.Outstanding
+	}
+	return nil
+}
+
+func (x *CreditLine) GetAvailable() *Money {
+	if x != nil {
+		return x.Available
+	}
+	return nil
+}
+
+func (x *CreditLine) GetAnnualRateBps() int32 {
+	if x != nil {
+		return x.AnnualRateBps
+	}
+	return 0
+}
+
+func (x *CreditLine) GetCycleDay() int32 {
+	if x != nil {
+		return x.CycleDay
+	}
+	return 0
+}
+
+func (x *CreditLine) GetPaymentDays() int32 {
+	if x != nil {
+		return x.PaymentDays
+	}
+	return 0
+}
+
+func (x *CreditLine) GetStatus() CreditLineStatus {
+	if x != nil {
+		return x.Status
+	}
+	return CreditLineStatus_CREDIT_LINE_STATUS_UNSPECIFIED
+}
+
+func (x *CreditLine) GetDecisionRef() string {
+	if x != nil {
+		return x.DecisionRef
+	}
+	return ""
+}
+
+func (x *CreditLine) GetOpenedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OpenedAt
+	}
+	return nil
+}
+
+type OpenCreditLineRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CustomerId string                 `protobuf:"bytes,1,opt,name=customer_id,json=customerId,proto3" json:"customer_id,omitempty"`
+	// Nombre de la cuenta: el del titular.
+	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Currency      string `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
+	LimitMicros   int64  `protobuf:"varint,4,opt,name=limit_micros,json=limitMicros,proto3" json:"limit_micros,omitempty"`
+	AnnualRateBps int32  `protobuf:"varint,5,opt,name=annual_rate_bps,json=annualRateBps,proto3" json:"annual_rate_bps,omitempty"`
+	CycleDay      int32  `protobuf:"varint,6,opt,name=cycle_day,json=cycleDay,proto3" json:"cycle_day,omitempty"`
+	PaymentDays   int32  `protobuf:"varint,7,opt,name=payment_days,json=paymentDays,proto3" json:"payment_days,omitempty"`
+	DecisionRef   string `protobuf:"bytes,8,opt,name=decision_ref,json=decisionRef,proto3" json:"decision_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenCreditLineRequest) Reset() {
+	*x = OpenCreditLineRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenCreditLineRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenCreditLineRequest) ProtoMessage() {}
+
+func (x *OpenCreditLineRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenCreditLineRequest.ProtoReflect.Descriptor instead.
+func (*OpenCreditLineRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *OpenCreditLineRequest) GetCustomerId() string {
+	if x != nil {
+		return x.CustomerId
+	}
+	return ""
+}
+
+func (x *OpenCreditLineRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *OpenCreditLineRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *OpenCreditLineRequest) GetLimitMicros() int64 {
+	if x != nil {
+		return x.LimitMicros
+	}
+	return 0
+}
+
+func (x *OpenCreditLineRequest) GetAnnualRateBps() int32 {
+	if x != nil {
+		return x.AnnualRateBps
+	}
+	return 0
+}
+
+func (x *OpenCreditLineRequest) GetCycleDay() int32 {
+	if x != nil {
+		return x.CycleDay
+	}
+	return 0
+}
+
+func (x *OpenCreditLineRequest) GetPaymentDays() int32 {
+	if x != nil {
+		return x.PaymentDays
+	}
+	return 0
+}
+
+func (x *OpenCreditLineRequest) GetDecisionRef() string {
+	if x != nil {
+		return x.DecisionRef
+	}
+	return ""
+}
+
+type GetCustomerCreditLineRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CustomerId    string                 `protobuf:"bytes,1,opt,name=customer_id,json=customerId,proto3" json:"customer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCustomerCreditLineRequest) Reset() {
+	*x = GetCustomerCreditLineRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCustomerCreditLineRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCustomerCreditLineRequest) ProtoMessage() {}
+
+func (x *GetCustomerCreditLineRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCustomerCreditLineRequest.ProtoReflect.Descriptor instead.
+func (*GetCustomerCreditLineRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *GetCustomerCreditLineRequest) GetCustomerId() string {
+	if x != nil {
+		return x.CustomerId
+	}
+	return ""
+}
+
 var File_aibank_core_v1_core_proto protoreflect.FileDescriptor
 
 const file_aibank_core_v1_core_proto_rawDesc = "" +
@@ -4128,7 +4476,37 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x1dAuthorizeUnderMandateResponse\x12C\n" +
 	"\rauthorization\x18\x01 \x01(\v2\x1d.aibank.core.v1.AuthorizationR\rauthorization\x12\x1a\n" +
 	"\breplayed\x18\x02 \x01(\bR\breplayed\x121\n" +
-	"\amandate\x18\x03 \x01(\v2\x17.aibank.core.v1.MandateR\amandate*Q\n" +
+	"\amandate\x18\x03 \x01(\v2\x17.aibank.core.v1.MandateR\amandate\"\xf5\x03\n" +
+	"\n" +
+	"CreditLine\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x02 \x01(\tR\taccountId\x12\x1f\n" +
+	"\vcustomer_id\x18\x03 \x01(\tR\n" +
+	"customerId\x12+\n" +
+	"\x05limit\x18\x04 \x01(\v2\x15.aibank.core.v1.MoneyR\x05limit\x127\n" +
+	"\voutstanding\x18\x05 \x01(\v2\x15.aibank.core.v1.MoneyR\voutstanding\x123\n" +
+	"\tavailable\x18\x06 \x01(\v2\x15.aibank.core.v1.MoneyR\tavailable\x12&\n" +
+	"\x0fannual_rate_bps\x18\a \x01(\x05R\rannualRateBps\x12\x1b\n" +
+	"\tcycle_day\x18\b \x01(\x05R\bcycleDay\x12!\n" +
+	"\fpayment_days\x18\t \x01(\x05R\vpaymentDays\x128\n" +
+	"\x06status\x18\n" +
+	" \x01(\x0e2 .aibank.core.v1.CreditLineStatusR\x06status\x12!\n" +
+	"\fdecision_ref\x18\v \x01(\tR\vdecisionRef\x127\n" +
+	"\topened_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bopenedAt\"\x96\x02\n" +
+	"\x15OpenCreditLineRequest\x12\x1f\n" +
+	"\vcustomer_id\x18\x01 \x01(\tR\n" +
+	"customerId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12!\n" +
+	"\flimit_micros\x18\x04 \x01(\x03R\vlimitMicros\x12&\n" +
+	"\x0fannual_rate_bps\x18\x05 \x01(\x05R\rannualRateBps\x12\x1b\n" +
+	"\tcycle_day\x18\x06 \x01(\x05R\bcycleDay\x12!\n" +
+	"\fpayment_days\x18\a \x01(\x05R\vpaymentDays\x12!\n" +
+	"\fdecision_ref\x18\b \x01(\tR\vdecisionRef\"?\n" +
+	"\x1cGetCustomerCreditLineRequest\x12\x1f\n" +
+	"\vcustomer_id\x18\x01 \x01(\tR\n" +
+	"customerId*Q\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_DEBIT\x10\x01\x12\x14\n" +
@@ -4148,7 +4526,7 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x1aACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15ACCOUNT_STATUS_ACTIVE\x10\x01\x12\x19\n" +
 	"\x15ACCOUNT_STATUS_FROZEN\x10\x02\x12\x19\n" +
-	"\x15ACCOUNT_STATUS_CLOSED\x10\x03*\xc3\x02\n" +
+	"\x15ACCOUNT_STATUS_CLOSED\x10\x03*\xc8\x03\n" +
 	"\x12PostingErrorReason\x12$\n" +
 	" POSTING_ERROR_REASON_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cPOSTING_ERROR_REASON_INVALID\x10\x01\x12-\n" +
@@ -4156,7 +4534,10 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"'POSTING_ERROR_REASON_INSUFFICIENT_FUNDS\x10\x03\x12-\n" +
 	")POSTING_ERROR_REASON_BALANCE_CAP_EXCEEDED\x10\x04\x121\n" +
 	"-POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED\x10\x05\x12'\n" +
-	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x06*\xd8\x01\n" +
+	"#POSTING_ERROR_REASON_ALREADY_EXISTS\x10\x06\x12.\n" +
+	"*POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED\x10\a\x12-\n" +
+	")POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE\x10\b\x12$\n" +
+	" POSTING_ERROR_REASON_OVERPAYMENT\x10\t*\xd8\x01\n" +
 	"\vFindingKind\x12\x1c\n" +
 	"\x18FINDING_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aFINDING_KIND_BALANCE_DRIFT\x10\x01\x12\"\n" +
@@ -4195,7 +4576,12 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x1cMANDATE_ERROR_REASON_REVOKED\x10\x03\x12 \n" +
 	"\x1cMANDATE_ERROR_REASON_EXPIRED\x10\x04\x12'\n" +
 	"#MANDATE_ERROR_REASON_LIMIT_EXCEEDED\x10\x05\x12,\n" +
-	"(MANDATE_ERROR_REASON_ACCOUNT_NOT_COVERED\x10\x062\xff\x01\n" +
+	"(MANDATE_ERROR_REASON_ACCOUNT_NOT_COVERED\x10\x06*\x94\x01\n" +
+	"\x10CreditLineStatus\x12\"\n" +
+	"\x1eCREDIT_LINE_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19CREDIT_LINE_STATUS_ACTIVE\x10\x01\x12\x1e\n" +
+	"\x1aCREDIT_LINE_STATUS_BLOCKED\x10\x02\x12\x1d\n" +
+	"\x19CREDIT_LINE_STATUS_CLOSED\x10\x032\xff\x01\n" +
 	"\rLedgerService\x12A\n" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +
@@ -4232,7 +4618,10 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x11FindActiveMandate\x12(.aibank.core.v1.FindActiveMandateRequest\x1a\x17.aibank.core.v1.Mandate\x12Y\n" +
 	"\fListMandates\x12#.aibank.core.v1.ListMandatesRequest\x1a$.aibank.core.v1.ListMandatesResponse\x12t\n" +
 	"\x15AuthorizeUnderMandate\x12,.aibank.core.v1.AuthorizeUnderMandateRequest\x1a-.aibank.core.v1.AuthorizeUnderMandateResponse\x12_\n" +
-	"\x0eSummarizeSpend\x12%.aibank.core.v1.SummarizeSpendRequest\x1a&.aibank.core.v1.SummarizeSpendResponseB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
+	"\x0eSummarizeSpend\x12%.aibank.core.v1.SummarizeSpendRequest\x1a&.aibank.core.v1.SummarizeSpendResponse2\xc7\x01\n" +
+	"\rCreditService\x12S\n" +
+	"\x0eOpenCreditLine\x12%.aibank.core.v1.OpenCreditLineRequest\x1a\x1a.aibank.core.v1.CreditLine\x12a\n" +
+	"\x15GetCustomerCreditLine\x12,.aibank.core.v1.GetCustomerCreditLineRequest\x1a\x1a.aibank.core.v1.CreditLineB3Z1github.com/aibank/aibank/clients/go/corev1;corev1b\x06proto3"
 
 var (
 	file_aibank_core_v1_core_proto_rawDescOnce sync.Once
@@ -4246,8 +4635,8 @@ func file_aibank_core_v1_core_proto_rawDescGZIP() []byte {
 	return file_aibank_core_v1_core_proto_rawDescData
 }
 
-var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_aibank_core_v1_core_proto_goTypes = []any{
 	(Direction)(0),                        // 0: aibank.core.v1.Direction
 	(AccountType)(0),                      // 1: aibank.core.v1.AccountType
@@ -4259,166 +4648,179 @@ var file_aibank_core_v1_core_proto_goTypes = []any{
 	(AuthorizationErrorReason)(0),         // 7: aibank.core.v1.AuthorizationErrorReason
 	(MandateStatus)(0),                    // 8: aibank.core.v1.MandateStatus
 	(MandateErrorReason)(0),               // 9: aibank.core.v1.MandateErrorReason
-	(*Money)(nil),                         // 10: aibank.core.v1.Money
-	(*Entry)(nil),                         // 11: aibank.core.v1.Entry
-	(*PostRequest)(nil),                   // 12: aibank.core.v1.PostRequest
-	(*PostResponse)(nil),                  // 13: aibank.core.v1.PostResponse
-	(*GetBalanceRequest)(nil),             // 14: aibank.core.v1.GetBalanceRequest
-	(*GetBalanceResponse)(nil),            // 15: aibank.core.v1.GetBalanceResponse
-	(*AccountEntry)(nil),                  // 16: aibank.core.v1.AccountEntry
-	(*ListEntriesRequest)(nil),            // 17: aibank.core.v1.ListEntriesRequest
-	(*ListEntriesResponse)(nil),           // 18: aibank.core.v1.ListEntriesResponse
-	(*Account)(nil),                       // 19: aibank.core.v1.Account
-	(*OpenCustomerAccountRequest)(nil),    // 20: aibank.core.v1.OpenCustomerAccountRequest
-	(*CreateInternalAccountRequest)(nil),  // 21: aibank.core.v1.CreateInternalAccountRequest
-	(*GetAccountRequest)(nil),             // 22: aibank.core.v1.GetAccountRequest
-	(*GetAccountByIdRequest)(nil),         // 23: aibank.core.v1.GetAccountByIdRequest
-	(*ListCustomerAccountsRequest)(nil),   // 24: aibank.core.v1.ListCustomerAccountsRequest
-	(*ListCustomerAccountsResponse)(nil),  // 25: aibank.core.v1.ListCustomerAccountsResponse
-	(*Product)(nil),                       // 26: aibank.core.v1.Product
-	(*CreateProductRequest)(nil),          // 27: aibank.core.v1.CreateProductRequest
-	(*GetProductRequest)(nil),             // 28: aibank.core.v1.GetProductRequest
-	(*Finding)(nil),                       // 29: aibank.core.v1.Finding
-	(*ListOpenFindingsRequest)(nil),       // 30: aibank.core.v1.ListOpenFindingsRequest
-	(*ListOpenFindingsResponse)(nil),      // 31: aibank.core.v1.ListOpenFindingsResponse
-	(*ResolveFindingRequest)(nil),         // 32: aibank.core.v1.ResolveFindingRequest
-	(*ResolveFindingResponse)(nil),        // 33: aibank.core.v1.ResolveFindingResponse
-	(*RunInternalCheckRequest)(nil),       // 34: aibank.core.v1.RunInternalCheckRequest
-	(*RunInternalCheckResponse)(nil),      // 35: aibank.core.v1.RunInternalCheckResponse
-	(*Authorization)(nil),                 // 36: aibank.core.v1.Authorization
-	(*AuthorizeRequest)(nil),              // 37: aibank.core.v1.AuthorizeRequest
-	(*AuthorizeResponse)(nil),             // 38: aibank.core.v1.AuthorizeResponse
-	(*CaptureRequest)(nil),                // 39: aibank.core.v1.CaptureRequest
-	(*RefundRequest)(nil),                 // 40: aibank.core.v1.RefundRequest
-	(*GetAuthorizationRequest)(nil),       // 41: aibank.core.v1.GetAuthorizationRequest
-	(*ReleaseExpiredRequest)(nil),         // 42: aibank.core.v1.ReleaseExpiredRequest
-	(*ReleaseExpiredResponse)(nil),        // 43: aibank.core.v1.ReleaseExpiredResponse
-	(*SummarizeLiveHoldsRequest)(nil),     // 44: aibank.core.v1.SummarizeLiveHoldsRequest
-	(*HoldGroup)(nil),                     // 45: aibank.core.v1.HoldGroup
-	(*LookupHoldGranteesRequest)(nil),     // 46: aibank.core.v1.LookupHoldGranteesRequest
-	(*HoldGrantee)(nil),                   // 47: aibank.core.v1.HoldGrantee
-	(*LookupHoldGranteesResponse)(nil),    // 48: aibank.core.v1.LookupHoldGranteesResponse
-	(*SummarizeLiveHoldsResponse)(nil),    // 49: aibank.core.v1.SummarizeLiveHoldsResponse
-	(*Mandate)(nil),                       // 50: aibank.core.v1.Mandate
-	(*GrantMandateRequest)(nil),           // 51: aibank.core.v1.GrantMandateRequest
-	(*RevokeMandateRequest)(nil),          // 52: aibank.core.v1.RevokeMandateRequest
-	(*GetMandateRequest)(nil),             // 53: aibank.core.v1.GetMandateRequest
-	(*FindActiveMandateRequest)(nil),      // 54: aibank.core.v1.FindActiveMandateRequest
-	(*SummarizeSpendRequest)(nil),         // 55: aibank.core.v1.SummarizeSpendRequest
-	(*MandateSpend)(nil),                  // 56: aibank.core.v1.MandateSpend
-	(*SummarizeSpendResponse)(nil),        // 57: aibank.core.v1.SummarizeSpendResponse
-	(*ListMandatesRequest)(nil),           // 58: aibank.core.v1.ListMandatesRequest
-	(*ListMandatesResponse)(nil),          // 59: aibank.core.v1.ListMandatesResponse
-	(*AuthorizeUnderMandateRequest)(nil),  // 60: aibank.core.v1.AuthorizeUnderMandateRequest
-	(*AuthorizeUnderMandateResponse)(nil), // 61: aibank.core.v1.AuthorizeUnderMandateResponse
-	(*timestamppb.Timestamp)(nil),         // 62: google.protobuf.Timestamp
+	(CreditLineStatus)(0),                 // 10: aibank.core.v1.CreditLineStatus
+	(*Money)(nil),                         // 11: aibank.core.v1.Money
+	(*Entry)(nil),                         // 12: aibank.core.v1.Entry
+	(*PostRequest)(nil),                   // 13: aibank.core.v1.PostRequest
+	(*PostResponse)(nil),                  // 14: aibank.core.v1.PostResponse
+	(*GetBalanceRequest)(nil),             // 15: aibank.core.v1.GetBalanceRequest
+	(*GetBalanceResponse)(nil),            // 16: aibank.core.v1.GetBalanceResponse
+	(*AccountEntry)(nil),                  // 17: aibank.core.v1.AccountEntry
+	(*ListEntriesRequest)(nil),            // 18: aibank.core.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),           // 19: aibank.core.v1.ListEntriesResponse
+	(*Account)(nil),                       // 20: aibank.core.v1.Account
+	(*OpenCustomerAccountRequest)(nil),    // 21: aibank.core.v1.OpenCustomerAccountRequest
+	(*CreateInternalAccountRequest)(nil),  // 22: aibank.core.v1.CreateInternalAccountRequest
+	(*GetAccountRequest)(nil),             // 23: aibank.core.v1.GetAccountRequest
+	(*GetAccountByIdRequest)(nil),         // 24: aibank.core.v1.GetAccountByIdRequest
+	(*ListCustomerAccountsRequest)(nil),   // 25: aibank.core.v1.ListCustomerAccountsRequest
+	(*ListCustomerAccountsResponse)(nil),  // 26: aibank.core.v1.ListCustomerAccountsResponse
+	(*Product)(nil),                       // 27: aibank.core.v1.Product
+	(*CreateProductRequest)(nil),          // 28: aibank.core.v1.CreateProductRequest
+	(*GetProductRequest)(nil),             // 29: aibank.core.v1.GetProductRequest
+	(*Finding)(nil),                       // 30: aibank.core.v1.Finding
+	(*ListOpenFindingsRequest)(nil),       // 31: aibank.core.v1.ListOpenFindingsRequest
+	(*ListOpenFindingsResponse)(nil),      // 32: aibank.core.v1.ListOpenFindingsResponse
+	(*ResolveFindingRequest)(nil),         // 33: aibank.core.v1.ResolveFindingRequest
+	(*ResolveFindingResponse)(nil),        // 34: aibank.core.v1.ResolveFindingResponse
+	(*RunInternalCheckRequest)(nil),       // 35: aibank.core.v1.RunInternalCheckRequest
+	(*RunInternalCheckResponse)(nil),      // 36: aibank.core.v1.RunInternalCheckResponse
+	(*Authorization)(nil),                 // 37: aibank.core.v1.Authorization
+	(*AuthorizeRequest)(nil),              // 38: aibank.core.v1.AuthorizeRequest
+	(*AuthorizeResponse)(nil),             // 39: aibank.core.v1.AuthorizeResponse
+	(*CaptureRequest)(nil),                // 40: aibank.core.v1.CaptureRequest
+	(*RefundRequest)(nil),                 // 41: aibank.core.v1.RefundRequest
+	(*GetAuthorizationRequest)(nil),       // 42: aibank.core.v1.GetAuthorizationRequest
+	(*ReleaseExpiredRequest)(nil),         // 43: aibank.core.v1.ReleaseExpiredRequest
+	(*ReleaseExpiredResponse)(nil),        // 44: aibank.core.v1.ReleaseExpiredResponse
+	(*SummarizeLiveHoldsRequest)(nil),     // 45: aibank.core.v1.SummarizeLiveHoldsRequest
+	(*HoldGroup)(nil),                     // 46: aibank.core.v1.HoldGroup
+	(*LookupHoldGranteesRequest)(nil),     // 47: aibank.core.v1.LookupHoldGranteesRequest
+	(*HoldGrantee)(nil),                   // 48: aibank.core.v1.HoldGrantee
+	(*LookupHoldGranteesResponse)(nil),    // 49: aibank.core.v1.LookupHoldGranteesResponse
+	(*SummarizeLiveHoldsResponse)(nil),    // 50: aibank.core.v1.SummarizeLiveHoldsResponse
+	(*Mandate)(nil),                       // 51: aibank.core.v1.Mandate
+	(*GrantMandateRequest)(nil),           // 52: aibank.core.v1.GrantMandateRequest
+	(*RevokeMandateRequest)(nil),          // 53: aibank.core.v1.RevokeMandateRequest
+	(*GetMandateRequest)(nil),             // 54: aibank.core.v1.GetMandateRequest
+	(*FindActiveMandateRequest)(nil),      // 55: aibank.core.v1.FindActiveMandateRequest
+	(*SummarizeSpendRequest)(nil),         // 56: aibank.core.v1.SummarizeSpendRequest
+	(*MandateSpend)(nil),                  // 57: aibank.core.v1.MandateSpend
+	(*SummarizeSpendResponse)(nil),        // 58: aibank.core.v1.SummarizeSpendResponse
+	(*ListMandatesRequest)(nil),           // 59: aibank.core.v1.ListMandatesRequest
+	(*ListMandatesResponse)(nil),          // 60: aibank.core.v1.ListMandatesResponse
+	(*AuthorizeUnderMandateRequest)(nil),  // 61: aibank.core.v1.AuthorizeUnderMandateRequest
+	(*AuthorizeUnderMandateResponse)(nil), // 62: aibank.core.v1.AuthorizeUnderMandateResponse
+	(*CreditLine)(nil),                    // 63: aibank.core.v1.CreditLine
+	(*OpenCreditLineRequest)(nil),         // 64: aibank.core.v1.OpenCreditLineRequest
+	(*GetCustomerCreditLineRequest)(nil),  // 65: aibank.core.v1.GetCustomerCreditLineRequest
+	(*timestamppb.Timestamp)(nil),         // 66: google.protobuf.Timestamp
 }
 var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	0,  // 0: aibank.core.v1.Entry.direction:type_name -> aibank.core.v1.Direction
-	10, // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
-	11, // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
-	62, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
-	10, // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
-	10, // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
+	11, // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
+	12, // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
+	66, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
+	11, // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
+	11, // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
 	0,  // 6: aibank.core.v1.AccountEntry.direction:type_name -> aibank.core.v1.Direction
-	10, // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
-	62, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
-	16, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
+	11, // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
+	66, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
+	17, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
 	1,  // 10: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
 	2,  // 11: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
 	3,  // 12: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
-	62, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	66, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 14: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
-	19, // 15: aibank.core.v1.ListCustomerAccountsResponse.accounts:type_name -> aibank.core.v1.Account
+	20, // 15: aibank.core.v1.ListCustomerAccountsResponse.accounts:type_name -> aibank.core.v1.Account
 	5,  // 16: aibank.core.v1.Finding.kind:type_name -> aibank.core.v1.FindingKind
-	62, // 17: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
-	29, // 18: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
-	10, // 19: aibank.core.v1.Authorization.amount:type_name -> aibank.core.v1.Money
+	66, // 17: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
+	30, // 18: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
+	11, // 19: aibank.core.v1.Authorization.amount:type_name -> aibank.core.v1.Money
 	6,  // 20: aibank.core.v1.Authorization.status:type_name -> aibank.core.v1.AuthorizationStatus
-	62, // 21: aibank.core.v1.Authorization.expires_at:type_name -> google.protobuf.Timestamp
-	62, // 22: aibank.core.v1.Authorization.created_at:type_name -> google.protobuf.Timestamp
-	62, // 23: aibank.core.v1.Authorization.settled_at:type_name -> google.protobuf.Timestamp
-	62, // 24: aibank.core.v1.Authorization.released_at:type_name -> google.protobuf.Timestamp
-	10, // 25: aibank.core.v1.AuthorizeRequest.amount:type_name -> aibank.core.v1.Money
-	36, // 26: aibank.core.v1.AuthorizeResponse.authorization:type_name -> aibank.core.v1.Authorization
-	10, // 27: aibank.core.v1.HoldGroup.total:type_name -> aibank.core.v1.Money
-	10, // 28: aibank.core.v1.HoldGroup.expired:type_name -> aibank.core.v1.Money
-	62, // 29: aibank.core.v1.HoldGroup.first_expires_at:type_name -> google.protobuf.Timestamp
-	62, // 30: aibank.core.v1.HoldGroup.last_expires_at:type_name -> google.protobuf.Timestamp
-	47, // 31: aibank.core.v1.LookupHoldGranteesResponse.holds:type_name -> aibank.core.v1.HoldGrantee
-	45, // 32: aibank.core.v1.SummarizeLiveHoldsResponse.groups:type_name -> aibank.core.v1.HoldGroup
+	66, // 21: aibank.core.v1.Authorization.expires_at:type_name -> google.protobuf.Timestamp
+	66, // 22: aibank.core.v1.Authorization.created_at:type_name -> google.protobuf.Timestamp
+	66, // 23: aibank.core.v1.Authorization.settled_at:type_name -> google.protobuf.Timestamp
+	66, // 24: aibank.core.v1.Authorization.released_at:type_name -> google.protobuf.Timestamp
+	11, // 25: aibank.core.v1.AuthorizeRequest.amount:type_name -> aibank.core.v1.Money
+	37, // 26: aibank.core.v1.AuthorizeResponse.authorization:type_name -> aibank.core.v1.Authorization
+	11, // 27: aibank.core.v1.HoldGroup.total:type_name -> aibank.core.v1.Money
+	11, // 28: aibank.core.v1.HoldGroup.expired:type_name -> aibank.core.v1.Money
+	66, // 29: aibank.core.v1.HoldGroup.first_expires_at:type_name -> google.protobuf.Timestamp
+	66, // 30: aibank.core.v1.HoldGroup.last_expires_at:type_name -> google.protobuf.Timestamp
+	48, // 31: aibank.core.v1.LookupHoldGranteesResponse.holds:type_name -> aibank.core.v1.HoldGrantee
+	46, // 32: aibank.core.v1.SummarizeLiveHoldsResponse.groups:type_name -> aibank.core.v1.HoldGroup
 	8,  // 33: aibank.core.v1.Mandate.status:type_name -> aibank.core.v1.MandateStatus
-	62, // 34: aibank.core.v1.Mandate.expires_at:type_name -> google.protobuf.Timestamp
-	62, // 35: aibank.core.v1.Mandate.created_at:type_name -> google.protobuf.Timestamp
-	62, // 36: aibank.core.v1.Mandate.revoked_at:type_name -> google.protobuf.Timestamp
-	62, // 37: aibank.core.v1.GrantMandateRequest.expires_at:type_name -> google.protobuf.Timestamp
-	10, // 38: aibank.core.v1.MandateSpend.today:type_name -> aibank.core.v1.Money
-	10, // 39: aibank.core.v1.MandateSpend.month:type_name -> aibank.core.v1.Money
-	10, // 40: aibank.core.v1.MandateSpend.in_flight:type_name -> aibank.core.v1.Money
-	56, // 41: aibank.core.v1.SummarizeSpendResponse.mandates:type_name -> aibank.core.v1.MandateSpend
-	50, // 42: aibank.core.v1.ListMandatesResponse.mandates:type_name -> aibank.core.v1.Mandate
-	37, // 43: aibank.core.v1.AuthorizeUnderMandateRequest.authorization:type_name -> aibank.core.v1.AuthorizeRequest
-	36, // 44: aibank.core.v1.AuthorizeUnderMandateResponse.authorization:type_name -> aibank.core.v1.Authorization
-	50, // 45: aibank.core.v1.AuthorizeUnderMandateResponse.mandate:type_name -> aibank.core.v1.Mandate
-	12, // 46: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
-	14, // 47: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
-	17, // 48: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
-	20, // 49: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
-	21, // 50: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
-	22, // 51: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
-	23, // 52: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
-	24, // 53: aibank.core.v1.AccountService.ListCustomerAccounts:input_type -> aibank.core.v1.ListCustomerAccountsRequest
-	27, // 54: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
-	28, // 55: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
-	30, // 56: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
-	32, // 57: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
-	34, // 58: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
-	37, // 59: aibank.core.v1.AuthorizationService.Authorize:input_type -> aibank.core.v1.AuthorizeRequest
-	39, // 60: aibank.core.v1.AuthorizationService.Capture:input_type -> aibank.core.v1.CaptureRequest
-	40, // 61: aibank.core.v1.AuthorizationService.Refund:input_type -> aibank.core.v1.RefundRequest
-	41, // 62: aibank.core.v1.AuthorizationService.GetAuthorization:input_type -> aibank.core.v1.GetAuthorizationRequest
-	42, // 63: aibank.core.v1.AuthorizationService.ReleaseExpired:input_type -> aibank.core.v1.ReleaseExpiredRequest
-	44, // 64: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:input_type -> aibank.core.v1.SummarizeLiveHoldsRequest
-	46, // 65: aibank.core.v1.AuthorizationService.LookupHoldGrantees:input_type -> aibank.core.v1.LookupHoldGranteesRequest
-	51, // 66: aibank.core.v1.MandateService.GrantMandate:input_type -> aibank.core.v1.GrantMandateRequest
-	52, // 67: aibank.core.v1.MandateService.RevokeMandate:input_type -> aibank.core.v1.RevokeMandateRequest
-	53, // 68: aibank.core.v1.MandateService.GetMandate:input_type -> aibank.core.v1.GetMandateRequest
-	54, // 69: aibank.core.v1.MandateService.FindActiveMandate:input_type -> aibank.core.v1.FindActiveMandateRequest
-	58, // 70: aibank.core.v1.MandateService.ListMandates:input_type -> aibank.core.v1.ListMandatesRequest
-	60, // 71: aibank.core.v1.MandateService.AuthorizeUnderMandate:input_type -> aibank.core.v1.AuthorizeUnderMandateRequest
-	55, // 72: aibank.core.v1.MandateService.SummarizeSpend:input_type -> aibank.core.v1.SummarizeSpendRequest
-	13, // 73: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
-	15, // 74: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
-	18, // 75: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
-	19, // 76: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
-	19, // 77: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
-	19, // 78: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
-	19, // 79: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
-	25, // 80: aibank.core.v1.AccountService.ListCustomerAccounts:output_type -> aibank.core.v1.ListCustomerAccountsResponse
-	26, // 81: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
-	26, // 82: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
-	31, // 83: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
-	33, // 84: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
-	35, // 85: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
-	38, // 86: aibank.core.v1.AuthorizationService.Authorize:output_type -> aibank.core.v1.AuthorizeResponse
-	36, // 87: aibank.core.v1.AuthorizationService.Capture:output_type -> aibank.core.v1.Authorization
-	36, // 88: aibank.core.v1.AuthorizationService.Refund:output_type -> aibank.core.v1.Authorization
-	36, // 89: aibank.core.v1.AuthorizationService.GetAuthorization:output_type -> aibank.core.v1.Authorization
-	43, // 90: aibank.core.v1.AuthorizationService.ReleaseExpired:output_type -> aibank.core.v1.ReleaseExpiredResponse
-	49, // 91: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:output_type -> aibank.core.v1.SummarizeLiveHoldsResponse
-	48, // 92: aibank.core.v1.AuthorizationService.LookupHoldGrantees:output_type -> aibank.core.v1.LookupHoldGranteesResponse
-	50, // 93: aibank.core.v1.MandateService.GrantMandate:output_type -> aibank.core.v1.Mandate
-	50, // 94: aibank.core.v1.MandateService.RevokeMandate:output_type -> aibank.core.v1.Mandate
-	50, // 95: aibank.core.v1.MandateService.GetMandate:output_type -> aibank.core.v1.Mandate
-	50, // 96: aibank.core.v1.MandateService.FindActiveMandate:output_type -> aibank.core.v1.Mandate
-	59, // 97: aibank.core.v1.MandateService.ListMandates:output_type -> aibank.core.v1.ListMandatesResponse
-	61, // 98: aibank.core.v1.MandateService.AuthorizeUnderMandate:output_type -> aibank.core.v1.AuthorizeUnderMandateResponse
-	57, // 99: aibank.core.v1.MandateService.SummarizeSpend:output_type -> aibank.core.v1.SummarizeSpendResponse
-	73, // [73:100] is the sub-list for method output_type
-	46, // [46:73] is the sub-list for method input_type
-	46, // [46:46] is the sub-list for extension type_name
-	46, // [46:46] is the sub-list for extension extendee
-	0,  // [0:46] is the sub-list for field type_name
+	66, // 34: aibank.core.v1.Mandate.expires_at:type_name -> google.protobuf.Timestamp
+	66, // 35: aibank.core.v1.Mandate.created_at:type_name -> google.protobuf.Timestamp
+	66, // 36: aibank.core.v1.Mandate.revoked_at:type_name -> google.protobuf.Timestamp
+	66, // 37: aibank.core.v1.GrantMandateRequest.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 38: aibank.core.v1.MandateSpend.today:type_name -> aibank.core.v1.Money
+	11, // 39: aibank.core.v1.MandateSpend.month:type_name -> aibank.core.v1.Money
+	11, // 40: aibank.core.v1.MandateSpend.in_flight:type_name -> aibank.core.v1.Money
+	57, // 41: aibank.core.v1.SummarizeSpendResponse.mandates:type_name -> aibank.core.v1.MandateSpend
+	51, // 42: aibank.core.v1.ListMandatesResponse.mandates:type_name -> aibank.core.v1.Mandate
+	38, // 43: aibank.core.v1.AuthorizeUnderMandateRequest.authorization:type_name -> aibank.core.v1.AuthorizeRequest
+	37, // 44: aibank.core.v1.AuthorizeUnderMandateResponse.authorization:type_name -> aibank.core.v1.Authorization
+	51, // 45: aibank.core.v1.AuthorizeUnderMandateResponse.mandate:type_name -> aibank.core.v1.Mandate
+	11, // 46: aibank.core.v1.CreditLine.limit:type_name -> aibank.core.v1.Money
+	11, // 47: aibank.core.v1.CreditLine.outstanding:type_name -> aibank.core.v1.Money
+	11, // 48: aibank.core.v1.CreditLine.available:type_name -> aibank.core.v1.Money
+	10, // 49: aibank.core.v1.CreditLine.status:type_name -> aibank.core.v1.CreditLineStatus
+	66, // 50: aibank.core.v1.CreditLine.opened_at:type_name -> google.protobuf.Timestamp
+	13, // 51: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
+	15, // 52: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
+	18, // 53: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
+	21, // 54: aibank.core.v1.AccountService.OpenCustomerAccount:input_type -> aibank.core.v1.OpenCustomerAccountRequest
+	22, // 55: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
+	23, // 56: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
+	24, // 57: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
+	25, // 58: aibank.core.v1.AccountService.ListCustomerAccounts:input_type -> aibank.core.v1.ListCustomerAccountsRequest
+	28, // 59: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
+	29, // 60: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
+	31, // 61: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
+	33, // 62: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
+	35, // 63: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
+	38, // 64: aibank.core.v1.AuthorizationService.Authorize:input_type -> aibank.core.v1.AuthorizeRequest
+	40, // 65: aibank.core.v1.AuthorizationService.Capture:input_type -> aibank.core.v1.CaptureRequest
+	41, // 66: aibank.core.v1.AuthorizationService.Refund:input_type -> aibank.core.v1.RefundRequest
+	42, // 67: aibank.core.v1.AuthorizationService.GetAuthorization:input_type -> aibank.core.v1.GetAuthorizationRequest
+	43, // 68: aibank.core.v1.AuthorizationService.ReleaseExpired:input_type -> aibank.core.v1.ReleaseExpiredRequest
+	45, // 69: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:input_type -> aibank.core.v1.SummarizeLiveHoldsRequest
+	47, // 70: aibank.core.v1.AuthorizationService.LookupHoldGrantees:input_type -> aibank.core.v1.LookupHoldGranteesRequest
+	52, // 71: aibank.core.v1.MandateService.GrantMandate:input_type -> aibank.core.v1.GrantMandateRequest
+	53, // 72: aibank.core.v1.MandateService.RevokeMandate:input_type -> aibank.core.v1.RevokeMandateRequest
+	54, // 73: aibank.core.v1.MandateService.GetMandate:input_type -> aibank.core.v1.GetMandateRequest
+	55, // 74: aibank.core.v1.MandateService.FindActiveMandate:input_type -> aibank.core.v1.FindActiveMandateRequest
+	59, // 75: aibank.core.v1.MandateService.ListMandates:input_type -> aibank.core.v1.ListMandatesRequest
+	61, // 76: aibank.core.v1.MandateService.AuthorizeUnderMandate:input_type -> aibank.core.v1.AuthorizeUnderMandateRequest
+	56, // 77: aibank.core.v1.MandateService.SummarizeSpend:input_type -> aibank.core.v1.SummarizeSpendRequest
+	64, // 78: aibank.core.v1.CreditService.OpenCreditLine:input_type -> aibank.core.v1.OpenCreditLineRequest
+	65, // 79: aibank.core.v1.CreditService.GetCustomerCreditLine:input_type -> aibank.core.v1.GetCustomerCreditLineRequest
+	14, // 80: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
+	16, // 81: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
+	19, // 82: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
+	20, // 83: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
+	20, // 84: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
+	20, // 85: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
+	20, // 86: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
+	26, // 87: aibank.core.v1.AccountService.ListCustomerAccounts:output_type -> aibank.core.v1.ListCustomerAccountsResponse
+	27, // 88: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
+	27, // 89: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
+	32, // 90: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
+	34, // 91: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
+	36, // 92: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
+	39, // 93: aibank.core.v1.AuthorizationService.Authorize:output_type -> aibank.core.v1.AuthorizeResponse
+	37, // 94: aibank.core.v1.AuthorizationService.Capture:output_type -> aibank.core.v1.Authorization
+	37, // 95: aibank.core.v1.AuthorizationService.Refund:output_type -> aibank.core.v1.Authorization
+	37, // 96: aibank.core.v1.AuthorizationService.GetAuthorization:output_type -> aibank.core.v1.Authorization
+	44, // 97: aibank.core.v1.AuthorizationService.ReleaseExpired:output_type -> aibank.core.v1.ReleaseExpiredResponse
+	50, // 98: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:output_type -> aibank.core.v1.SummarizeLiveHoldsResponse
+	49, // 99: aibank.core.v1.AuthorizationService.LookupHoldGrantees:output_type -> aibank.core.v1.LookupHoldGranteesResponse
+	51, // 100: aibank.core.v1.MandateService.GrantMandate:output_type -> aibank.core.v1.Mandate
+	51, // 101: aibank.core.v1.MandateService.RevokeMandate:output_type -> aibank.core.v1.Mandate
+	51, // 102: aibank.core.v1.MandateService.GetMandate:output_type -> aibank.core.v1.Mandate
+	51, // 103: aibank.core.v1.MandateService.FindActiveMandate:output_type -> aibank.core.v1.Mandate
+	60, // 104: aibank.core.v1.MandateService.ListMandates:output_type -> aibank.core.v1.ListMandatesResponse
+	62, // 105: aibank.core.v1.MandateService.AuthorizeUnderMandate:output_type -> aibank.core.v1.AuthorizeUnderMandateResponse
+	58, // 106: aibank.core.v1.MandateService.SummarizeSpend:output_type -> aibank.core.v1.SummarizeSpendResponse
+	63, // 107: aibank.core.v1.CreditService.OpenCreditLine:output_type -> aibank.core.v1.CreditLine
+	63, // 108: aibank.core.v1.CreditService.GetCustomerCreditLine:output_type -> aibank.core.v1.CreditLine
+	80, // [80:109] is the sub-list for method output_type
+	51, // [51:80] is the sub-list for method input_type
+	51, // [51:51] is the sub-list for extension type_name
+	51, // [51:51] is the sub-list for extension extendee
+	0,  // [0:51] is the sub-list for field type_name
 }
 
 func init() { file_aibank_core_v1_core_proto_init() }
@@ -4436,10 +4838,10 @@ func file_aibank_core_v1_core_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aibank_core_v1_core_proto_rawDesc), len(file_aibank_core_v1_core_proto_rawDesc)),
-			NumEnums:      10,
-			NumMessages:   52,
+			NumEnums:      11,
+			NumMessages:   55,
 			NumExtensions: 0,
-			NumServices:   6,
+			NumServices:   7,
 		},
 		GoTypes:           file_aibank_core_v1_core_proto_goTypes,
 		DependencyIndexes: file_aibank_core_v1_core_proto_depIdxs,

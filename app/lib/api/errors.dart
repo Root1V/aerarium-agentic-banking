@@ -44,6 +44,12 @@ enum ApiErrorCode {
   codeLocked,
   ownPhone,
   sameAccount,
+  // Tarjeta de crédito.
+  noCreditCard,
+  alreadyHasCard,
+  creditLimitExceeded,
+  creditLineInactive,
+  overpayment,
   unknown,
 }
 
@@ -99,6 +105,11 @@ class ApiError implements Exception {
         'code_locked' => ApiErrorCode.codeLocked,
         'own_phone' => ApiErrorCode.ownPhone,
         'same_account' => ApiErrorCode.sameAccount,
+        'no_credit_card' => ApiErrorCode.noCreditCard,
+        'already_has_card' => ApiErrorCode.alreadyHasCard,
+        'credit_limit_exceeded' => ApiErrorCode.creditLimitExceeded,
+        'credit_line_inactive' => ApiErrorCode.creditLineInactive,
+        'overpayment' => ApiErrorCode.overpayment,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -158,6 +169,11 @@ class ApiError implements Exception {
         ApiErrorCode.codeLocked => 'Demasiados intentos. Pide un código nuevo.',
         ApiErrorCode.ownPhone => 'Ese es tu número: no puedes enviarte dinero a ti mismo.',
         ApiErrorCode.sameAccount => 'No puedes enviarte dinero a la misma cuenta.',
+        ApiErrorCode.noCreditCard => 'Todavía no tienes tarjeta de crédito.',
+        ApiErrorCode.alreadyHasCard => 'Ya tienes una tarjeta de crédito.',
+        ApiErrorCode.creditLimitExceeded => 'Supera lo que tienes disponible en tu tarjeta.',
+        ApiErrorCode.creditLineInactive => 'Tu tarjeta está bloqueada por un pago pendiente. Puedes pagarla.',
+        ApiErrorCode.overpayment => 'Ese pago es mayor que lo que debes.',
         ApiErrorCode.weakPin =>
           'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',

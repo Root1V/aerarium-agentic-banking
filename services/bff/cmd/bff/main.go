@@ -19,6 +19,8 @@
 //	PASSKEY_RP_ORIGINS  orígenes aceptados, separados por coma (https://<RP_ID>,
 //	                    android:apk-key-hash:<hash>).
 //	PASSKEY_RP_NAME     nombre que muestra el sistema operativo. Por defecto AIBank.
+//	RISK_URL            motor de riesgo (risk/, aibank_risk.server). Con él, tarjeta
+//	                    de crédito.
 //	CORS_ALLOWED_ORIGINS  orígenes del portal web, separados por coma. Vacío = sin CORS.
 package main
 
@@ -37,6 +39,7 @@ import (
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/bff/sim"
+	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/stepup"
@@ -135,6 +138,23 @@ func run(log *slog.Logger) error {
 			log.Warn("directorio de celulares deshabilitado: no hay proveedor de SMS")
 		}
 
+		// Tarjeta de crédito: necesita el motor de riesgo, que decide. Sin él no se
+		// origina nada.
+		if riskURL := os.Getenv("RISK_URL"); riskURL != "" {
+			cards := credit.NewService(db, core, credit.NewHTTPAssessor(riskURL), credit.Config{
+				// Solo en el sandbox: una cuenta recién abierta nunca califica.
+				SyntheticHistory: devAuth,
+				Cooldown:         creditCooldown(devAuth),
+			})
+			if err := cards.Migrate(ctx); err != nil {
+				return err
+			}
+			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithCredit(cards) })
+			log.Info("tarjeta de crédito habilitada", "motor_de_riesgo", riskURL, "historial_sintetico", devAuth)
+		} else {
+			log.Warn("tarjeta de crédito deshabilitada: falta RISK_URL")
+		}
+
 		if rpID != "" {
 			pk, err := setupPasskeys(ctx, db, onboardingStore, sessionStore, rpID)
 			if err != nil {
@@ -215,4 +235,13 @@ func env(name, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// creditCooldown: tras una solicitud no aprobada, cuánto esperar para volver a
+// evaluar. En el sandbox casi nada, para poder probar otra vez.
+func creditCooldown(sandbox bool) time.Duration {
+	if sandbox {
+		return time.Minute
+	}
+	return 30 * 24 * time.Hour
 }

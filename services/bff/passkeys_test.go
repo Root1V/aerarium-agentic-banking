@@ -15,6 +15,7 @@ import (
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
+	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/devices"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
@@ -91,6 +92,16 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	}
 
 	deviceSvc := devices.NewService(devices.Config{}, devStore, onb, sess)
+	// Un motor de riesgo de mentira que aprueba 500.
+	risk := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"outcome":"approved","limit_micros":500000000,"currency":"USD","score":700,` +
+			`"model_version":"scorecard-v1","reasons":[]}`))
+	}))
+	t.Cleanup(risk.Close)
+	cards := credit.NewService(db, f.core, credit.NewHTTPAssessor(risk.URL), credit.Config{})
+	if err := cards.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
 	sender := aliases.NewSandboxSender()
 	directory := aliases.NewService(db, sender)
 	if err := directory.Migrate(f.ctx); err != nil {
@@ -104,7 +115,8 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithDevices(deviceSvc, bff.WithDeviceLimit(100, 100)).
 		WithStepUp(policy, deviceSvc).
 		WithSandboxFunds(cashPrefix, "RETAIL-").
-		WithAliases(directory, sender, bff.WithLookupLimit(100, 100))
+		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
+		WithCredit(cards)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
 	return &passkeyEnv{srv: ts, f: f}

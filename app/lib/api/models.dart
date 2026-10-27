@@ -71,9 +71,14 @@ class Movement {
   /// Si es un pago hecho por una plataforma con permiso, con plataforma conocida.
   bool get isPlatformPayment => kind == 'authorization_hold' && merchant.isNotEmpty;
 
+  /// Los movimientos con la tarjeta propia: la otra cuenta es del mismo
+  /// titular, y "De Carmen Huaman" (ella misma) no diría nada.
+  bool get _withOwnCard => kind == 'credit_drawdown' || kind == 'credit_payment';
+
   /// Etiqueta legible: a quién o de quién, si se sabe; si no, el tipo.
   String get label => switch (counterparty) {
         _ when isPlatformPayment => 'Pago a $merchant',
+        _ when _withOwnCard => _kindLabel,
         final Account who? => sign < 0 ? 'A ${who.name}' : 'De ${who.name}',
         null => _kindLabel,
       };
@@ -98,6 +103,8 @@ class Movement {
         // retenido: propinas, combustible.
         'card_clearing' => 'Ajuste de compra con tarjeta',
         'sandbox_funding' => 'Saldo de prueba',
+        'credit_drawdown' => 'Desde tu tarjeta de crédito',
+        'credit_payment' => 'Pago de tu tarjeta de crédito',
         _ => 'Movimiento',
       };
 }
@@ -613,3 +620,81 @@ String formatPhone(String phone) {
 
 /// Si lo escrito es un celular peruano: nueve dígitos que empiezan por 9.
 bool looksLikePhone(String input) => RegExp(r'^9\d{8}$').hasMatch(input.replaceAll(RegExp(r'[\s-]'), ''));
+
+
+/// La tarjeta de crédito del titular.
+class CreditCard {
+  final String id;
+  final Money limit;
+
+  /// Lo que se debe hoy.
+  final Money outstanding;
+
+  /// Lo que todavía se puede usar.
+  final Money available;
+
+  /// Tasa efectiva anual del contrato, en puntos básicos (4500 = 45 %).
+  final int annualRateBps;
+  final int cycleDay;
+  final int paymentDays;
+
+  /// `active`, `blocked` (por un pago pendiente) o `closed`.
+  final String status;
+
+  const CreditCard({
+    required this.id,
+    required this.limit,
+    required this.outstanding,
+    required this.available,
+    required this.annualRateBps,
+    required this.cycleDay,
+    required this.paymentDays,
+    required this.status,
+  });
+
+  bool get blocked => status == 'blocked';
+
+  /// "45 %", "45,5 %".
+  String get annualRate {
+    final whole = annualRateBps ~/ 100;
+    final decimals = annualRateBps % 100;
+    if (decimals == 0) return '$whole %';
+    return '$whole,${decimals.toString().padLeft(2, '0').replaceAll(RegExp(r'0$'), '')} %';
+  }
+
+  factory CreditCard.fromJson(Map<String, dynamic> json) => CreditCard(
+        id: json['id'] as String,
+        limit: Money.fromJson(json['limit'] as Map<String, dynamic>),
+        outstanding: Money.fromJson(json['outstanding'] as Map<String, dynamic>),
+        available: Money.fromJson(json['available'] as Map<String, dynamic>),
+        annualRateBps: (json['annual_rate_bps'] as num).toInt(),
+        cycleDay: (json['cycle_day'] as num).toInt(),
+        paymentDays: (json['payment_days'] as num).toInt(),
+        status: json['status'] as String,
+      );
+}
+
+/// Lo que respondió el banco a una solicitud de tarjeta.
+class CreditDecision {
+  /// `approved`, `needs_more_history` o `declined`.
+  final String outcome;
+
+  /// Qué faltó, en palabras de la persona. Vacío si se aprobó.
+  final List<String> reasons;
+
+  /// En el sandbox, la evaluación usó un historial simulado.
+  final bool syntheticHistory;
+
+  final CreditCard? card;
+
+  const CreditDecision({required this.outcome, required this.reasons, required this.syntheticHistory, this.card});
+
+  bool get approved => outcome == 'approved';
+
+  factory CreditDecision.fromJson(Map<String, dynamic> json) => CreditDecision(
+        outcome: json['outcome'] as String,
+        reasons: ((json['reasons'] as List<dynamic>?) ?? const []).cast<String>(),
+        syntheticHistory: json['synthetic_history'] as bool? ?? false,
+        card: json['card'] == null ? null : CreditCard.fromJson(json['card'] as Map<String, dynamic>),
+      );
+}

@@ -31,6 +31,12 @@ var (
 	// ErrAlreadyExists: ya hay un registro con ese código. Permite tratar un
 	// reintento de alta como idempotente en vez de como fallo.
 	ErrAlreadyExists = errors.New("ya existe")
+	// ErrCreditLimitExceeded: la deuda superaría el límite de la línea de crédito.
+	ErrCreditLimitExceeded = errors.New("límite de crédito excedido")
+	// ErrCreditLineInactive: la línea está bloqueada o cerrada; no admite usos.
+	ErrCreditLineInactive = errors.New("línea de crédito inactiva")
+	// ErrOverpayment: el pago supera lo que se debe.
+	ErrOverpayment = errors.New("el pago supera la deuda")
 	// ErrUnavailable: fallo de infraestructura. ESTE SÍ es reintentable.
 	ErrUnavailable = errors.New("core no disponible")
 )
@@ -89,6 +95,12 @@ func sentinelForReason(reason corev1.PostingErrorReason) error {
 		return ErrTransactionCapExceeded
 	case corev1.PostingErrorReason_POSTING_ERROR_REASON_ALREADY_EXISTS:
 		return ErrAlreadyExists
+	case corev1.PostingErrorReason_POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED:
+		return ErrCreditLimitExceeded
+	case corev1.PostingErrorReason_POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE:
+		return ErrCreditLineInactive
+	case corev1.PostingErrorReason_POSTING_ERROR_REASON_OVERPAYMENT:
+		return ErrOverpayment
 	default:
 		return nil
 	}

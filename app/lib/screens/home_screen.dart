@@ -7,6 +7,7 @@ import '../auth/device_keys.dart';
 import '../history.dart';
 import '../money.dart';
 import '../theme.dart';
+import 'credit_card_screen.dart';
 import 'mandates_screen.dart';
 import 'pending_payments_screen.dart';
 import 'phone_alias_screen.dart';
@@ -57,6 +58,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// El destinatario de prueba que creó el sandbox junto con el saldo.
   Account? _testPayee;
 
+  /// Si el banco ofrece tarjeta de crédito, y la del titular si ya la tiene.
+  bool _creditOffered = false;
+  CreditCard? _card;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _loading = true;
       _error = null;
     });
+    _loadCredit();
     try {
       final home = await widget.client.home(widget.accountId);
       if (!mounted) return;
@@ -126,6 +132,41 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Enviar'),
             ),
     );
+  }
+
+  /// La tarjeta va aparte del inicio: si el banco no la ofrece o no responde, el
+  /// inicio se muestra igual, sin ella.
+  Future<void> _loadCredit() async {
+    try {
+      final card = await widget.client.creditCard();
+      if (mounted) {
+        setState(() {
+          _creditOffered = true;
+          _card = card;
+        });
+      }
+    } catch (_) {
+      // Cualquier fallo —el banco no ofrece tarjetas, no responde, o responde
+      // algo ilegible— deja el inicio como estaba, sin la tarjeta. No se captura
+      // solo ApiError a propósito: una respuesta mal formada no puede tumbar el
+      // saldo, que es lo que la persona vino a ver.
+      if (mounted) setState(() => _creditOffered = false);
+    }
+  }
+
+  Future<void> _openCredit() async {
+    final card = _card;
+    if (card == null) {
+      await Navigator.of(context).push<CreditCard>(MaterialPageRoute(
+        builder: (_) => CreditApplyScreen(client: widget.client, accountId: widget.accountId),
+      ));
+    } else {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => CreditCardScreen(client: widget.client, accountId: widget.accountId, card: card),
+      ));
+    }
+    // Pedirla o usarla cambia la tarjeta y el saldo.
+    await _load();
   }
 
   Future<void> _addTestFunds() async {
@@ -215,6 +256,10 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _BalanceCard(home: home, onOpenPending: _openPending),
+        if (_creditOffered) ...[
+          const SizedBox(height: 12),
+          CreditCardTile(card: _card, onTap: _openCredit),
+        ],
         if (widget.offerTestFunds) ...[
           const SizedBox(height: 8),
           Align(

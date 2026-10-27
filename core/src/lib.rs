@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod authorizations;
+pub mod credit;
 pub mod db;
 pub mod grpc;
 pub mod kafka;
@@ -18,6 +19,7 @@ pub mod telemetry;
 pub mod products;
 
 pub use accounts::AccountRepository;
+pub use credit::{CreditLine, CreditLineStatus, CreditRepository, NewCreditLine};
 pub use model::*;
 pub use posting::PostingService;
 pub use reconciliation::{Finding, FindingKind, Reconciler};
