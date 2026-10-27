@@ -203,6 +203,10 @@ la firma. Si lo firmado no es exactamente lo que se pide ejecutar, se rechaza: l
 confirmación de 50 no sirve para mover 900. Tras una transferencia confirmada, el
 destinatario queda conocido y los envíos chicos ya no la piden.
 
+Los **destinatarios recientes** (`GET /v1/payees/recent`) salen de la misma tabla:
+a quien ya se le envió con una sesión real, del más reciente al más antiguo. La
+pantalla de envío los muestra arriba y nadie escribe un identificador de cuenta.
+
 En el sandbox, «Añadir saldo de prueba» acredita 250 (bajo el tope por operación de
 la cuenta de nivel 1) y crea un destinatario de prueba para enviarle.
 
