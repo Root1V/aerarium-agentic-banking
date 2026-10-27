@@ -58,12 +58,16 @@ if ! curl -sf "http://$ip:$holder_port/health" >/dev/null; then
 fi
 
 cd "$root/app"
-device="$(flutter devices --machine 2>/dev/null | python3 -c '
+# Un iPhone físico. Con varios dispositivos Apple conectados —un iPad por la Wi-Fi,
+# por ejemplo— se elige el iPhone; DEVICE_ID fuerza uno concreto.
+device="${DEVICE_ID:-$(flutter devices --machine 2>/dev/null | python3 -c '
 import json, sys
-for d in json.load(sys.stdin):
-    if d.get("targetPlatform", "").startswith("ios") and not d.get("emulator"):
-        print(d["id"]); break
-')"
+phones = [d for d in json.load(sys.stdin)
+          if d.get("targetPlatform", "").startswith("ios") and not d.get("emulator")]
+phones.sort(key=lambda d: "iphone" not in d.get("name", "").lower())
+if phones:
+    print(phones[0]["id"])
+')}"
 if [[ -z "$device" ]]; then
   echo "no veo ningún iPhone. Conéctalo por cable, desbloquéalo y acepta «Confiar en este Mac»." >&2
   exit 1
