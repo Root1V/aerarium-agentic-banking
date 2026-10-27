@@ -207,6 +207,16 @@ Los **destinatarios recientes** (`GET /v1/payees/recent`) salen de la misma tabl
 a quien ya se le envió con una sesión real, del más reciente al más antiguo. La
 pantalla de envío los muestra arriba y nadie escribe un identificador de cuenta.
 
+**Enviar a un celular** (`services/aliases`): el titular registra su número con un
+código por SMS (cinco intentos) y queda en el directorio, uno por cliente y un
+cliente por número; si alguien verifica un número que era de otro, pasa a él. Buscar
+un número devuelve su cuenta y el nombre a medias ("Juan P."), con tope de búsquedas
+por cliente para que el directorio no sirva para recorrer números. Sin proveedor de
+SMS, el directorio solo se monta en el sandbox y el código vuelve en la respuesta.
+
+El historial dice **a quién y de quién**: el core devuelve la otra cuenta de una
+transferencia entre dos clientes (nunca una cuenta interna del banco).
+
 En el sandbox, «Añadir saldo de prueba» acredita 250 (bajo el tope por operación de
 la cuenta de nivel 1) y crea un destinatario de prueba para enviarle.
 
