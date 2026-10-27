@@ -238,15 +238,8 @@ func (s *Service) LoginWithPIN(ctx context.Context, challengeID string, signatur
 	if err != nil || !verify(key, payload, signature) {
 		return nil, ErrRejected
 	}
-	if subtle.ConstantTimeCompare(hashPIN(pin, d.pinSalt), d.pinHash) != 1 {
-		attempts, err := s.store.failPIN(ctx, d.id, s.cfg.MaxPINAttempts)
-		if err != nil {
-			return nil, err
-		}
-		if attempts >= s.cfg.MaxPINAttempts {
-			return nil, ErrLocked
-		}
-		return nil, &WrongPINError{Remaining: s.cfg.MaxPINAttempts - attempts}
+	if err := s.checkPIN(ctx, d, pin); err != nil {
+		return nil, err
 	}
 	return s.enter(ctx, d, sessions.FactorDevicePIN)
 }
@@ -273,6 +266,114 @@ func (s *Service) enter(ctx context.Context, d *device, factor sessions.Factor) 
 		return nil, err
 	}
 	return s.sessions.Open(ctx, d.customerID, factor, d.id, s.now().Add(s.cfg.SessionTTL))
+}
+
+// ------------------------------------------------------------- confirmar
+
+// BeginConfirmation emite el desafío para confirmar una operación concreta.
+//
+// `operation` describe la operación entera —monto, destino, clave de
+// idempotencia— y va DENTRO de lo que se firma. Es el "vínculo dinámico" de la
+// autenticación reforzada: la firma vale para esa operación y para ninguna
+// otra, así que quien intercepte la confirmación de 50 no puede usarla para
+// mover 5.000 ni para cambiar el destino.
+func (s *Service) BeginConfirmation(ctx context.Context, customerID, deviceID string, operation []byte) (*Challenge, error) {
+	d, err := s.ownDevice(ctx, customerID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := usable(d); err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	id := uuid.NewString()
+	payload := []byte(payloadPrefix + "\n" + string(purposeConfirm) + "\n" + id + "\n" +
+		base64.RawURLEncoding.EncodeToString(nonce) + "\n" + string(operation))
+	if err := s.store.saveChallenge(ctx, id, purposeConfirm, deviceID, payload, s.now().Add(s.cfg.ChallengeTTL)); err != nil {
+		return nil, err
+	}
+	return &Challenge{ID: id, Payload: payload}, nil
+}
+
+// Confirm comprueba la firma de una confirmación.
+//
+// Exige que el desafío sea de este teléfono, de este cliente y de ESTA
+// operación: si lo que se pide ejecutar no es exactamente lo que se firmó, no
+// vale. Con la cara firma la llave biométrica; con la clave, la de posesión más
+// la clave de 6 dígitos, con el mismo tope de intentos que al entrar.
+func (s *Service) Confirm(ctx context.Context, customerID, deviceID, challengeID string, operation []byte, method Method, signature []byte, pin string) error {
+	payload, challengeDevice, err := s.store.consumeChallenge(ctx, challengeID, purposeConfirm)
+	if err != nil {
+		return err
+	}
+	if challengeDevice != deviceID || !bytes.HasSuffix(payload, append([]byte("\n"), operation...)) {
+		return ErrRejected
+	}
+	d, err := s.ownDevice(ctx, customerID, deviceID)
+	if err != nil {
+		return err
+	}
+	if err := usable(d); err != nil {
+		return err
+	}
+	switch method {
+	case MethodBiometric:
+		key, err := parseKey(d.biometricKey)
+		if err != nil || !verify(key, payload, signature) {
+			return ErrRejected
+		}
+	case MethodPIN:
+		key, err := parseKey(d.possessionKey)
+		if err != nil || !verify(key, payload, signature) {
+			return ErrRejected
+		}
+		if err := s.checkPIN(ctx, d, pin); err != nil {
+			return err
+		}
+	default:
+		return ErrRejected
+	}
+	return s.store.markUsed(ctx, d.id)
+}
+
+// Method es con qué se desbloqueó la llave.
+type Method string
+
+const (
+	MethodBiometric Method = "biometric"
+	MethodPIN       Method = "pin"
+)
+
+func (s *Service) ownDevice(ctx context.Context, customerID, deviceID string) (*device, error) {
+	if _, err := uuid.Parse(deviceID); err != nil {
+		return nil, ErrRejected
+	}
+	d, err := s.store.deviceByID(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	if d.customerID != customerID {
+		return nil, ErrRejected
+	}
+	return d, nil
+}
+
+// checkPIN compara la clave y, si no coincide, cuenta el intento.
+func (s *Service) checkPIN(ctx context.Context, d *device, pin string) error {
+	if subtle.ConstantTimeCompare(hashPIN(pin, d.pinSalt), d.pinHash) == 1 {
+		return nil
+	}
+	attempts, err := s.store.failPIN(ctx, d.id, s.cfg.MaxPINAttempts)
+	if err != nil {
+		return err
+	}
+	if attempts >= s.cfg.MaxPINAttempts {
+		return ErrLocked
+	}
+	return &WrongPINError{Remaining: s.cfg.MaxPINAttempts - attempts}
 }
 
 // Revoke desvincula un teléfono del cliente y cierra lo que tenga abierto.

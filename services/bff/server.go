@@ -45,6 +45,10 @@ type Server struct {
 	devices *deviceConfig
 	// sessions habilita cerrar sesión en el banco.
 	sessions *sessions.Store
+	// stepUp pide confirmar con el teléfono las operaciones de riesgo.
+	stepUp *stepUpConfig
+	// sandbox habilita el saldo de prueba. Solo en el sandbox.
+	sandbox *sandboxConfig
 	// timeZone es la zona en la que se cuenta "hoy" y "este mes" para el
 	// titular. Una sola mientras el banco opera en un país; con más de uno,
 	// saldrá del perfil del cliente.
@@ -100,6 +104,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.sessions != nil {
 		mux.Handle("POST /v1/session/logout", s.requireAuth(s.handleLogout))
+	}
+	if s.sandbox != nil {
+		s.sandboxRoutes(mux)
 	}
 
 	// El alta va SIN requireAuth: quien se da de alta todavía no tiene sesión.

@@ -13,9 +13,11 @@
 # a abrir desde la pantalla de inicio una vez desconectado el cable, y probar
 # "cierro la app y vuelvo a entrar con Face ID" es justamente lo que importa.
 #
-# Requisitos del iPhone, una vez: Modo desarrollador activado (Ajustes ›
+# Requisitos, una vez: en el iPhone, Modo desarrollador activado (Ajustes ›
 # Privacidad y seguridad), confiar en este Mac al conectarlo, y la misma Wi-Fi
-# que el Mac.
+# que el Mac. En el Mac, un Apple ID en Xcode › Settings › Accounts (gratis
+# basta); con uno gratis, la primera vez hay que confiar en el desarrollador en
+# Ajustes › General › VPN y gestión de dispositivos.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -73,5 +75,26 @@ if [[ -z "$device" ]]; then
   exit 1
 fi
 
-echo "· instalando en el iPhone ($device). La primera vez tarda unos minutos."
-exec flutter run --release -d "$device" --dart-define=AIBANK_BFF_URL="http://$ip:$holder_port"
+# Se compila con xcodebuild y se instala con devicectl, no con `flutter run`: con
+# iOS 26 Flutter a veces cree que el Modo desarrollador está apagado cuando no lo
+# está, y Xcode es quien crea el perfil de firma con la cuenta de Xcode › Settings
+# › Accounts (-allowProvisioningUpdates).
+echo "· compilando y firmando para el iPhone ($device). La primera vez tarda unos minutos."
+flutter build ios --config-only --release --dart-define=AIBANK_BFF_URL="http://$ip:$holder_port" >/dev/null
+if ! xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+     -destination "id=$device" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+     build >/tmp/aerarium-iphone-build.log 2>&1; then
+  grep -E "error:" /tmp/aerarium-iphone-build.log | head -5 >&2
+  echo "la compilación falló; si dice 'No Accounts', añade tu Apple ID en Xcode › Settings › Accounts" >&2
+  exit 1
+fi
+app="$(xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -showBuildSettings 2>/dev/null |
+  awk -F' = ' '/ BUILT_PRODUCTS_DIR =/{d=$2} / WRAPPER_NAME =/{w=$2} END{print d"/"w}')"
+
+echo "· instalando"
+xcrun devicectl device install app --device "$device" "$app" >/dev/null
+if ! xcrun devicectl device process launch --device "$device" dev.aerarium.aibankApp >/dev/null 2>&1; then
+  echo "instalada. Si no abre: Ajustes › General › VPN y gestión de dispositivos › tu Apple ID › Confiar."
+  exit 0
+fi
+echo "· listo: AIBank abierta en el iPhone, contra http://$ip:$holder_port"

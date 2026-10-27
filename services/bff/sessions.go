@@ -28,7 +28,7 @@ func (a *SessionAuthenticator) Authenticate(ctx context.Context, token string) (
 	}
 	// Lo que firmó —el teléfono o la passkey— identifica el dispositivo: es lo
 	// que permite exigir que una operación sensible venga del mismo.
-	return &Principal{CustomerID: p.CustomerID, DeviceID: p.DeviceRef}, nil
+	return &Principal{CustomerID: p.CustomerID, DeviceID: p.DeviceRef, Factor: string(p.Factor)}, nil
 }
 
 // ChainAuthenticator prueba varios autenticadores en orden.

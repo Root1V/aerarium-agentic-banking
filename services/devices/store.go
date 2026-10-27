@@ -26,6 +26,7 @@ type purpose string
 const (
 	purposeRegister purpose = "register"
 	purposeLogin    purpose = "login"
+	purposeConfirm  purpose = "confirm"
 )
 
 type device struct {

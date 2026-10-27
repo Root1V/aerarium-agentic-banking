@@ -12,11 +12,13 @@ import (
 
 	kycsim "github.com/aibank/aibank/adapters/kyc/sim"
 	"github.com/aibank/aibank/clients/go/coreclient"
+	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/devices"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
 	"github.com/aibank/aibank/services/sessions"
+	"github.com/aibank/aibank/services/stepup"
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
 )
@@ -31,6 +33,7 @@ var passkeyRP = virtualwebauthn.RelyingParty{ID: passkeyRPID, Name: "AIBank", Or
 
 type passkeyEnv struct {
 	srv *httptest.Server
+	f   *fixture
 }
 
 func newPasskeyEnv(t *testing.T) *passkeyEnv {
@@ -56,7 +59,14 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	}
 
 	product := "BASICA-" + uuid.NewString()[:8]
-	if _, err := f.core.CreateProduct(f.ctx, coreclient.NewProduct{Code: product, Name: "Básica", Currency: "USD"}); err != nil {
+	// Con los topes de la cuenta de nivel 1, como la del alta real: 300 por
+	// operación, 1.000 de saldo. Sin ellos, el saldo de prueba pasaba aquí y
+	// fallaba en el teléfono.
+	maxBalance, maxTx := int64(1_000_000_000), int64(300_000_000)
+	if _, err := f.core.CreateProduct(f.ctx, coreclient.NewProduct{
+		Code: product, Name: "Básica", Currency: "USD",
+		MaxBalanceMicros: &maxBalance, MaxTransactionMicros: &maxTx,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	onboardingSvc := onboarding.NewService(onb, f.core, kycsim.NewIdentityVerifier(), kycsim.NewSanctionsScreener())
@@ -68,18 +78,37 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		t.Fatal(err)
 	}
 
+	policy := stepup.NewService(db, stepup.DefaultPolicy())
+	if err := policy.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	// La caja del saldo de prueba: el prefijo más la moneda es su código.
+	cashPrefix := "TESTCASH-" + uuid.NewString()[:8] + "-"
+	if _, err := f.core.CreateInternalAccount(f.ctx, cashPrefix+"USD", "Caja de prueba",
+		corev1.AccountType_ACCOUNT_TYPE_ASSET, "USD"); err != nil {
+		t.Fatal(err)
+	}
+
+	deviceSvc := devices.NewService(devices.Config{}, devStore, onb, sess)
 	auth := bff.ChainAuthenticator{bff.NewSessionAuthenticator(sess)}
 	server := bff.NewServer(f.core, auth, nil).
 		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
 		WithSessions(sess).
 		WithPasskeys(pk).
-		WithDevices(devices.NewService(devices.Config{}, devStore, onb, sess), bff.WithDeviceLimit(100, 100))
+		WithDevices(deviceSvc, bff.WithDeviceLimit(100, 100)).
+		WithStepUp(policy, deviceSvc).
+		WithSandboxFunds(cashPrefix, "RETAIL-")
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
-	return &passkeyEnv{srv: ts}
+	return &passkeyEnv{srv: ts, f: f}
 }
 
 func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (int, map[string]any) {
+	t.Helper()
+	return e.callWith(t, method, path, token, nil, body)
+}
+
+func (e *passkeyEnv) callWith(t *testing.T, method, path, token string, headers map[string]string, body any) (int, map[string]any) {
 	t.Helper()
 	var reader io.Reader
 	if body != nil {
@@ -92,6 +121,9 @@ func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (i
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
