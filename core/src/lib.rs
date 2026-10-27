@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod authorizations;
 pub mod credit;
+pub mod credit_cycle;
 pub mod db;
 pub mod grpc;
 pub mod kafka;
@@ -20,6 +21,7 @@ pub mod products;
 
 pub use accounts::AccountRepository;
 pub use credit::{CreditLine, CreditLineStatus, CreditRepository, NewCreditLine};
+pub use credit_cycle::Statement;
 pub use model::*;
 pub use posting::PostingService;
 pub use reconciliation::{Finding, FindingKind, Reconciler};

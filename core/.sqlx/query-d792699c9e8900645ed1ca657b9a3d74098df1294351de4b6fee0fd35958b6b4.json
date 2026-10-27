@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.id FROM credit_lines l\n            WHERE l.status <> 'CLOSED'\n              AND l.cycle_day = EXTRACT(DAY FROM $1::date)::SMALLINT\n              AND l.opened_at::date < $1::date\n              AND NOT EXISTS (SELECT 1 FROM credit_statements s\n                               WHERE s.line_id = l.id AND s.period_end::date = $1::date)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d792699c9e8900645ed1ca657b9a3d74098df1294351de4b6fee0fd35958b6b4"
+}

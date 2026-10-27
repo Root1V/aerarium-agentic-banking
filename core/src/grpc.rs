@@ -1161,8 +1161,75 @@ fn credit_line_to_pb(line: crate::credit::CreditLine) -> pb::CreditLine {
     }
 }
 
+fn statement_to_pb(s: crate::credit_cycle::Statement) -> pb::CreditStatement {
+    let money = |amount_micros: i64| Some(pb::Money { amount_micros, currency: s.currency.clone() });
+    pb::CreditStatement {
+        id: s.id.to_string(),
+        line_id: s.line_id.to_string(),
+        period_start: Some(to_timestamp(s.period_start)),
+        period_end: Some(to_timestamp(s.period_end)),
+        opening: money(s.opening_micros),
+        charges: money(s.charges_micros),
+        payments: money(s.payments_micros),
+        interest: money(s.interest_micros),
+        closing: money(s.closing_micros),
+        minimum_payment: money(s.minimum_payment_micros),
+        due_date: s.due_date.format("%Y-%m-%d").to_string(),
+        paid_since_cut: money(s.paid_since_cut_micros),
+    }
+}
+
+fn instant_or_now(t: Option<prost_types::Timestamp>) -> Result<chrono::DateTime<chrono::Utc>, Status> {
+    match t {
+        None => Ok(chrono::Utc::now()),
+        Some(t) => chrono::DateTime::from_timestamp(t.seconds, t.nanos.max(0) as u32)
+            .ok_or_else(|| Status::invalid_argument("invalid timestamp")),
+    }
+}
+
 #[tonic::async_trait]
 impl pb::credit_service_server::CreditService for CreditApi {
+    async fn close_cycle(
+        &self,
+        request: Request<pb::CloseCycleRequest>,
+    ) -> Result<Response<pb::CreditStatement>, Status> {
+        let req = request.into_inner();
+        let line_id = parse_uuid(&req.line_id, "line_id")?;
+        let statement = self
+            .credit
+            .close_cycle(line_id, instant_or_now(req.cut_at)?)
+            .await
+            .map_err(to_status)?;
+        Ok(Response::new(statement_to_pb(statement)))
+    }
+
+    async fn list_statements(
+        &self,
+        request: Request<pb::ListStatementsRequest>,
+    ) -> Result<Response<pb::ListStatementsResponse>, Status> {
+        let req = request.into_inner();
+        let line_id = parse_uuid(&req.line_id, "line_id")?;
+        let limit = if req.limit <= 0 { 12 } else { req.limit.min(60) } as i64;
+        let statements = self
+            .credit
+            .statements(line_id, limit)
+            .await
+            .map_err(|e| to_status(PostingError::Database(e)))?;
+        Ok(Response::new(pb::ListStatementsResponse {
+            statements: statements.into_iter().map(statement_to_pb).collect(),
+        }))
+    }
+
+    async fn review_credit_line(
+        &self,
+        request: Request<pb::ReviewCreditLineRequest>,
+    ) -> Result<Response<pb::CreditLine>, Status> {
+        let req = request.into_inner();
+        let line_id = parse_uuid(&req.line_id, "line_id")?;
+        let line = self.credit.review(line_id, instant_or_now(req.as_of)?).await.map_err(to_status)?;
+        Ok(Response::new(credit_line_to_pb(line)))
+    }
+
     async fn open_credit_line(
         &self,
         request: Request<pb::OpenCreditLineRequest>,

@@ -661,10 +661,58 @@ message GetCustomerCreditLineRequest {
   string customer_id = 1;
 }
 
+// El estado de cuenta: la foto de la línea al corte.
+message CreditStatement {
+  string id = 1;
+  string line_id = 2;
+  google.protobuf.Timestamp period_start = 3;
+  google.protobuf.Timestamp period_end = 4;
+  Money opening = 5;
+  // Lo usado en el periodo.
+  Money charges = 6;
+  Money payments = 7;
+  Money interest = 8;
+  Money closing = 9;
+  Money minimum_payment = 10;
+  // Fecha de vencimiento, AAAA-MM-DD.
+  string due_date = 11;
+  // Lo pagado desde el corte, hasta ahora.
+  Money paid_since_cut = 12;
+}
+
+message CloseCycleRequest {
+  string line_id = 1;
+  // Instante del corte. Vacío: ahora.
+  google.protobuf.Timestamp cut_at = 2;
+}
+
+message ListStatementsRequest {
+  string line_id = 1;
+  int32 limit = 2;
+}
+
+message ListStatementsResponse {
+  // Del más reciente al más antiguo.
+  repeated CreditStatement statements = 1;
+}
+
+message ReviewCreditLineRequest {
+  string line_id = 1;
+  // Fecha a la que se revisa la mora. Vacío: ahora.
+  google.protobuf.Timestamp as_of = 2;
+}
+
 service CreditService {
   // Abre la línea que otorgó una decisión de crédito. ALREADY_EXISTS si el
   // cliente ya tiene una línea viva.
   rpc OpenCreditLine(OpenCreditLineRequest) returns (CreditLine);
   // La línea viva del cliente. NOT_FOUND si no tiene.
   rpc GetCustomerCreditLine(GetCustomerCreditLineRequest) returns (CreditLine);
+  // Corta el estado de cuenta: cobra intereses si corresponden y lo emite. Lo
+  // hace el barrendero cada día; expuesto para el sandbox y la operación.
+  rpc CloseCycle(CloseCycleRequest) returns (CreditStatement);
+  rpc ListStatements(ListStatementsRequest) returns (ListStatementsResponse);
+  // Revisa la mora: bloquea si no se pagó el mínimo vencido, desbloquea al
+  // ponerse al día. Se llama tras cada pago para desbloquear en el momento.
+  rpc ReviewCreditLine(ReviewCreditLineRequest) returns (CreditLine);
 }

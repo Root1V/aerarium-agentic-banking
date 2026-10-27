@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO accounts (code, name, type, owner, currency, allows_overdraft)\n        VALUES ($1, $2, 'INCOME', 'INTERNAL', $3, TRUE)\n        ON CONFLICT (code) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bpchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1880d126916933ee777d1aed726d8cadc3f4402e12a14c54edf78031229a5692"
+}
