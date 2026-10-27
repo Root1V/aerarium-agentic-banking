@@ -16,6 +16,7 @@ import (
 func TestNoArrancaSinPedirLaAutenticacionDeDesarrollo(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "")
 	t.Setenv("PASSKEY_RP_ID", "")
+	t.Setenv("DATABASE_URL", "")
 
 	err := run(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err == nil {
@@ -31,6 +32,7 @@ func TestNoArrancaSinPedirLaAutenticacionDeDesarrollo(t *testing.T) {
 func TestSoloElValorExactoHabilitaElModoDesarrollo(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "1")
 	t.Setenv("PASSKEY_RP_ID", "")
+	t.Setenv("DATABASE_URL", "")
 
 	if err := run(slog.New(slog.NewTextHandler(io.Discard, nil))); err == nil {
 		t.Fatal("arrancó con ALLOW_DEV_AUTH=1")

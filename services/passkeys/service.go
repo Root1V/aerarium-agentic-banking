@@ -15,13 +15,13 @@ package passkeys
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/aibank/aibank/services/onboarding"
+	"github.com/aibank/aibank/services/sessions"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
@@ -41,7 +41,7 @@ var (
 	// ErrCloned: el contador de firmas retrocedió: hay dos copias de la clave.
 	ErrCloned = errors.New("la passkey parece clonada")
 	// ErrSessionInvalid: la sesión no existe, venció o se cerró.
-	ErrSessionInvalid = errors.New("sesión inválida")
+	ErrSessionInvalid = sessions.ErrInvalid
 )
 
 // Config del Relying Party y de los plazos.
@@ -77,21 +77,18 @@ func (c *Config) defaults() {
 }
 
 // Session es lo que se le entrega a la app tras una ceremonia superada.
-type Session struct {
-	Token      string
-	CustomerID string
-	ExpiresAt  time.Time
-}
+type Session = sessions.Session
 
 type Service struct {
 	wa         *webauthn.WebAuthn
 	store      *Store
 	onboarding *onboarding.Store
+	sessions   *sessions.Store
 	cfg        Config
 	now        func() time.Time
 }
 
-func NewService(cfg Config, store *Store, onboardingStore *onboarding.Store) (*Service, error) {
+func NewService(cfg Config, store *Store, onboardingStore *onboarding.Store, sessionStore *sessions.Store) (*Service, error) {
 	cfg.defaults()
 	wa, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.RPID,
@@ -101,7 +98,7 @@ func NewService(cfg Config, store *Store, onboardingStore *onboarding.Store) (*S
 	if err != nil {
 		return nil, fmt.Errorf("configuración WebAuthn: %w", err)
 	}
-	return &Service{wa: wa, store: store, onboarding: onboardingStore, cfg: cfg, now: time.Now}, nil
+	return &Service{wa: wa, store: store, onboarding: onboardingStore, sessions: sessionStore, cfg: cfg, now: time.Now}, nil
 }
 
 // SetClock fija el reloj. Solo para pruebas.
@@ -306,33 +303,22 @@ func (s *Service) FinishLogin(ctx context.Context, ceremonyID string, response [
 // -------------------------------------------------------------------- sesión
 
 func (s *Service) openSession(ctx context.Context, customerID string, credentialID []byte) (*Session, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return nil, err
-	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	expires := s.now().Add(s.cfg.SessionTTL)
-	if err := s.store.createSession(ctx, token, customerID, credentialID, expires); err != nil {
-		return nil, err
-	}
-	return &Session{Token: token, CustomerID: customerID, ExpiresAt: expires}, nil
+	return s.sessions.Open(ctx, customerID, sessions.FactorPasskey,
+		base64.RawURLEncoding.EncodeToString(credentialID), s.now().Add(s.cfg.SessionTTL))
 }
 
-// ResolveSession devuelve el cliente y la passkey detrás de un token.
-//
-// La passkey hace de identificador del dispositivo: es lo que permite, más
-// adelante, exigir que una operación sensible venga del mismo dispositivo.
-func (s *Service) ResolveSession(ctx context.Context, token string) (customerID, credentialID string, err error) {
-	customer, cred, err := s.store.resolveSession(ctx, token)
+// ResolveSession devuelve el cliente y lo que firmó detrás de un token.
+func (s *Service) ResolveSession(ctx context.Context, token string) (customerID, deviceRef string, err error) {
+	p, err := s.sessions.Resolve(ctx, token)
 	if err != nil {
 		return "", "", err
 	}
-	return customer, base64.RawURLEncoding.EncodeToString(cred), nil
+	return p.CustomerID, p.DeviceRef, nil
 }
 
 // Logout cierra la sesión. Cerrar una que ya no existe no es un error.
 func (s *Service) Logout(ctx context.Context, token string) error {
-	return s.store.revokeSession(ctx, token)
+	return s.sessions.Revoke(ctx, token)
 }
 
 // ---------------------------------------------------------------- usuario

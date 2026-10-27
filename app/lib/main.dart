@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'api/client.dart';
-import 'api/models.dart';
-import 'auth/passkeys.dart';
+import 'entry.dart';
 import 'sandbox/sandbox_client.dart';
 import 'sandbox/sandbox_entry_screen.dart';
-import 'screens/account_gate.dart';
-import 'screens/enroll_passkey_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme.dart';
 
 /// Configuración de compilación.
 ///
-/// Sin sesión fija ni sandbox, la app entra con passkeys. `AIBANK_TOKEN` y
+/// Sin sesión fija ni sandbox, la app entra por `BankEntry`: Face ID en un
+/// teléfono vinculado, passkey o alta en uno nuevo. `AIBANK_TOKEN` y
 /// `AIBANK_ACCOUNT_ID` quedan para apuntar la app a una sesión ya abierta
 /// mientras se desarrolla.
 const _baseUrl = String.fromEnvironment(
@@ -67,7 +64,7 @@ class AiBankApp extends StatelessWidget {
     } else if (_sandbox) {
       home = _sandboxEntry();
     } else {
-      home = Builder(builder: _login);
+      home = BankEntry(baseUrl: Uri.parse(baseUrl));
     }
 
     return MaterialApp(
@@ -76,63 +73,6 @@ class AiBankApp extends StatelessWidget {
       darkTheme: appDarkTheme,
       themeMode: ThemeMode.system,
       home: home,
-    );
-  }
-
-  // ------------------------------------------------------------- passkeys
-
-  PasskeyFlow _flow() => PasskeyFlow(
-        // Las ceremonias no llevan sesión: el cliente no manda token.
-        client: BffClient(baseUrl: Uri.parse(baseUrl), token: () => ''),
-        platform: const NativePasskeys(),
-      );
-
-  Widget _login(BuildContext context) => LoginScreen(
-        flow: _flow(),
-        onSignedIn: (session) => _enter(context, session),
-        onOpenAccount: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (context) => OnboardingScreen(
-            client: BffClient(baseUrl: Uri.parse(baseUrl), token: () => ''),
-            // El alta aprobada lleva directo a proteger la cuenta, sin pila
-            // detrás: volver al formulario de un alta cerrada no tiene sentido.
-            onApproved: (result) => Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute<void>(
-                // Cada pantalla navega con el contexto de su propia ruta: el de
-                // la anterior deja de existir al vaciarse la pila.
-                builder: (context) => EnrollPasskeyScreen(
-                  flow: _flow(),
-                  onboardingReference: result.reference,
-                  onEnrolled: (session) => _enter(context, session),
-                  onAlreadyEnrolled: () => _signOut(context),
-                ),
-              ),
-              (_) => false,
-            ),
-          ),
-        )),
-      );
-
-  /// Abre la cuenta con la sesión recién emitida.
-  ///
-  /// El token vive solo en memoria: cerrar la app es cerrar la sesión, y volver
-  /// a entrar es una passkey, que cuesta un segundo. Guardarlo en disco sería
-  /// dejar una llave del dinero de alguien en un archivo.
-  void _enter(BuildContext context, SessionGrant session) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (context) => AccountGate(
-          client: BffClient(baseUrl: Uri.parse(baseUrl), token: () => session.token),
-          onSignOut: () => _signOut(context),
-        ),
-      ),
-      (_) => false,
-    );
-  }
-
-  void _signOut(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: _login),
-      (_) => false,
     );
   }
 

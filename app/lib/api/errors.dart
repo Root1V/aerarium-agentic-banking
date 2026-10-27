@@ -28,6 +28,11 @@ enum ApiErrorCode {
   ceremonyExpired,
   notEnrollable,
   alreadyEnrolled,
+  // Teléfono vinculado.
+  pinIncorrect,
+  deviceLocked,
+  deviceRejected,
+  weakPin,
   unknown,
 }
 
@@ -38,9 +43,12 @@ class ApiError implements Exception {
   /// contener detalle del servidor que no le sirve a la persona usuaria.
   final String detail;
 
-  const ApiError(this.code, this.detail);
+  const ApiError(this.code, this.detail, {this.remainingAttempts});
 
-  factory ApiError.fromResponse(String? code, String detail) {
+  /// Con `pinIncorrect`: cuántos intentos quedan antes del bloqueo.
+  final int? remainingAttempts;
+
+  factory ApiError.fromResponse(String? code, String detail, {int? remainingAttempts}) {
     return ApiError(
       switch (code) {
         'unauthenticated' => ApiErrorCode.unauthenticated,
@@ -62,9 +70,14 @@ class ApiError implements Exception {
         'ceremony_expired' => ApiErrorCode.ceremonyExpired,
         'not_enrollable' => ApiErrorCode.notEnrollable,
         'already_enrolled' => ApiErrorCode.alreadyEnrolled,
+        'pin_incorrect' => ApiErrorCode.pinIncorrect,
+        'device_locked' => ApiErrorCode.deviceLocked,
+        'device_rejected' => ApiErrorCode.deviceRejected,
+        'weak_pin' => ApiErrorCode.weakPin,
         _ => ApiErrorCode.unknown,
       },
       detail,
+      remainingAttempts: remainingAttempts,
     );
   }
 
@@ -97,6 +110,16 @@ class ApiError implements Exception {
         ApiErrorCode.notEnrollable =>
           'No pudimos proteger tu cuenta desde aquí. Escríbenos para ayudarte.',
         ApiErrorCode.alreadyEnrolled => 'Tu cuenta ya está protegida con una passkey.',
+        ApiErrorCode.pinIncorrect => switch (remainingAttempts) {
+            1 => 'Clave incorrecta. Te queda 1 intento.',
+            final n? => 'Clave incorrecta. Te quedan $n intentos.',
+            null => 'Clave incorrecta.',
+          },
+        ApiErrorCode.deviceLocked =>
+          'Bloqueamos este teléfono por seguridad. Entra con tu passkey o escríbenos.',
+        ApiErrorCode.deviceRejected => 'Este teléfono ya no está vinculado a tu cuenta.',
+        ApiErrorCode.weakPin =>
+          'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',
       };
 

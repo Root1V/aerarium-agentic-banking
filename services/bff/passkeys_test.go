@@ -2,6 +2,7 @@ package bff_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -12,8 +13,10 @@ import (
 	kycsim "github.com/aibank/aibank/adapters/kyc/sim"
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/services/bff"
+	"github.com/aibank/aibank/services/devices"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
+	"github.com/aibank/aibank/services/sessions"
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
 )
@@ -44,8 +47,12 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		t.Skipf("base no disponible: %v", err)
 	}
 	pkStore := passkeys.NewStore(db)
-	if err := pkStore.Migrate(f.ctx); err != nil {
-		t.Fatal(err)
+	sess := sessions.NewStore(db)
+	devStore := devices.NewStore(db)
+	for _, m := range []interface{ Migrate(context.Context) error }{pkStore, sess, devStore} {
+		if err := m.Migrate(f.ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	product := "BASICA-" + uuid.NewString()[:8]
@@ -56,15 +63,17 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 
 	pk, err := passkeys.NewService(passkeys.Config{
 		RPID: passkeyRPID, RPDisplayName: "AIBank", RPOrigins: []string{"https://" + passkeyRPID},
-	}, pkStore, onb)
+	}, pkStore, onb, sess)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	auth := bff.ChainAuthenticator{bff.NewPasskeyAuthenticator(pk)}
+	auth := bff.ChainAuthenticator{bff.NewSessionAuthenticator(sess)}
 	server := bff.NewServer(f.core, auth, nil).
 		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
-		WithPasskeys(pk)
+		WithSessions(sess).
+		WithPasskeys(pk).
+		WithDevices(devices.NewService(devices.Config{}, devStore, onb, sess), bff.WithDeviceLimit(100, 100))
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
 	return &passkeyEnv{srv: ts}
@@ -132,17 +141,23 @@ func (p *phone) get(t *testing.T, options any) json.RawMessage {
 	return json.RawMessage(virtualwebauthn.CreateAssertionResponse(p.rp, p.auth, p.cred, *parsed))
 }
 
-// onboard da de alta a una persona y registra la passkey de su teléfono.
-func (e *passkeyEnv) onboard(t *testing.T) (token, customer, account string, device *phone) {
+// approve da de alta a una persona por HTTP y devuelve la referencia del alta.
+func (e *passkeyEnv) approve(t *testing.T) (reference, customer, account string) {
 	t.Helper()
-	reference := uuid.NewString()
+	reference = uuid.NewString()
 	req := applicant(dni())
 	req["reference"] = reference
 	status, alta := e.call(t, http.MethodPost, "/v1/onboarding", "", req)
 	if status != http.StatusOK || alta["status"] != "approved" {
 		t.Fatalf("alta: %d %v", status, alta)
 	}
-	customer, account = alta["customer_id"].(string), alta["account_id"].(string)
+	return reference, alta["customer_id"].(string), alta["account_id"].(string)
+}
+
+// onboard da de alta a una persona y registra la passkey de su teléfono.
+func (e *passkeyEnv) onboard(t *testing.T) (token, customer, account string, device *phone) {
+	t.Helper()
+	reference, customer, account := e.approve(t)
 
 	status, begin := e.call(t, http.MethodPost, "/v1/passkeys/enrollment", "", map[string]any{"reference": reference})
 	if status != http.StatusOK {

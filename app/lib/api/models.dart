@@ -439,3 +439,49 @@ class SessionGrant {
         expiresAt: DateTime.parse(json['expires_at'] as String),
       );
 }
+
+
+/// Lo que el teléfono tiene que firmar para el banco, en base64url.
+class DeviceChallenge {
+  final String id;
+  final String payload;
+
+  const DeviceChallenge({required this.id, required this.payload});
+
+  factory DeviceChallenge.fromJson(Map<String, dynamic> json) => DeviceChallenge(
+        id: json['challenge_id'] as String,
+        payload: json['payload'] as String,
+      );
+}
+
+/// Las claves públicas de las dos llaves del teléfono, en base64url (SPKI DER).
+class DeviceKeyPair {
+  final String biometricKey;
+  final String possessionKey;
+
+  /// En el chip seguro. `false` solo en el simulador.
+  final bool hardwareBacked;
+
+  const DeviceKeyPair({
+    required this.biometricKey,
+    required this.possessionKey,
+    required this.hardwareBacked,
+  });
+}
+
+/// Cómo se desbloquea la llave del teléfono para entrar.
+enum DeviceUnlock {
+  /// Cara o huella: la llave que solo firma tras la biometría.
+  biometric,
+
+  /// La clave de 6 dígitos, junto con la llave de posesión.
+  pin,
+}
+
+/// Un teléfono recién vinculado: su id y la sesión ya abierta.
+class LinkedDevice {
+  final String deviceId;
+  final SessionGrant session;
+
+  const LinkedDevice({required this.deviceId, required this.session});
+}

@@ -122,6 +122,73 @@ class BffClient {
   /// memoria tiene que dejar de valer también del otro lado.
   Future<void> logout() => _postNoContent('/v1/session/logout');
 
+  // ---------------------------------------------------- teléfono vinculado
+
+  Future<DeviceChallenge> deviceRegistrationOptions() async =>
+      DeviceChallenge.fromJson(await _postPublic('/v1/devices/registration/options', const {}));
+
+  /// Vincula este teléfono. Con `reference`, el primero tras el alta; con
+  /// `withSession`, uno más para quien ya entró (con su passkey).
+  Future<LinkedDevice> registerDevice({
+    required String challengeId,
+    String? reference,
+    bool withSession = false,
+    required DeviceKeyPair keys,
+    required String biometricSignature,
+    required String possessionSignature,
+    required String pin,
+    required String name,
+  }) async {
+    final body = {
+      'challenge_id': challengeId,
+      if (reference != null) 'reference': reference,
+      'biometric_key': keys.biometricKey,
+      'possession_key': keys.possessionKey,
+      'biometric_signature': biometricSignature,
+      'possession_signature': possessionSignature,
+      'pin': pin,
+      'name': name,
+      'hardware_backed': keys.hardwareBacked,
+    };
+    final json = withSession
+        ? await _post('/v1/devices/registration', headers: const {}, body: body)
+        : await _postPublic('/v1/devices/registration', body);
+    return LinkedDevice(deviceId: json['device_id'] as String, session: SessionGrant.fromJson(json));
+  }
+
+  Future<DeviceChallenge> deviceLoginOptions(String deviceId) async =>
+      DeviceChallenge.fromJson(await _postPublic('/v1/devices/login/options', {'device_id': deviceId}));
+
+  Future<SessionGrant> deviceLogin({
+    required String challengeId,
+    required DeviceUnlock method,
+    required String signature,
+    String? pin,
+  }) async =>
+      SessionGrant.fromJson(await _postPublic('/v1/devices/login', {
+        'challenge_id': challengeId,
+        'method': method.name,
+        'signature': signature,
+        if (pin != null) 'pin': pin,
+      }));
+
+  /// Desvincula un teléfono de la cuenta.
+  Future<void> revokeDevice(String deviceId) async {
+    final uri = baseUrl.replace(path: '/v1/devices/$deviceId');
+    try {
+      final response = await _http.delete(uri, headers: _headers()).timeout(_timeout);
+      if (response.statusCode >= 200 && response.statusCode < 300) return;
+      if (response.statusCode == 401) {
+        throw ApiError(ApiErrorCode.unauthenticated, 'HTTP 401');
+      }
+      throw ApiError.fromResponse(_codeOf(response.body), 'HTTP ${response.statusCode}');
+    } on ApiError {
+      rethrow;
+    } catch (e) {
+      throw ApiError(ApiErrorCode.network, e.toString());
+    }
+  }
+
   /// POST sin sesión: las ceremonias las hace alguien que todavía no entró.
   Future<Map<String, dynamic>> _postPublic(String path, Map<String, dynamic> body) =>
       _send(() => _http.post(
@@ -186,6 +253,10 @@ class BffClient {
 
   Map<String, String> _headers() => {'Authorization': 'Bearer ${_token()}'};
 
+  /// Códigos con los que falla un intento de entrar. Llegan con 401, pero no
+  /// significan que una sesión venció.
+  static const _signInCodes = {'passkey_rejected', 'device_rejected', 'pin_incorrect'};
+
   Future<Map<String, dynamic>> _send(
       Future<http.Response> Function() request) async {
     final http.Response response;
@@ -206,23 +277,26 @@ class BffClient {
     }
 
     String? code;
+    int? remaining;
     var detail = 'HTTP ${response.statusCode}';
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
         code = decoded['code'] as String?;
         detail = '${decoded['message'] ?? detail}';
+        remaining = (decoded['remaining_attempts'] as num?)?.toInt();
       }
     } catch (_) {
       // Cuerpo no interpretable: se mantiene el detalle genérico.
     }
 
-    if (response.statusCode == 401 && code != 'passkey_rejected') {
-      // Un 401 es una sesión que ya no vale, salvo el de una passkey rechazada:
-      // ahí no había sesión, y decir "tu sesión expiró" confundiría.
+    if (response.statusCode == 401 && !_signInCodes.contains(code)) {
+      // Un 401 es una sesión que ya no vale, salvo cuando falla el propio
+      // intento de entrar: ahí no había sesión, y decir "tu sesión expiró"
+      // confundiría.
       return throw ApiError(ApiErrorCode.unauthenticated, detail);
     }
-    throw ApiError.fromResponse(code, detail);
+    throw ApiError.fromResponse(code, detail, remainingAttempts: remaining);
   }
 }
 

@@ -228,6 +228,19 @@ Tres cosas del contrato que no son obvias:
   impide abrir dos cuentas tras un corte de red, y lo único que permite consultar el
   alta después (`GET /v1/onboarding` con la cabecera `X-Onboarding-Reference`).
 
+## 5c. La app en un iPhone
+
+Con el iPhone conectado por cable al Mac donde corre el sandbox, y en la misma Wi-Fi:
+
+```bash
+app/tool/iphone.sh
+```
+
+La app arranca como la real: abres una cuenta con un DNI de 8 dígitos (KYC simulado:
+los de prueba de arriba siguen valiendo), creas tu clave, activas Face ID, y desde ahí
+entras con la cara. La primera vez el iPhone pide activar el Modo desarrollador y
+confiar en el Mac.
+
 ## 6. Reiniciar de cero
 
 ```bash

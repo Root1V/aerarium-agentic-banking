@@ -1,10 +1,13 @@
 import AuthenticationServices
+import CryptoKit
 import Flutter
+import LocalAuthentication
 import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var passkeys: PasskeysChannel?
+  private var deviceKeys: DeviceKeysChannel?
 
   override func application(
     _ application: UIApplication,
@@ -17,6 +20,7 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PasskeysChannel")!
     passkeys = PasskeysChannel(messenger: registrar.messenger())
+    deviceKeys = DeviceKeysChannel(messenger: registrar.messenger())
   }
 }
 
@@ -215,5 +219,262 @@ private enum Base64URL {
     var base64 = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
     base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
     return Data(base64Encoded: base64)
+  }
+}
+
+// MARK: - Llaves del teléfono
+
+/// Las dos llaves que atan este teléfono a la cuenta, en el Secure Enclave.
+///
+/// - `biometric`: solo firma tras Face ID o Touch ID. Firmar con ella cubre los
+///   dos factores: tener ESTE teléfono y ser quien es.
+/// - `possession`: firma sin biometría. Acompaña a la clave de 6 dígitos, para
+///   que el banco sepa que la clave se escribió en este teléfono.
+///
+/// Las privadas nunca salen del chip; el llavero solo guarda un envoltorio
+/// cifrado que únicamente el chip de este teléfono puede abrir. No se copian a
+/// iCloud: si el teléfono se pierde, las llaves se pierden con él.
+///
+/// En el simulador las llaves son de software y se dice (`hardwareBacked:
+/// false`). Sirve para probar el flujo, no la seguridad.
+final class DeviceKeysChannel: NSObject {
+  private let channel: FlutterMethodChannel
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "dev.aerarium/device_keys", binaryMessenger: messenger)
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in
+      self?.handle(call, result: result)
+    }
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let args = call.arguments as? [String: Any] ?? [:]
+    switch call.method {
+    case "status":
+      result([
+        "deviceId": Keychain.get(.deviceID).map { String(decoding: $0, as: UTF8.self) } as Any,
+        "biometry": Self.biometryName(),
+      ])
+    case "create":
+      do {
+        result(try create())
+      } catch let error as DeviceKeyError {
+        result(error.flutter)
+      } catch {
+        result(FlutterError(code: "failed", message: "\(error)", details: nil))
+      }
+    case "sign":
+      guard
+        let which = args["key"] as? String,
+        let payload = (args["payload"] as? String).flatMap(Base64URL.decode)
+      else {
+        result(FlutterError(code: "failed", message: "argumentos inválidos", details: nil))
+        return
+      }
+      sign(which: which, payload: payload, reason: args["reason"] as? String ?? "Entrar a AIBank", result: result)
+    case "save":
+      guard let id = args["deviceId"] as? String else {
+        result(FlutterError(code: "failed", message: "falta deviceId", details: nil))
+        return
+      }
+      Keychain.set(Data(id.utf8), .deviceID)
+      result(nil)
+    case "reset":
+      Keychain.Item.allCases.forEach(Keychain.delete)
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  /// En el simulador `SecureEnclave.isAvailable` dice que sí, pero crear una
+  /// llave atada a Face ID falla ("not supported on iOS Simulator"). Ahí se usan
+  /// llaves de software; en un teléfono, siempre el chip.
+  private static var useSecureEnclave: Bool {
+    #if targetEnvironment(simulator)
+      return false
+    #else
+      return SecureEnclave.isAvailable
+    #endif
+  }
+
+  private static func biometryName() -> String {
+    let context = LAContext()
+    guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) else {
+      return "none"
+    }
+    switch context.biometryType {
+    case .faceID: return "faceID"
+    case .touchID: return "touchID"
+    default: return "other"
+    }
+  }
+
+  /// Crea las dos llaves, reemplazando las que hubiera, y devuelve las públicas.
+  private func create() throws -> [String: Any] {
+    // Sin biometría configurada no se puede crear una llave que la exija.
+    guard Self.biometryName() != "none" else {
+      throw DeviceKeyError.unavailable("sin Face ID ni Touch ID configurados")
+    }
+    Keychain.Item.allCases.forEach(Keychain.delete)
+
+    if Self.useSecureEnclave {
+      var error: Unmanaged<CFError>?
+      // biometryCurrentSet: si alguien añade su cara o su huella al teléfono, la
+      // llave deja de servir. Quien conozca el código del teléfono no puede
+      // registrar su cara y entrar al banco con ella.
+      guard
+        let bioAccess = SecAccessControlCreateWithFlags(
+          nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+          [.privateKeyUsage, .biometryCurrentSet], &error),
+        let possessionAccess = SecAccessControlCreateWithFlags(
+          nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.privateKeyUsage], &error)
+      else { throw DeviceKeyError.failed("control de acceso: \(String(describing: error))") }
+
+      let bio = try SecureEnclave.P256.Signing.PrivateKey(accessControl: bioAccess)
+      let possession = try SecureEnclave.P256.Signing.PrivateKey(accessControl: possessionAccess)
+      Keychain.set(bio.dataRepresentation, .biometric)
+      Keychain.set(possession.dataRepresentation, .possession)
+      Keychain.set(Data([1]), .hardware)
+      return [
+        "biometricKey": Base64URL.encode(bio.publicKey.derRepresentation),
+        "possessionKey": Base64URL.encode(possession.publicKey.derRepresentation),
+        "hardwareBacked": true,
+      ]
+    }
+
+    let bio = P256.Signing.PrivateKey()
+    let possession = P256.Signing.PrivateKey()
+    Keychain.set(bio.rawRepresentation, .biometric)
+    Keychain.set(possession.rawRepresentation, .possession)
+    Keychain.set(Data([0]), .hardware)
+    return [
+      "biometricKey": Base64URL.encode(bio.publicKey.derRepresentation),
+      "possessionKey": Base64URL.encode(possession.publicKey.derRepresentation),
+      "hardwareBacked": false,
+    ]
+  }
+
+  private func sign(which: String, payload: Data, reason: String, result: @escaping FlutterResult) {
+    let item: Keychain.Item = which == "biometric" ? .biometric : .possession
+    guard let stored = Keychain.get(item) else {
+      result(FlutterError(code: "unavailable", message: "este teléfono no tiene llaves", details: nil))
+      return
+    }
+    let hardware = Keychain.get(.hardware) == Data([1])
+
+    let finish: (Result<Data, DeviceKeyError>) -> Void = { outcome in
+      DispatchQueue.main.async {
+        switch outcome {
+        case .success(let signature): result(Base64URL.encode(signature))
+        case .failure(let error): result(error.flutter)
+        }
+      }
+    }
+
+    guard item == .biometric else {
+      DispatchQueue.global(qos: .userInitiated).async {
+        finish(Result { try Self.signature(stored, payload, hardware: hardware, context: nil) }
+          .mapError { DeviceKeyError.failed("\($0)") })
+      }
+      return
+    }
+
+    // La biometría se pide primero con LocalAuthentication, que da errores claros
+    // (canceló, quiso usar la clave, está bloqueada). El contexto ya evaluado se
+    // le pasa al Secure Enclave, que firma sin volver a preguntar.
+    let context = LAContext()
+    context.localizedFallbackTitle = "Usar mi clave"
+    context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) {
+      ok, error in
+      guard ok else {
+        finish(.failure(DeviceKeyError.from(error)))
+        return
+      }
+      do {
+        finish(.success(try Self.signature(stored, payload, hardware: hardware, context: context)))
+      } catch {
+        // La cara se reconoció pero la llave no firma: la biometría del teléfono
+        // cambió desde que se creó (biometryCurrentSet) y la llave ya no sirve.
+        finish(.failure(.invalidated("\(error)")))
+      }
+    }
+  }
+
+  private static func signature(_ stored: Data, _ payload: Data, hardware: Bool, context: LAContext?) throws -> Data {
+    if hardware {
+      let key = try SecureEnclave.P256.Signing.PrivateKey(
+        dataRepresentation: stored, authenticationContext: context)
+      return try key.signature(for: payload).derRepresentation
+    }
+    return try P256.Signing.PrivateKey(rawRepresentation: stored).signature(for: payload).derRepresentation
+  }
+}
+
+private enum DeviceKeyError: Error {
+  case cancelled, fallback, lockout
+  case unavailable(String), invalidated(String), failed(String)
+
+  static func from(_ error: Error?) -> DeviceKeyError {
+    guard let la = error as? LAError else { return .failed("\(String(describing: error))") }
+    switch la.code {
+    case .userCancel, .appCancel, .systemCancel: return .cancelled
+    case .userFallback: return .fallback
+    case .biometryLockout: return .lockout
+    case .biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet:
+      return .unavailable(la.localizedDescription)
+    default: return .failed(la.localizedDescription)
+    }
+  }
+
+  var flutter: FlutterError {
+    switch self {
+    case .cancelled: return FlutterError(code: "cancelled", message: nil, details: nil)
+    case .fallback: return FlutterError(code: "fallback", message: nil, details: nil)
+    case .lockout: return FlutterError(code: "lockout", message: nil, details: nil)
+    case .unavailable(let m): return FlutterError(code: "unavailable", message: m, details: nil)
+    case .invalidated(let m): return FlutterError(code: "invalidated", message: m, details: nil)
+    case .failed(let m): return FlutterError(code: "failed", message: m, details: nil)
+    }
+  }
+}
+
+/// El llavero, solo para este dispositivo y sin copia a iCloud.
+private enum Keychain {
+  enum Item: String, CaseIterable {
+    case biometric, possession, hardware
+    case deviceID = "device-id"
+  }
+
+  private static let service = "dev.aerarium.device-keys"
+
+  private static func query(_ item: Item) -> [String: Any] {
+    [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: item.rawValue,
+    ]
+  }
+
+  static func set(_ data: Data, _ item: Item) {
+    delete(item)
+    var attributes = query(item)
+    attributes[kSecValueData as String] = data
+    attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    SecItemAdd(attributes as CFDictionary, nil)
+  }
+
+  static func get(_ item: Item) -> Data? {
+    var q = query(item)
+    q[kSecReturnData as String] = true
+    q[kSecMatchLimit as String] = kSecMatchLimitOne
+    var out: CFTypeRef?
+    guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
+    return out as? Data
+  }
+
+  static func delete(_ item: Item) {
+    SecItemDelete(query(item) as CFDictionary)
   }
 }

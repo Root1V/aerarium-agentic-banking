@@ -1,7 +1,6 @@
 package bff
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,8 +11,8 @@ import (
 	"github.com/aibank/aibank/services/ratelimit"
 )
 
-// Passkeys en el canal del titular: entrar, registrar el primer dispositivo tras
-// el alta, añadir otro, y cerrar sesión.
+// Passkeys en el canal del titular: entrar, registrar la primera tras el alta y
+// añadir otra.
 //
 // Las ceremonias son públicas —quien entra todavía no tiene sesión— y llevan
 // límite por origen. Ante una passkey desconocida, una firma que no verifica o
@@ -38,38 +37,6 @@ func (s *Server) WithPasskeys(svc *passkeys.Service) *Server {
 		limiter: ratelimit.NewLimiter(defaultPasskeyRate, defaultPasskeyBurst),
 	}
 	return s
-}
-
-// PasskeyAuthenticator resuelve los tokens emitidos tras una ceremonia superada.
-type PasskeyAuthenticator struct{ svc *passkeys.Service }
-
-func NewPasskeyAuthenticator(svc *passkeys.Service) *PasskeyAuthenticator {
-	return &PasskeyAuthenticator{svc: svc}
-}
-
-func (a *PasskeyAuthenticator) Authenticate(ctx context.Context, token string) (*Principal, error) {
-	customer, device, err := a.svc.ResolveSession(ctx, token)
-	if err != nil {
-		return nil, ErrUnauthenticated
-	}
-	// La passkey identifica el dispositivo: es lo que permitirá exigir que una
-	// operación sensible venga del mismo desde el que se entró.
-	return &Principal{CustomerID: customer, DeviceID: device}, nil
-}
-
-// ChainAuthenticator prueba varios autenticadores en orden.
-//
-// Existe para el sandbox, donde conviven las passkeys y el sustituto de
-// desarrollo. En producción la cadena tiene un solo eslabón.
-type ChainAuthenticator []Authenticator
-
-func (c ChainAuthenticator) Authenticate(ctx context.Context, token string) (*Principal, error) {
-	for _, a := range c {
-		if p, err := a.Authenticate(ctx, token); err == nil {
-			return p, nil
-		}
-	}
-	return nil, ErrUnauthenticated
 }
 
 type ceremonyResponse struct {
@@ -109,7 +76,6 @@ func (s *Server) passkeyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/passkeys/login", limited(s.handleFinishLogin))
 
 	mux.Handle("POST /v1/passkeys/devices", s.requireAuth(s.handleBeginAddDevice))
-	mux.Handle("POST /v1/session/logout", s.requireAuth(s.handleLogout))
 }
 
 func (s *Server) handleBeginEnrollment(w http.ResponseWriter, r *http.Request) {
@@ -207,15 +173,6 @@ func (s *Server) ceremonyError(w http.ResponseWriter, r *http.Request, what stri
 		s.logger.ErrorContext(r.Context(), "passkeys: "+what, "error", err)
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
 	}
-}
-
-func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, _ *Principal) {
-	if err := s.passkeys.svc.Logout(r.Context(), bearerToken(r)); err != nil {
-		s.logger.ErrorContext(r.Context(), "passkeys: cerrar sesión", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func toSessionResponse(s *passkeys.Session) sessionResponse {

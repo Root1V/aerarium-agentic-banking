@@ -97,7 +97,10 @@ Plan y razones en [docs/14](docs/14-ux-y-decision-movil.md). Para probarla: `app
 | 4b | Umbral de aprobación por pago y «qué se compró» | Rust/Go/Flutter | — | ⬜ propuesto a Mercatus (AE-09) |
 | 5 | Passkeys: el banco como Relying Party, sesiones, entrar y proteger la cuenta en iOS | Go/Rust/Swift/Flutter | feat/app-auth-passkeys | 👀 |
 | 5b | Passkeys en Android | Kotlin | — | ⬜ sin SDK en esta máquina |
-| 5c | Atestación de la app (App Attest, Play Integrity) y vinculación del dispositivo | Swift/Kotlin/Go | — | ⬜ |
+| 5c | Teléfono vinculado: llave en el Secure Enclave, Face ID al abrir, clave de 6 dígitos con bloqueo | Go/Swift/Flutter | feat/app-device-binding | 👀 |
+| 5d | Confirmar con Face ID las operaciones de riesgo (monto y destinatario firmados) | Go/Swift/Flutter | — | ⬜ siguiente |
+| 5e | Atestación de la app (App Attest, Play Integrity) | Swift/Kotlin/Go | — | ⬜ |
+| 5f | Passkey de respaldo desde «Seguridad» y recuperación en un teléfono nuevo | Flutter/Go | — | ⬜ necesita el dominio |
 
 **Por qué el nivel 2 está bloqueado:** la prueba de vida necesita la cámara y el SDK
 nativo del proveedor de identidad (Incode, Metamap), y el core no sabe cambiar el
@@ -123,8 +126,14 @@ retención vence. Propuesto en el canal (AE-09).
 
 - **Una passkey sincronizada no es un dispositivo.** iOS copia las passkeys a los otros
   equipos de la misma cuenta de iCloud. Firma la persona, con biometría, pero no
-  necesariamente desde el teléfono donde se registró. Para operaciones de alto riesgo
-  hará falta atar la sesión al dispositivo (5c).
+  necesariamente desde el teléfono donde se registró. Por eso el día a día va con la
+  llave del teléfono (5c), que no se copia; la passkey queda para entrar en uno nuevo.
+- **Sin atestación, el banco no puede comprobar que la llave vive en el chip**: la app
+  lo declara (`hardware_backed`) y se cree. Lo resuelve App Attest (5e).
+- **Si Face ID cambia en el teléfono** (alguien añade su cara), la llave biométrica
+  deja de servir a propósito y se entra con la clave; falta ofrecer re-activar Face ID
+  desde ahí, que hoy exige desvincular y volver a entrar con passkey.
+- **Hasta 5f, perder el teléfono es soporte**: sin dominio no hay passkey de respaldo.
 - **Si la app se cierra entre el alta aprobada y «Protege tu cuenta»**, la referencia
   del alta se pierde (vive en memoria) y la persona queda con cuenta pero sin forma de
   entrar: hoy, soporte. Guardarla en el llavero del sistema lo resuelve.

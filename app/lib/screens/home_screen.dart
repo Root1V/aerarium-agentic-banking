@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
     required this.client,
     required this.accountId,
     this.onSignOut,
+    this.onUnlink,
   });
 
   final BffClient client;
@@ -28,6 +29,9 @@ class HomeScreen extends StatefulWidget {
   /// Vuelve a la entrada. Sin él —el sandbox, una sesión fija de desarrollo—
   /// no hay a dónde salir y la pantalla no ofrece hacerlo.
   final VoidCallback? onSignOut;
+
+  /// Desvincula este teléfono de la cuenta. Sin él no se ofrece.
+  final Future<void> Function()? onUnlink;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -85,6 +89,13 @@ class _HomeScreenState extends State<HomeScreen> {
               tooltip: 'Salir',
               onPressed: _signOut,
             ),
+          if (widget.onUnlink != null)
+            PopupMenuButton<void>(
+              tooltip: 'Más',
+              itemBuilder: (_) => [
+                PopupMenuItem(onTap: _confirmUnlink, child: const Text('Desvincular este teléfono')),
+              ],
+            ),
         ],
       ),
       body: RefreshIndicator(
@@ -109,6 +120,24 @@ class _HomeScreenState extends State<HomeScreen> {
       // el token se descarta aquí y en el banco vence solo en 30 minutos.
     }
     widget.onSignOut!();
+  }
+
+  Future<void> _confirmUnlink() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Desvincular este teléfono?'),
+        content: const Text(
+          'Ya no podrás entrar desde aquí con tu cara ni con tu clave. Para volver a '
+          'usarlo tendrás que entrar con tu passkey.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Desvincular')),
+        ],
+      ),
+    );
+    if (confirmed == true) await widget.onUnlink!();
   }
 
   void _openPending() {

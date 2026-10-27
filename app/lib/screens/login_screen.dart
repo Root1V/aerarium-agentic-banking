@@ -16,7 +16,11 @@ class LoginScreen extends StatefulWidget {
     required this.flow,
     required this.onSignedIn,
     this.onOpenAccount,
+    this.notice,
   });
+
+  /// Algo que decir al llegar, por ejemplo que el teléfono se desvinculó.
+  final String? notice;
 
   final PasskeyFlow flow;
   final void Function(SessionGrant session) onSignedIn;
@@ -75,6 +79,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (widget.notice != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(widget.notice!, style: theme.textTheme.bodyMedium),
+                ],
                 const SizedBox(height: AppSpacing.xxl),
                 FilledButton.icon(
                   onPressed: _busy ? null : _signIn,

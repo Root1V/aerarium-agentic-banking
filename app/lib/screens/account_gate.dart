@@ -11,10 +11,11 @@ import 'home_screen.dart';
 /// La passkey dice quién es la persona, no qué cuenta quiere ver: se piden sus
 /// cuentas y se abre la primera. Con varias cuentas, aquí irá el selector.
 class AccountGate extends StatefulWidget {
-  const AccountGate({super.key, required this.client, required this.onSignOut});
+  const AccountGate({super.key, required this.client, required this.onSignOut, this.onUnlink});
 
   final BffClient client;
   final VoidCallback onSignOut;
+  final Future<void> Function()? onUnlink;
 
   @override
   State<AccountGate> createState() => _AccountGateState();
@@ -37,6 +38,7 @@ class _AccountGateState extends State<AccountGate> {
             client: widget.client,
             accountId: accounts.first.id,
             onSignOut: widget.onSignOut,
+            onUnlink: widget.onUnlink,
           );
         }
 

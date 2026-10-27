@@ -42,16 +42,6 @@ CREATE TABLE IF NOT EXISTS identity.ceremonies (
     consumed_at  TIMESTAMPTZ
 );
 
--- Sesiones emitidas tras una ceremonia superada.
-CREATE TABLE IF NOT EXISTS identity.sessions (
-    -- SHA-256 del token. El token tiene 256 bits de entropía generados por el
-    -- banco: un hash rápido basta, igual que con los secretos de integración.
-    token_hash     TEXT PRIMARY KEY,
-    customer_id    UUID NOT NULL,
-    credential_id  BYTEA NOT NULL REFERENCES identity.passkeys (credential_id),
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    expires_at     TIMESTAMPTZ NOT NULL,
-    revoked_at     TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_customer ON identity.sessions (customer_id);
+-- Las sesiones viven en el paquete sessions (identity.app_sessions), comunes a
+-- todas las formas de entrar. Esta tabla era la de antes, solo de passkeys.
+DROP TABLE IF EXISTS identity.sessions;

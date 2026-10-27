@@ -2,10 +2,8 @@ package passkeys
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -197,35 +195,5 @@ func (s *Store) updateAfterLogin(ctx context.Context, cred *webauthn.Credential)
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE identity.passkeys SET credential = $2, last_used_at = now()
 		 WHERE credential_id = $1`, cred.ID, raw)
-	return err
-}
-
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
-}
-
-func (s *Store) createSession(ctx context.Context, token, customerID string, credentialID []byte, expires time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO identity.sessions (token_hash, customer_id, credential_id, expires_at)
-		VALUES ($1, $2, $3, $4)`, hashToken(token), customerID, credentialID, expires)
-	return err
-}
-
-func (s *Store) resolveSession(ctx context.Context, token string) (customerID string, credentialID []byte, err error) {
-	err = s.db.QueryRowContext(ctx, `
-		SELECT customer_id, credential_id FROM identity.sessions
-		 WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()`,
-		hashToken(token)).Scan(&customerID, &credentialID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil, ErrSessionInvalid
-	}
-	return customerID, credentialID, err
-}
-
-func (s *Store) revokeSession(ctx context.Context, token string) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE identity.sessions SET revoked_at = now()
-		 WHERE token_hash = $1 AND revoked_at IS NULL`, hashToken(token))
 	return err
 }

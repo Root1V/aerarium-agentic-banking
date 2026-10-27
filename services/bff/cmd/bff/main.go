@@ -12,8 +12,10 @@
 //	BIND_ADDR       dirección de escucha (por defecto 127.0.0.1:8080)
 //	ALLOW_DEV_AUTH  "true" monta la autenticación de juguete, /dev y el alta con
 //	                KYC simulado. SOLO sandbox.
-//	PASSKEY_RP_ID       dominio al que quedan atadas las passkeys. Con él (y con
-//	                    DATABASE_URL) el canal autentica de verdad.
+//	                Con ella el canal autentica de verdad: teléfonos vinculados
+//	                (llave en el chip seguro + cara o clave) y, con
+//	                PASSKEY_RP_ID, passkeys.
+//	PASSKEY_RP_ID       dominio al que quedan atadas las passkeys.
 //	PASSKEY_RP_ORIGINS  orígenes aceptados, separados por coma (https://<RP_ID>,
 //	                    android:apk-key-hash:<hash>).
 //	PASSKEY_RP_NAME     nombre que muestra el sistema operativo. Por defecto AIBank.
@@ -55,18 +57,19 @@ func run(log *slog.Logger) error {
 	dsn := os.Getenv("DATABASE_URL")
 	rpID := os.Getenv("PASSKEY_RP_ID")
 
-	// Sin una forma de autenticar, el canal no arranca. Las passkeys son la
-	// forma real; el sustituto de desarrollo hay que pedirlo explícitamente, y
+	// Sin una forma de autenticar, el canal no arranca. Los teléfonos vinculados
+	// y las passkeys son la forma real, y viven en la base; el sustituto de
+	// desarrollo hay que pedirlo explícitamente, y
 	// solo vale para el sandbox. Un servicio que se queda con el autenticador de
 	// juguete porque nadie configuró el de verdad es exactamente el accidente que
 	// este error impide.
 	if rpID != "" && dsn == "" {
 		return errors.New("PASSKEY_RP_ID necesita DATABASE_URL: las passkeys y las sesiones se guardan ahí")
 	}
-	if !devAuth && rpID == "" {
+	if !devAuth && dsn == "" {
 		return errors.New(
-			"sin forma de autenticar: configura las passkeys (PASSKEY_RP_ID, " +
-				"PASSKEY_RP_ORIGINS, DATABASE_URL) o, SOLO en el sandbox, ALLOW_DEV_AUTH=true")
+			"sin forma de autenticar: configura DATABASE_URL (teléfonos vinculados y, con " +
+				"PASSKEY_RP_ID, passkeys) o, SOLO en el sandbox, ALLOW_DEV_AUTH=true")
 	}
 	if devAuth {
 		log.Warn("AUTENTICACIÓN DE DESARROLLO ACTIVA: cualquiera puede emitir una sesión")
@@ -102,12 +105,21 @@ func run(log *slog.Logger) error {
 			return err
 		}
 
+		sessionStore, deviceSvc, err := setupDevices(ctx, db, onboardingStore)
+		if err != nil {
+			return err
+		}
+		chain = append(chain, bff.NewSessionAuthenticator(sessionStore))
+		setup = append(setup, func(s *bff.Server) *bff.Server {
+			return s.WithSessions(sessionStore).WithDevices(deviceSvc)
+		})
+		log.Info("teléfonos vinculados habilitados")
+
 		if rpID != "" {
-			pk, err := setupPasskeys(ctx, db, onboardingStore, rpID)
+			pk, err := setupPasskeys(ctx, db, onboardingStore, sessionStore, rpID)
 			if err != nil {
 				return err
 			}
-			chain = append(chain, bff.NewPasskeyAuthenticator(pk))
 			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithPasskeys(pk) })
 			log.Info("passkeys habilitadas", "rp_id", rpID)
 		}
