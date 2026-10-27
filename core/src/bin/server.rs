@@ -9,16 +9,17 @@ use aibank_core::mandates::MandateService;
 use aibank_core::grpc::pb::{
     account_service_server::AccountServiceServer,
     authorization_service_server::AuthorizationServiceServer,
+    credit_service_server::CreditServiceServer,
     ledger_service_server::LedgerServiceServer,
     mandate_service_server::MandateServiceServer,
     product_service_server::ProductServiceServer,
     reconciliation_service_server::ReconciliationServiceServer,
 };
 use aibank_core::grpc::{
-    AccountApi, AuthorizationApi, LedgerApi, MandateApi, ProductApi, ReconciliationApi,
+    AccountApi, AuthorizationApi, CreditApi, LedgerApi, MandateApi, ProductApi, ReconciliationApi,
 };
 use aibank_core::reconciliation::Reconciler;
-use aibank_core::{db, AccountRepository, PostingService, ProductRepository};
+use aibank_core::{db, AccountRepository, CreditRepository, PostingService, ProductRepository};
 use std::error::Error;
 use tonic::transport::Server;
 
@@ -45,6 +46,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let reconciliation = ReconciliationApi::new(Reconciler::new(pool.clone()));
     let authorizations = AuthorizationApi::new(AuthorizationService::new(pool.clone()));
     let mandates = MandateApi::new(MandateService::new(pool.clone()));
+    let credit = CreditApi::new(CreditRepository::new(pool.clone()));
 
     tracing::info!(%bind_addr, "core escuchando");
 
@@ -55,6 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .add_service(ReconciliationServiceServer::new(reconciliation))
         .add_service(AuthorizationServiceServer::new(authorizations))
         .add_service(MandateServiceServer::new(mandates))
+        .add_service(CreditServiceServer::new(credit))
         .serve_with_shutdown(bind_addr.parse()?, async {
             let _ = tokio::signal::ctrl_c().await;
             tracing::info!("apagando");

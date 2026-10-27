@@ -80,6 +80,12 @@ enum PostingErrorReason {
   POSTING_ERROR_REASON_TRANSACTION_CAP_EXCEEDED = 5;
   // Ya existe un registro con esa clave (código de cuenta o de producto repetido).
   POSTING_ERROR_REASON_ALREADY_EXISTS = 6;
+  // La deuda superaría el límite de la línea de crédito.
+  POSTING_ERROR_REASON_CREDIT_LIMIT_EXCEEDED = 7;
+  // La línea de crédito está bloqueada o cerrada: no admite usos.
+  POSTING_ERROR_REASON_CREDIT_LINE_INACTIVE = 8;
+  // El pago supera lo que se debe.
+  POSTING_ERROR_REASON_OVERPAYMENT = 9;
 }
 
 // ---------------------------------------------------------------- ledger
@@ -599,4 +605,66 @@ service MandateService {
   rpc AuthorizeUnderMandate(AuthorizeUnderMandateRequest) returns (AuthorizeUnderMandateResponse);
   // Lo gastado en cada mandato del titular, hoy y en el mes, en su zona horaria.
   rpc SummarizeSpend(SummarizeSpendRequest) returns (SummarizeSpendResponse);
+}
+
+// =============================================================================
+// Crédito: líneas de tarjeta de crédito
+//
+// La línea es una cuenta del cliente de tipo ACTIVO (lo que debe) más su
+// contrato. Usarla y pagarla son asientos normales (LedgerService.Post); el
+// límite, el bloqueo y el no pagar de más los hace cumplir el ledger, con los
+// motivos CREDIT_LIMIT_EXCEEDED, CREDIT_LINE_INACTIVE y OVERPAYMENT.
+// =============================================================================
+
+enum CreditLineStatus {
+  CREDIT_LINE_STATUS_UNSPECIFIED = 0;
+  CREDIT_LINE_STATUS_ACTIVE = 1;
+  // Por mora: se puede pagar, no usar.
+  CREDIT_LINE_STATUS_BLOCKED = 2;
+  CREDIT_LINE_STATUS_CLOSED = 3;
+}
+
+message CreditLine {
+  string id = 1;
+  // La cuenta de la línea: se usa como origen de una disposición y como destino
+  // de un pago.
+  string account_id = 2;
+  string customer_id = 3;
+  Money limit = 4;
+  // Lo que se debe hoy.
+  Money outstanding = 5;
+  // Lo que todavía se puede usar.
+  Money available = 6;
+  // Tasa efectiva anual del contrato, en puntos básicos (4500 = 45 %).
+  int32 annual_rate_bps = 7;
+  int32 cycle_day = 8;
+  int32 payment_days = 9;
+  CreditLineStatus status = 10;
+  // Referencia al expediente de la decisión de crédito que la otorgó.
+  string decision_ref = 11;
+  google.protobuf.Timestamp opened_at = 12;
+}
+
+message OpenCreditLineRequest {
+  string customer_id = 1;
+  // Nombre de la cuenta: el del titular.
+  string name = 2;
+  string currency = 3;
+  int64 limit_micros = 4;
+  int32 annual_rate_bps = 5;
+  int32 cycle_day = 6;
+  int32 payment_days = 7;
+  string decision_ref = 8;
+}
+
+message GetCustomerCreditLineRequest {
+  string customer_id = 1;
+}
+
+service CreditService {
+  // Abre la línea que otorgó una decisión de crédito. ALREADY_EXISTS si el
+  // cliente ya tiene una línea viva.
+  rpc OpenCreditLine(OpenCreditLineRequest) returns (CreditLine);
+  // La línea viva del cliente. NOT_FOUND si no tiene.
+  rpc GetCustomerCreditLine(GetCustomerCreditLineRequest) returns (CreditLine);
 }

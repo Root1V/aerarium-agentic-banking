@@ -1495,3 +1495,149 @@ var MandateService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "aibank/core/v1/core.proto",
 }
+
+const (
+	CreditService_OpenCreditLine_FullMethodName        = "/aibank.core.v1.CreditService/OpenCreditLine"
+	CreditService_GetCustomerCreditLine_FullMethodName = "/aibank.core.v1.CreditService/GetCustomerCreditLine"
+)
+
+// CreditServiceClient is the client API for CreditService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type CreditServiceClient interface {
+	// Abre la línea que otorgó una decisión de crédito. ALREADY_EXISTS si el
+	// cliente ya tiene una línea viva.
+	OpenCreditLine(ctx context.Context, in *OpenCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error)
+	// La línea viva del cliente. NOT_FOUND si no tiene.
+	GetCustomerCreditLine(ctx context.Context, in *GetCustomerCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error)
+}
+
+type creditServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewCreditServiceClient(cc grpc.ClientConnInterface) CreditServiceClient {
+	return &creditServiceClient{cc}
+}
+
+func (c *creditServiceClient) OpenCreditLine(ctx context.Context, in *OpenCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreditLine)
+	err := c.cc.Invoke(ctx, CreditService_OpenCreditLine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *creditServiceClient) GetCustomerCreditLine(ctx context.Context, in *GetCustomerCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreditLine)
+	err := c.cc.Invoke(ctx, CreditService_GetCustomerCreditLine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreditServiceServer is the server API for CreditService service.
+// All implementations must embed UnimplementedCreditServiceServer
+// for forward compatibility.
+type CreditServiceServer interface {
+	// Abre la línea que otorgó una decisión de crédito. ALREADY_EXISTS si el
+	// cliente ya tiene una línea viva.
+	OpenCreditLine(context.Context, *OpenCreditLineRequest) (*CreditLine, error)
+	// La línea viva del cliente. NOT_FOUND si no tiene.
+	GetCustomerCreditLine(context.Context, *GetCustomerCreditLineRequest) (*CreditLine, error)
+	mustEmbedUnimplementedCreditServiceServer()
+}
+
+// UnimplementedCreditServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedCreditServiceServer struct{}
+
+func (UnimplementedCreditServiceServer) OpenCreditLine(context.Context, *OpenCreditLineRequest) (*CreditLine, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenCreditLine not implemented")
+}
+func (UnimplementedCreditServiceServer) GetCustomerCreditLine(context.Context, *GetCustomerCreditLineRequest) (*CreditLine, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCustomerCreditLine not implemented")
+}
+func (UnimplementedCreditServiceServer) mustEmbedUnimplementedCreditServiceServer() {}
+func (UnimplementedCreditServiceServer) testEmbeddedByValue()                       {}
+
+// UnsafeCreditServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CreditServiceServer will
+// result in compilation errors.
+type UnsafeCreditServiceServer interface {
+	mustEmbedUnimplementedCreditServiceServer()
+}
+
+func RegisterCreditServiceServer(s grpc.ServiceRegistrar, srv CreditServiceServer) {
+	// If the following call panics, it indicates UnimplementedCreditServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&CreditService_ServiceDesc, srv)
+}
+
+func _CreditService_OpenCreditLine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenCreditLineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CreditServiceServer).OpenCreditLine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CreditService_OpenCreditLine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CreditServiceServer).OpenCreditLine(ctx, req.(*OpenCreditLineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CreditService_GetCustomerCreditLine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCustomerCreditLineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CreditServiceServer).GetCustomerCreditLine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CreditService_GetCustomerCreditLine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CreditServiceServer).GetCustomerCreditLine(ctx, req.(*GetCustomerCreditLineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// CreditService_ServiceDesc is the grpc.ServiceDesc for CreditService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var CreditService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "aibank.core.v1.CreditService",
+	HandlerType: (*CreditServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "OpenCreditLine",
+			Handler:    _CreditService_OpenCreditLine_Handler,
+		},
+		{
+			MethodName: "GetCustomerCreditLine",
+			Handler:    _CreditService_GetCustomerCreditLine_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "aibank/core/v1/core.proto",
+}

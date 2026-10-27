@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO accounts (code, name, type, owner, owner_id, product_id, currency, allows_overdraft)\n            VALUES ($1, $2, 'ASSET', 'CUSTOMER', $3, $4, $5, FALSE)\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Bpchar"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "40096f42573aa5442ea432c7b93dd4e2a6d8b738fb8f1dae54b5efbaab1cf49b"
+}
