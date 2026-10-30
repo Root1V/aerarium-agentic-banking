@@ -39,6 +39,7 @@ import (
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/bff/sim"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
@@ -115,14 +116,18 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		chain = append(chain, bff.NewSessionAuthenticator(sessionStore))
-		policy := stepup.NewService(db, stepup.DefaultPolicy())
-		if err := policy.Migrate(ctx); err != nil {
+		payees := stepup.NewService(db, stepup.DefaultPolicy())
+		if err := payees.Migrate(ctx); err != nil {
+			return err
+		}
+		ctrl := control.NewService(db, payees)
+		if err := ctrl.Migrate(ctx); err != nil {
 			return err
 		}
 		setup = append(setup, func(s *bff.Server) *bff.Server {
-			return s.WithSessions(sessionStore).WithDevices(deviceSvc).WithStepUp(policy, deviceSvc)
+			return s.WithSessions(sessionStore).WithDevices(deviceSvc).WithControl(ctrl, payees, deviceSvc)
 		})
-		log.Info("teléfonos vinculados y confirmación de operaciones de riesgo habilitados")
+		log.Info("teléfonos vinculados y capa de control habilitados")
 
 		// El directorio de celulares necesita mandar SMS para verificar números.
 		// Sin proveedor de SMS, solo el sandbox lo tiene, con códigos visibles.

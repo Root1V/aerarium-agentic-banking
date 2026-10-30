@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../auth/device_keys.dart';
 import '../money.dart';
+import '../theme.dart';
+import '../widgets/pin_pad.dart';
 
 /// La pantalla donde una persona decide si le da a una plataforma permiso para
 /// pagar desde una cuenta suya.
@@ -23,15 +26,24 @@ import '../money.dart';
 ///   foco en aprobar convierte la pantalla en un trámite.
 /// - **Lo que se aprueba se dice en dinero, no en micras.** Nadie decide sobre
 ///   `5000000`.
+///
+/// Y dar poder sobre el dinero es de alto impacto (nivel 4 de la capa de
+/// control): el banco pide confirmarlo con la cara, o con la clave si la cara
+/// no puede. Lo que se firma lleva los topes y la vigencia elegidos.
 class ConsentScreen extends StatefulWidget {
   const ConsentScreen({
     super.key,
     required this.client,
     required this.handoffCode,
     required this.accountId,
+    this.confirmer,
   });
 
   final BffClient client;
+
+  /// Firma la confirmación con el teléfono. Sin él —una sesión de desarrollo—
+  /// el banco no la pide.
+  final TransferConfirmer? confirmer;
 
   /// Lo que la plataforma le entregó a la persona (un enlace, un QR).
   final String handoffCode;
@@ -245,14 +257,13 @@ class _ConsentScreenState extends State<ConsentScreen> {
     });
 
     try {
-      final mandate = await widget.client.approveConsent(
-        widget.handoffCode,
-        accountId: widget.accountId,
-        expiresInDays: _days,
-        maxPerOperationMicros: perOperation,
-        maxTotalMicros: total,
-      );
+      final mandate = await _grant(perOperation, total);
       if (!mounted) return;
+      if (mandate == null) {
+        // Cerró el diálogo de la cara o el teclado: no se concedió nada.
+        setState(() => _submitting = false);
+        return;
+      }
       Navigator.of(context).pop(mandate);
     } on ApiError catch (e) {
       if (!mounted) return;
@@ -261,6 +272,57 @@ class _ConsentScreenState extends State<ConsentScreen> {
         _limitsError = e.userMessage;
       });
     }
+  }
+
+  /// Concede el permiso. La primera llamada devuelve lo que hay que firmar; la
+  /// segunda lleva la firma. Devuelve `null` si la persona se echó atrás.
+  Future<Mandate?> _grant(int? perOperation, int? total) async {
+    Future<Mandate> call([TransferConfirmation? confirmation]) => widget.client.approveConsent(
+          widget.handoffCode,
+          accountId: widget.accountId,
+          expiresInDays: _days,
+          maxPerOperationMicros: perOperation,
+          maxTotalMicros: total,
+          confirmation: confirmation,
+        );
+
+    final ConfirmationChallenge challenge;
+    try {
+      return await call();
+    } on ApiError catch (e) {
+      if (e.code != ApiErrorCode.confirmationRequired) rethrow;
+      challenge = ConfirmationChallenge.fromJson(e.details);
+    }
+    final confirmer = widget.confirmer;
+    if (confirmer == null) {
+      throw const ApiError(ApiErrorCode.confirmationUnavailable, 'sin teléfono vinculado');
+    }
+
+    TransferConfirmation confirmation;
+    try {
+      confirmation = await confirmer.confirm(
+        challenge,
+        DeviceUnlock.biometric,
+        // Lo que la persona ve en el diálogo del sistema: qué está aprobando.
+        reason: 'Das permiso a ${challenge.toName} para pagar desde tu cuenta',
+      );
+    } on DeviceKeyException catch (e) {
+      if (e.failure == DeviceKeyFailure.cancelled) return null;
+      // La cara no pudo: con la clave. El desafío sigue vivo, porque el banco
+      // no llegó a verlo.
+      if (!mounted) return null;
+      final pin = await Navigator.of(context).push<String>(MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _PinPrompt(grantedTo: challenge.toName),
+      ));
+      if (pin == null) return null;
+      try {
+        confirmation = await confirmer.confirm(challenge, DeviceUnlock.pin, pin: pin, reason: '');
+      } on DeviceKeyException {
+        throw const ApiError(ApiErrorCode.confirmationRejected, 'el teléfono no firmó');
+      }
+    }
+    return call(confirmation);
   }
 
   Future<void> _reject() async {
@@ -377,6 +439,35 @@ class _Message extends StatelessWidget {
               const SizedBox(height: 16),
               FilledButton(onPressed: onRetry, child: const Text('Reintentar')),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// La clave de 6 dígitos, cuando la cara no pudo confirmar el permiso.
+class _PinPrompt extends StatelessWidget {
+  const _PinPrompt({required this.grantedTo});
+
+  final String grantedTo;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Confirma el permiso')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          children: [
+            Text('Das permiso a $grantedTo para pagar desde tu cuenta',
+                textAlign: TextAlign.center, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: AppSpacing.xl),
+            Text('Escribe tu clave para confirmar',
+                textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.lg),
+            PinPad(onCompleted: (pin) => Navigator.of(context).pop(pin)),
           ],
         ),
       ),

@@ -15,8 +15,10 @@ import (
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/devices"
+	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
 	"github.com/aibank/aibank/services/sessions"
@@ -36,6 +38,7 @@ var passkeyRP = virtualwebauthn.RelyingParty{ID: passkeyRPID, Name: "AIBank", Or
 type passkeyEnv struct {
 	srv *httptest.Server
 	f   *fixture
+	db  *sql.DB
 }
 
 func newPasskeyEnv(t *testing.T) *passkeyEnv {
@@ -80,8 +83,12 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		t.Fatal(err)
 	}
 
-	policy := stepup.NewService(db, stepup.DefaultPolicy())
-	if err := policy.Migrate(f.ctx); err != nil {
+	payees := stepup.NewService(db, stepup.DefaultPolicy())
+	if err := payees.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	ctrl := control.NewService(db, payees)
+	if err := ctrl.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
 	}
 	// La caja del saldo de prueba: el prefijo más la moneda es su código.
@@ -107,19 +114,34 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	if err := directory.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
 	}
+	// La plataforma de prueba que pide permisos desde el sandbox. Puede existir
+	// ya, de una corrida anterior.
+	consents := oauth.NewStore(db)
+	if err := consents.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := consents.FindClient(f.ctx, bff.SandboxPlatform); err != nil {
+		if _, err := consents.Register(f.ctx, bff.SandboxPlatform, "Mercatus", []string{oauth.ScopePaymentsWrite}); err != nil {
+			// Otra prueba en paralelo la registró primero.
+			if _, findErr := consents.FindClient(f.ctx, bff.SandboxPlatform); findErr != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	auth := bff.ChainAuthenticator{bff.NewSessionAuthenticator(sess)}
 	server := bff.NewServer(f.core, auth, nil).
 		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
 		WithSessions(sess).
 		WithPasskeys(pk).
 		WithDevices(deviceSvc, bff.WithDeviceLimit(100, 100)).
-		WithStepUp(policy, deviceSvc).
+		WithControl(ctrl, payees, deviceSvc).
 		WithSandboxFunds(cashPrefix, "RETAIL-").
 		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
-		WithCredit(cards)
+		WithCredit(cards).
+		WithConsents(consents)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
-	return &passkeyEnv{srv: ts, f: f}
+	return &passkeyEnv{srv: ts, f: f, db: db}
 }
 
 func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (int, map[string]any) {
