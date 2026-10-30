@@ -177,6 +177,40 @@ retención vence. Propuesto en el canal (AE-09).
   límite efectivo se multiplica; hay que moverlo a un almacén compartido antes de
   escalar horizontalmente — o antes de abrir el sandbox alojado a un segundo socio.
 
+## Fase 3: el banco del futuro (backlog priorizado)
+
+Ideas de la investigación «El banco del futuro 2027–2035», corroboradas y contrastadas en
+[docs/15](docs/15-banco-del-futuro.md). El eje es pasar de vender productos a gestionar
+resultados financieros, con agentes que actúan dentro de límites que el cliente fija.
+
+- [ ] **F3-04 Capa de control común**: qué puede hacer cada actor (asistente, regla de
+  ahorro, agente de una plataforma), con nivel, alcance, monto y vigencia. Unifica
+  mandatos y confirmación reforzada. El nivel 4 siempre con humano. *Alta, va primero.*
+- [ ] **F3-01 Previsión de saldo y aviso de déficit** hasta el próximo ingreso, con los
+  pagos de la tarjeta. *Alta.*
+- [ ] **F3-02 Bolsillos**: dinero apartado dentro de la cuenta («para la tarjeta»). *Alta.*
+- [ ] **F3-06 Centro de permisos y privacidad**: agentes, teléfonos, passkeys y
+  consentimientos en una pantalla, revocables. *Alta.*
+- [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*
+- [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
+- [ ] **F3-05 Identidad del agente**: mandato atado al agente y a la intención,
+  compatible con Mastercard Agent Pay y Visa Trusted Agent Protocol. Acordar con
+  Mercatus. *Media.*
+- [ ] **F3-07 Registro de decisiones automáticas** con evidencia y cola de revisión
+  humana en el backoffice. *Media.*
+- [ ] **F3-08 Asistente financiero** nivel 1 (solo lectura), luego nivel 2. Falta
+  decidir proveedor de modelo y qué datos salen. *Media.*
+- [ ] **F3-10 Finanzas Abiertas Perú**: API de información con consentimiento sobre el
+  OAuth existente; seguir la consulta de la SBS. *Media.*
+- [ ] **F3-11 Operaciones asistidas**: un agente propone en la cola de conciliación y una
+  persona aprueba. *Baja.*
+- [ ] **F3-12 Métricas de resultados**: déficits evitados, ahorro, revocaciones,
+  intervenciones humanas. *Baja.*
+
+Fuera por ahora (motivos en docs/15 §4): pymes, seguros, inversión, marketplace, dinero
+tokenizado.
+
 ## Backlog (post-sprint 6)
 
-Sandbox BaaS real · notificaciones push · screening AML · asistente IA soporte · cuenta remunerada · hardening/pentest
+Sandbox BaaS real · notificaciones push · screening AML · cuenta remunerada · hardening/pentest
+(el asistente IA de soporte pasó a F3-08)

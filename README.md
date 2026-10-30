@@ -76,6 +76,7 @@ Investigación (agosto 2026, fuentes citadas en cada documento) y plan integral 
 | 12 | [Modelo B: iniciación de pagos](docs/12-modelo-b-iniciacion-de-pagos.md) | Respuesta a Q25: pagar sobre la cuenta propia del cliente en vez de un sub-ledger ómnibus — por qué sí, por qué no con `client_credentials`, y qué haría falta |
 | 13 | [Especificación de los modelos A y B](docs/13-spec-modelos-a-y-b.md) | **Documento para compartir**: cómo integrarse en los dos modelos, flujo de consentimiento, 30 escenarios de prueba y qué cambia al pasar a cuentas reales |
 | 14 | [UX de la app y decisión Flutter frente a nativo](docs/14-ux-y-decision-movil.md) | Principios de UX (SBS, Yape, agentes), por qué se mantiene Flutter y las dos reglas que lo acotan |
+| 15 | [El banco del futuro](docs/15-banco-del-futuro.md) | Corroboración de la investigación 2027–2035, dónde ya está Aerarium y 12 features nuevas para el backlog (F3-01…F3-12) |
 | — | [Sandbox](SANDBOX.md) | **Documento para compartir**: levantar el entorno completo con un comando, credenciales, recorrido de demostración y qué cambia en producción |
 
 ## Decisiones estructurales clave
