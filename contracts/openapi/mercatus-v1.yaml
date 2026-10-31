@@ -2,12 +2,68 @@ openapi: 3.1.0
 
 info:
   title: AIBank — riel de pago para agentes
-  version: "1.0.0"
+  version: "1.1.0-borrador"
   summary: Autorizar y capturar pagos entre sub-cuentas de una plataforma de agentes.
   description: |
     Implementación del contrato `aibank_integration_contract.md` v0.3 de Mercatus,
     con los defaults acordados en `docs/10-preguntas-mercatus.md` y confirmados en
     la respuesta de Mercatus.
+
+    ## Versión 1.1 — identidad del agente (borrador del 09/11/2026)
+
+    Acordada con Mercatus en AE-10, AE-11 y AE-12. **Todo lo nuevo es
+    obligatorio**: es la condición para que un agente pague.
+
+    1. **Cada agente se registra** con `POST /v1/agents`: un nombre que el titular
+       reconozca y una clave pública Ed25519. Puede tener varias claves para
+       rotarlas sin darlo de baja.
+    2. **El permiso es para un agente.** `POST /v1/consent-requests` exige
+       `agent_id`; el mandato solo lo usa ese agente.
+    3. **Cada pago dice quién paga y por qué.** `POST /v1/authorizations` exige
+       `agent_id` e `intent`. En el modelo A, la sub-cuenta pagadora se ata a su
+       agente al abrirla (`agent_id` en `POST /v1/accounts`).
+    4. **El agente firma cada pago** con su clave (ver «Firma del agente»).
+
+    **Transición.** Los mandatos concedidos antes de esta versión no tienen
+    agente: siguen sirviendo a cualquier agente de la plataforma hasta que vencen,
+    pero el pago igual va firmado y con `intent`. No se conceden mandatos nuevos
+    sin agente. Una sub-cuenta abierta antes se ata a su agente repitiendo
+    `POST /v1/accounts` con el mismo `owner_reference` y su `agent_id`.
+
+    ## Firma del agente
+
+    La plataforma se autentica con su token OAuth y actúa por todos sus agentes.
+    La firma prueba, además, **qué agente** paga. Sigue
+    [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) (HTTP Message
+    Signatures), el mecanismo del Trusted Agent Protocol de Visa, con un único
+    perfil:
+
+    ```
+    Content-Digest: sha-256=:<base64 del SHA-256 del cuerpo>:
+    Signature-Input: sig1=("@method" "@path" "content-digest");created=<unix>;keyid="key_…";alg="ed25519"
+    Signature: sig1=:<base64 de la firma Ed25519>:
+    ```
+
+    Lo firmado es, línea por línea (RFC 9421 §2.5):
+
+    ```
+    "@method": POST
+    "@path": /v1/authorizations
+    "content-digest": sha-256=:…:
+    "@signature-params": ("@method" "@path" "content-digest");created=…;keyid="key_…";alg="ed25519"
+    ```
+
+    - Cubre el cuerpo entero a través de su digest
+      ([RFC 9530](https://www.rfc-editor.org/rfc/rfc9530)): monto, receptor,
+      agente e intención quedan firmados.
+    - `keyid` es el `key_id` de una clave vigente del agente, y `agent_id` en el
+      cuerpo tiene que ser su dueño.
+    - Una firma vale **5 minutos** desde `created`. Dentro de esa ventana, repetir
+      la petición es un reintento, y la `Idempotency-Key` lo vuelve inofensivo.
+    - Sin firma, o con una que no verifica por cualquier motivo:
+      `401 agent_signature_invalid`. El motivo concreto no se dice.
+
+    `services/mercatus/cmd/demo` firma a mano, sin bibliotecas, como referencia.
 
     ## Unidad monetaria
 
@@ -72,6 +128,7 @@ tags:
   - name: Cuentas
   - name: Pagos
   - name: Consentimiento
+  - name: Agentes
 
 paths:
   /oauth/token:
@@ -161,6 +218,11 @@ paths:
         `owner_reference` debe ser trazable a una persona natural o jurídica real
         en los sistemas de la plataforma: el banco hace diligencia sobre la
         integración, la plataforma responde por quién está detrás de cada cuenta.
+
+        **Con `agent_id`, la cuenta es de ese agente**, y solo él paga con ella. Una
+        cuenta sin agente —la de un vendedor— cobra, pero no paga. Repetir la
+        llamada con el mismo `agent_id` no cambia nada; con otro, es
+        `409 account_agent_conflict`.
       security:
         - bearerToken: [accounts:write]
       requestBody:
@@ -172,6 +234,7 @@ paths:
               owner_reference: agent_7c1e9a
               currency: USD
               display_name: Mercatus · research-bot-42
+              agent_id: agt_5b2c8e1f9a3d4c7b8e6f0a1b2c3d4e5f
       responses:
         "201":
           description: Cuenta abierta.
@@ -196,6 +259,18 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`agent_not_found`: el `agent_id` no es de un agente de esta integración."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `account_agent_conflict`: la cuenta ya es de otro agente.
+            `agent_revoked`: el agente está dado de baja.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: "`currency_mismatch`: la moneda no está habilitada en este entorno."
           content:
@@ -260,6 +335,24 @@ paths:
             Un identificador por INTENTO DE PAGO LÓGICO, no por intento HTTP.
             Derívalo del `cart_id`, que ya es de un solo uso.
           example: cart_9c2f1e88
+        - name: Content-Digest
+          in: header
+          required: true
+          schema: { type: string }
+          description: SHA-256 del cuerpo, según RFC 9530. Lo cubre la firma.
+          example: "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:"
+        - name: Signature-Input
+          in: header
+          required: true
+          schema: { type: string }
+          description: Ver «Firma del agente». Un solo perfil, una sola firma.
+          example: 'sig1=("@method" "@path" "content-digest");created=1793480000;keyid="key_3a7f0c9e2b5d4e1f8a6c0b9d7e2f4a1c";alg="ed25519"'
+        - name: Signature
+          in: header
+          required: true
+          schema: { type: string }
+          description: La firma Ed25519 de la clave `keyid`, en base64.
+          example: "sig1=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:"
       requestBody:
         required: true
         content:
@@ -270,6 +363,10 @@ paths:
               payee_account_id: acc_1c9d44f0a1b2c3d4e5f60718293a4b5c
               amount: 1000
               currency: USD
+              agent_id: agt_5b2c8e1f9a3d4c7b8e6f0a1b2c3d4e5f
+              intent:
+                reference: conv_8f2a91
+                description: "Text Summarizer: resumen de un texto en 2 oraciones"
       responses:
         "201":
           description: Autorización creada.
@@ -293,11 +390,20 @@ paths:
         "400":
           description: |
             `malformed_request`: falta `Idempotency-Key`, `amount` no es positivo,
-            `currency` no es ISO-4217, o el cuerpo trae un campo desconocido.
+            `currency` no es ISO-4217, falta `intent` o no cumple su formato, o el
+            cuerpo trae un campo desconocido.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
+        "401":
+          description: |
+            `invalid_credential`: falta el token, expiró o no es válido.
+            `agent_signature_invalid`: el pago no viene firmado, la firma no
+            verifica o venció, la clave no es de un agente vigente de esta
+            integración, o `agent_id` no es el dueño de la clave.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "402":
           description: "`insufficient_funds`: la cuenta pagadora no llega al monto."
           content:
@@ -309,7 +415,10 @@ paths:
         "403":
           description: |
             `insufficient_scope` si el token no incluye `payments:write`;
-            `account_frozen` si una de las cuentas está bloqueada.
+            `account_frozen` si una de las cuentas está bloqueada;
+            `mandate_agent_scope` si el mandato es de otro agente;
+            `account_agent_scope` (modelo A) si la cuenta pagadora no es del
+            agente que firma.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -511,6 +620,9 @@ paths:
 
         Entrega el `handoff_code` al cliente (un enlace, un QR) para que lo abra
         en su app. La solicitud vive una hora.
+
+        **El permiso se le pide para un agente** (`agent_id`). El titular ve su
+        nombre al decidir, y el mandato que nazca solo lo usa ese agente.
       security:
         - bearerToken: [payments:write]
       requestBody:
@@ -523,6 +635,7 @@ paths:
               max_per_operation: 5000000
               max_total: 50000000
               purpose: Pagos del agente de investigación de Acme S.A.
+              agent_id: agt_5b2c8e1f9a3d4c7b8e6f0a1b2c3d4e5f
       responses:
         "201":
           description: Solicitud creada, pendiente de que el titular decida.
@@ -537,12 +650,22 @@ paths:
         "400":
           description: |
             `malformed_request`: falta `purpose` (es lo que el titular lee antes
-            de decidir) o `currency` no es ISO-4217.
+            de decidir), falta `agent_id`, o `currency` no es ISO-4217.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`agent_not_found`: el agente no es de esta integración."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`agent_revoked`: el agente está dado de baja."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/consent-requests/{consentRequestId}:
@@ -634,6 +757,169 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/agents:
+    post:
+      tags: [Agentes]
+      summary: Registra un agente con su primera clave
+      operationId: registerAgent
+      description: |
+        El nombre es el que ve el titular al conceder un permiso: tiene que
+        reconocerlo. La clave es Ed25519 (JWK, RFC 8037); la privada no sale de la
+        plataforma. Antes de producción, la privada vive en un gestor de claves
+        (KMS o HSM).
+      security:
+        - bearerToken: [payments:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterAgentRequest" }
+            example:
+              name: Agente de viajes
+              public_key: { kty: OKP, crv: Ed25519, x: 11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo }
+      responses:
+        "201":
+          description: Agente registrado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "400":
+          description: "`malformed_request`: falta el nombre (1–80) o la clave no es un JWK Ed25519."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`agent_key_in_use`: esa clave ya está registrada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{agentId}:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Agentes]
+      summary: Consulta un agente y sus claves
+      operationId: getAgent
+      security:
+        - bearerToken: [payments:read]
+      responses:
+        "200":
+          description: El agente.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`agent_not_found`: no existe, o es de otra integración."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [Agentes]
+      summary: Da de baja al agente
+      operationId: revokeAgent
+      description: |
+        Definitivo. Sus claves dejan de firmar y sus permisos dejan de servir **al
+        momento**. Repetirlo no es un error.
+      security:
+        - bearerToken: [payments:write]
+      responses:
+        "200":
+          description: El agente, con `status` `revoked`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`agent_not_found`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{agentId}/keys:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Agentes]
+      summary: Añade una clave, para rotar sin dar de baja al agente
+      operationId: addAgentKey
+      description: |
+        Desde ese momento valen la nueva y las anteriores. Las anteriores dejan de
+        valer al retirarlas, o **7 días** después de añadir la nueva, lo que
+        ocurra primero: su `expires_at` lo dice. Los permisos son del agente, no
+        de la clave: rotar no toca ningún mandato.
+      security:
+        - bearerToken: [payments:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_key]
+              properties:
+                public_key: { $ref: "#/components/schemas/JWK" }
+      responses:
+        "201":
+          description: La clave nueva.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentKey" }
+        "400":
+          description: "`malformed_request`: la clave no es un JWK Ed25519."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`agent_not_found`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `agent_key_in_use`: esa clave ya está registrada.
+            `agent_revoked`: el agente está dado de baja.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{agentId}/keys/{keyId}:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string } }
+      - { name: keyId, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [Agentes]
+      summary: Retira una clave antes de que venza
+      operationId: retireAgentKey
+      description: |
+        La única clave vigente no se puede retirar: dejaría al agente sin poder
+        pagar. Añade otra antes, o da de baja al agente.
+      security:
+        - bearerToken: [payments:write]
+      responses:
+        "200":
+          description: El agente, con la clave retirada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`agent_not_found`: el agente o la clave no existe."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `agent_last_key`: es la única clave vigente.
+            `agent_revoked`: el agente está dado de baja.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerToken:
@@ -688,6 +974,11 @@ components:
             **Solo sandbox.** Saldo con el que nace la cuenta, en millonésimas. Es
             lo que permite probar de verdad el camino de `insufficient_funds`
             abriendo una cuenta con $0.10 (`100000`). En producción se rechaza.
+        agent_id:
+          type: string
+          description: |
+            El agente dueño de la cuenta: solo él paga con ella. Sin él, la cuenta
+            cobra pero no paga.
 
     Account:
       type: object
@@ -704,7 +995,7 @@ components:
 
     AuthorizeRequest:
       type: object
-      required: [payer_account_id, payee_account_id, amount, currency]
+      required: [payer_account_id, payee_account_id, amount, currency, agent_id, intent]
       properties:
         mandate_id:
           type: string
@@ -732,6 +1023,84 @@ components:
           type: string
           minLength: 3
           maxLength: 3
+        agent_id:
+          type: string
+          description: El agente que paga. Tiene que ser el dueño de la clave que firma.
+        intent: { $ref: "#/components/schemas/Intent" }
+
+    Intent:
+      type: object
+      required: [reference, description]
+      description: Por qué se hace el pago. El titular lo lee en su historial.
+      properties:
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: |
+            El identificador de la tarea que el cliente le dio al agente (su
+            conversación, por ejemplo). Varios pagos de una tarea comparten la misma.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 140
+          description: |
+            Qué se compró, en texto plano y sin caracteres de control. Una por
+            llamada al proveedor. **Sin datos personales de terceros** ni el
+            contenido que procesa el agente: el titular lo lee tal cual.
+
+    JWK:
+      type: object
+      required: [kty, crv, x]
+      description: Clave pública Ed25519 (RFC 8037).
+      properties:
+        kty: { type: string, const: OKP }
+        crv: { type: string, const: Ed25519 }
+        x: { type: string, description: Los 32 bytes de la clave, en base64url sin relleno. }
+
+    RegisterAgentRequest:
+      type: object
+      required: [name, public_key]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: Lo que ve el titular. Tiene que reconocerlo.
+        public_key: { $ref: "#/components/schemas/JWK" }
+
+    AgentKey:
+      type: object
+      required: [key_id, public_key, created_at]
+      properties:
+        key_id:
+          type: string
+          pattern: "^key_[0-9a-f]{32}$"
+          description: El `keyid` de la firma.
+        public_key: { $ref: "#/components/schemas/JWK" }
+        created_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: Presente si se añadió otra clave después; vale hasta entonces.
+        retired_at: { type: string, format: date-time }
+
+    Agent:
+      type: object
+      required: [agent_id, name, status, created_at, keys]
+      properties:
+        agent_id:
+          type: string
+          pattern: "^agt_[0-9a-f]{32}$"
+        name: { type: string }
+        status:
+          type: string
+          enum: [active, revoked]
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+        keys:
+          type: array
+          items: { $ref: "#/components/schemas/AgentKey" }
 
     AuthorizationStatus:
       type: string
@@ -799,7 +1168,7 @@ components:
 
     ConsentRequestInput:
       type: object
-      required: [currency, purpose]
+      required: [currency, purpose, agent_id]
       properties:
         currency:
           type: string
@@ -823,6 +1192,11 @@ components:
             literalmente** en la pantalla de consentimiento, así que un texto
             vago convierte la decisión del titular en una que no puede tomar
             bien.
+        agent_id:
+          type: string
+          description: |
+            El agente al que se le pide el permiso. El titular ve su nombre, y
+            solo él podrá usar el mandato.
 
     ConsentRequest:
       type: object
@@ -837,6 +1211,9 @@ components:
           type: string
           enum: [pending, approved, rejected, expired]
         expires_at: { type: string, format: date-time }
+        agent_id:
+          type: string
+          description: El agente para el que se pidió. Ausente en solicitudes de antes de 1.1.
         mandate_id:
           type: string
           description: Presente solo cuando `status` es `approved`.

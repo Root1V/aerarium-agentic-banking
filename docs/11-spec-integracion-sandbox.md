@@ -293,6 +293,20 @@ demás. Acotarlo por cuenta convierte ese incidente en un problema de un agente.
 | 429 | `rate_limited` | Cuota superada |
 | 503 | `service_unavailable` | Transitorio. **Reintentable** con la misma clave |
 
+Desde la versión 1.1 del contrato (identidad del agente,
+[doc 13 §0](13-spec-modelos-a-y-b.md#0-versión-11--identidad-del-agente-borrador)):
+
+| HTTP | `error` | Cuándo |
+|---|---|---|
+| 401 | `agent_signature_invalid` | El pago no viene firmado por un agente vigente de la integración, la firma no verifica o venció, o `agent_id` no es el dueño de la clave |
+| 403 | `account_agent_scope` | Modelo A: la cuenta pagadora no es del agente que firma |
+| 403 | `mandate_agent_scope` | Modelo B: el mandato es de otro agente |
+| 404 | `agent_not_found` | El agente o la clave no existe, o es de otra integración |
+| 409 | `agent_revoked` | El agente está dado de baja |
+| 409 | `agent_key_in_use` | Esa clave pública ya está registrada |
+| 409 | `agent_last_key` | Se intentó retirar la única clave vigente |
+| 409 | `account_agent_conflict` | La cuenta ya es de otro agente |
+
 **El campo `error` es estable**: compárenlo por igualdad. El campo `message` es
 para humanos y puede cambiar sin aviso — no lo parseen.
 
