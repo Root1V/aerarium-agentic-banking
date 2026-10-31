@@ -469,3 +469,15 @@ func (f *modelBFixture) grantMandate(t *testing.T, maxPerOp, maxTotal *int64) st
 	}
 	return mandate["mandate_id"].(string)
 }
+
+// Sin saldo en la cuenta del titular es «falta dinero», no «el servicio no está»:
+// un 503 invita a reintentar un pago que nunca va a pasar (M-07).
+func TestUnPagoBajoMandatoSinSaldoDevuelve402(t *testing.T) {
+	f := setupModelB(t)
+	mandateID := f.grantMandate(t, nil, nil)
+
+	status, out := f.payUnderMandate(t, mandateID, 60_000000) // hay 50
+	if status != http.StatusPaymentRequired || out["error"] != CodeInsufficientFunds {
+		t.Errorf("status = %d, error = %v; se esperaba 402 %s", status, out["error"], CodeInsufficientFunds)
+	}
+}

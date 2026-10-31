@@ -352,7 +352,12 @@ impl MandateService {
         .execute(&mut *tx)
         .await?;
 
-        tx.commit().await?;
+        // Los triggers diferidos del ledger corren en el COMMIT: «fondos
+        // insuficientes» llega aquí, y hay que traducirlo como en el modelo A.
+        // Sin esto salía como error de base de datos y la API respondía 503.
+        tx.commit()
+            .await
+            .map_err(|e| MandateError::Authorization(crate::authorizations::map_db_error(e)))?;
 
         let consumed_after = if result.replayed {
             consumed
