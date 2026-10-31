@@ -319,6 +319,7 @@ func (d *demo) holderApproves(holder *sandboxHolder, handoff string) error {
 
 	var prompt struct {
 		RequestedBy     string `json:"requested_by"`
+		AgentName       string `json:"agent_name"`
 		Purpose         string `json:"purpose"`
 		MaxPerOperation *int64 `json:"max_per_operation"`
 		MaxTotal        *int64 `json:"max_total"`
@@ -326,7 +327,7 @@ func (d *demo) holderApproves(holder *sandboxHolder, handoff string) error {
 	if err := d.holder.json("GET", "/v1/consent-requests/"+handoff, nil, &prompt); err != nil {
 		return err
 	}
-	say("ve: %q pide %q", prompt.RequestedBy, prompt.Purpose)
+	say("ve: %q, agente de %q, pide %q", prompt.AgentName, prompt.RequestedBy, prompt.Purpose)
 
 	// Concede la MITAD de lo que le piden por operación. Es el caso interesante:
 	// el permiso vale por lo que decidió la persona, no por lo que se pidió.
