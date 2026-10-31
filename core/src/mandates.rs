@@ -30,7 +30,7 @@
 //! a quien ya cumplió sería trasladarle a él un problema que no es suyo.
 
 use crate::authorizations::{
-    authorize_in_tx, AuthorizationError, AuthorizeCommand, AuthorizeResult,
+    AuthorizationError, AuthorizeCommand, AuthorizeResult, authorize_in_tx,
 };
 use crate::model::AccountStatus;
 use chrono::{DateTime, Utc};
@@ -330,7 +330,8 @@ impl MandateService {
             if command.amount_micros > remaining {
                 return Err(MandateError::LimitExceeded(format!(
                     "payment of {} exceeds the {} still available on this mandate",
-                    command.amount_micros, remaining.max(0)
+                    command.amount_micros,
+                    remaining.max(0)
                 )));
             }
         }
@@ -352,14 +353,25 @@ impl MandateService {
         .execute(&mut *tx)
         .await?;
 
-        tx.commit().await?;
+        // Los triggers diferidos del ledger corren en el COMMIT: «fondos
+        // insuficientes» llega aquí, y hay que traducirlo como en el modelo A.
+        // Sin esto salía como error de base de datos y la API respondía 503.
+        tx.commit()
+            .await
+            .map_err(|e| MandateError::Authorization(crate::authorizations::map_db_error(e)))?;
 
         let consumed_after = if result.replayed {
             consumed
         } else {
             consumed + command.amount_micros
         };
-        Ok((result, MandateWithUsage { mandate, consumed_micros: consumed_after }))
+        Ok((
+            result,
+            MandateWithUsage {
+                mandate,
+                consumed_micros: consumed_after,
+            },
+        ))
     }
 
     pub async fn find(&self, id: Uuid) -> Result<Option<MandateWithUsage>, MandateError> {
@@ -375,7 +387,10 @@ impl MandateService {
         .flatten()
         .unwrap_or(0);
 
-        Ok(Some(MandateWithUsage { mandate, consumed_micros: consumed }))
+        Ok(Some(MandateWithUsage {
+            mandate,
+            consumed_micros: consumed,
+        }))
     }
 
     /// Busca el mandato vivo de una integración sobre una cuenta.

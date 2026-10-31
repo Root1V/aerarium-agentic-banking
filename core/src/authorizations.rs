@@ -44,7 +44,10 @@ pub const DEFAULT_TTL_MINUTES: i64 = 15;
 pub const HOLDS_ACCOUNT_PREFIX: &str = "AUTH-HOLDS-";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
-#[sqlx(type_name = "authorization_status", rename_all = "SCREAMING_SNAKE_CASE")]
+#[sqlx(
+    type_name = "authorization_status",
+    rename_all = "SCREAMING_SNAKE_CASE"
+)]
 pub enum AuthorizationStatus {
     Authorized,
     Captured,
@@ -385,7 +388,11 @@ impl AuthorizationService {
 
         tx.commit().await.map_err(map_db_error)?;
 
-        Ok(Authorization { status: new_status, refunded_micros: refunded_total, ..auth })
+        Ok(Authorization {
+            status: new_status,
+            refunded_micros: refunded_total,
+            ..auth
+        })
     }
 
     /// Libera una retención vencida: el dinero vuelve al pagador.
@@ -459,7 +466,10 @@ impl AuthorizationService {
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows.into_iter().map(|r| (r.transaction_id, r.grantee)).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.transaction_id, r.grantee))
+            .collect())
     }
 
     /// Lo retenido en una cuenta pagadora, agrupado por quién lo cobra.
@@ -538,7 +548,10 @@ pub(crate) async fn authorize_in_tx(
                 command.idempotency_key.clone(),
             ));
         }
-        return Ok(AuthorizeResult { authorization: existing, replayed: true });
+        return Ok(AuthorizeResult {
+            authorization: existing,
+            replayed: true,
+        });
     }
 
     let payer = load_operative_account(tx, command.payer_account_id).await?;
@@ -712,15 +725,12 @@ async fn load_operative_account(
     .ok_or(AuthorizationError::AccountNotFound(id))?;
 
     match row.status {
-        AccountStatus::Active => Ok(OperativeAccount { id: row.id, currency: row.currency }),
-        AccountStatus::Frozen => Err(AuthorizationError::AccountNotOperative(
-            id,
-            "frozen".into(),
-        )),
-        AccountStatus::Closed => Err(AuthorizationError::AccountNotOperative(
-            id,
-            "closed".into(),
-        )),
+        AccountStatus::Active => Ok(OperativeAccount {
+            id: row.id,
+            currency: row.currency,
+        }),
+        AccountStatus::Frozen => Err(AuthorizationError::AccountNotOperative(id, "frozen".into())),
+        AccountStatus::Closed => Err(AuthorizationError::AccountNotOperative(id, "closed".into())),
     }
 }
 
@@ -831,13 +841,13 @@ async fn find_by_id(
 ///
 /// Los triggers diferidos del ledger corren en el COMMIT, así que "fondos
 /// insuficientes" llega como error de `commit()` y no de la consulta que retuvo.
-fn map_db_error(err: sqlx::Error) -> AuthorizationError {
+pub(crate) fn map_db_error(err: sqlx::Error) -> AuthorizationError {
     if let Some(db_err) = err.as_database_error() {
         let message = db_err.message().to_owned();
         match db_err.code().as_deref() {
             Some("AB001") => return AuthorizationError::InsufficientFunds(message),
             Some("AB004") => {
-                return AuthorizationError::Invalid(format!("illegal state transition: {message}"))
+                return AuthorizationError::Invalid(format!("illegal state transition: {message}"));
             }
             _ => {}
         }
