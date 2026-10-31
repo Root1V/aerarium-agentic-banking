@@ -65,6 +65,7 @@ func TestDarUnPermisoDePagoPideLaCaraSiempre(t *testing.T) {
 	}
 	summary := need["summary"].(map[string]any)
 	if summary["kind"] != "grant_permission" || summary["to_name"] == "" ||
+		summary["agent_name"] != "Agente de compras (prueba)" ||
 		summary["max_per_operation"] != float64(10_000_000) || summary["expires_in_days"] != float64(30) {
 		t.Errorf("lo que se le muestra a la persona: %v", summary)
 	}

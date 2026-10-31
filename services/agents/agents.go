@@ -330,3 +330,25 @@ func insertKey(ctx context.Context, tx *sql.Tx, agentID string, pub ed25519.Publ
 	}
 	return nil
 }
+
+// SandboxAgent devuelve el agente de prueba de una integración del sandbox, y lo
+// registra la primera vez. Su clave privada no se guarda en ninguna parte: sirve
+// para que el titular practique dar un permiso a un agente, no para pagar.
+func (s *Store) SandboxAgent(ctx context.Context, clientID, name string) (*Agent, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id FROM agents.agents
+		 WHERE client_id = $1 AND name = $2 AND revoked_at IS NULL
+		 ORDER BY created_at LIMIT 1`, clientID, name).Scan(&id)
+	if err == nil {
+		return s.Get(ctx, clientID, id)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.Register(ctx, clientID, name, ToJWK(pub))
+}

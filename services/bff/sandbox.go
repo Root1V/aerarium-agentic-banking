@@ -61,6 +61,10 @@ const (
 	sandboxConsentTotal        int64 = 100_000_000
 )
 
+// sandboxAgentName es el agente de la plataforma de prueba al que se le da el
+// permiso simulado.
+const sandboxAgentName = "Agente de compras (prueba)"
+
 // handleSandboxConsentRequest hace que la plataforma de prueba le pida permiso
 // de pago al titular, como lo haría Mercatus desde su API. Sin esto, la
 // pantalla donde se concede un permiso solo se alcanza con un socio de verdad.
@@ -81,13 +85,24 @@ func (s *Server) handleSandboxConsentRequest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	perOperation, total := sandboxConsentPerOperation, sandboxConsentTotal
-	request, err := s.consents.NewConsentRequest(ctx, oauth.ConsentRequest{
+	consent := oauth.ConsentRequest{
 		ClientID:                 s.sandbox.platform,
 		RequestedMaxPerOperation: &perOperation,
 		RequestedMaxTotal:        &total,
 		Currency:                 body.Currency,
 		Purpose:                  "Pagar los servicios que contrata tu agente (prueba)",
-	})
+	}
+	// Como en la API de socio, el permiso se le pide a un agente de la plataforma.
+	if s.agents != nil {
+		agent, err := s.agents.SandboxAgent(ctx, s.sandbox.platform, sandboxAgentName)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "agente de prueba", "error", err)
+			writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
+			return
+		}
+		consent.AgentID, consent.AgentName = agent.ID, agent.Name
+	}
+	request, err := s.consents.NewConsentRequest(ctx, consent)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "solicitud de prueba", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
