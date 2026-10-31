@@ -141,9 +141,14 @@ retención vence. Propuesto en el canal (AE-09).
   deja de servir a propósito y se entra con la clave; falta ofrecer re-activar Face ID
   desde ahí, que hoy exige desvincular y volver a entrar con passkey.
 - **Hasta 5f, perder el teléfono es soporte**: sin dominio no hay passkey de respaldo.
-- **La confirmación cubre transferencias.** Conceder un permiso de pago a un agente
-  (modelo B) también es de riesgo y todavía no la pide; tampoco cambiar datos de
-  seguridad.
+- **La confirmación cubre transferencias y dar permisos de pago.** Todavía no la piden
+  pedir la tarjeta de crédito ni cambiar datos de seguridad: son nivel 4 y entran al
+  catálogo de la capa de control cuando se pase su flujo por ella.
+- **Los pagos de los agentes no pasan todavía por la capa de control.** Los topes los
+  hace cumplir el mandato en el core, que es lo que importa, pero esos pagos no quedan
+  en el registro de decisiones. Entra con F3-05, que ata el mandato al agente.
+- **El registro de decisiones no se ve todavía**: ni el titular ni el backoffice lo
+  consultan. Lo muestran F3-06 (centro de permisos) y F3-07 (revisión humana).
 - **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
   "Carmen H.": con tres palabras o más, la penúltima). Falla con dos nombres y un
   apellido. Lo correcto es guardar nombres y apellidos por separado desde el alta.
@@ -192,9 +197,15 @@ Ideas de la investigación «El banco del futuro 2027–2035», corroboradas y c
 [docs/15](docs/15-banco-del-futuro.md). El eje es pasar de vender productos a gestionar
 resultados financieros, con agentes que actúan dentro de límites que el cliente fija.
 
-- [ ] **F3-04 Capa de control común**: qué puede hacer cada actor (asistente, regla de
-  ahorro, agente de una plataforma), con nivel, alcance, monto y vigencia. Unifica
-  mandatos y confirmación reforzada. El nivel 4 siempre con humano. *Alta, va primero.*
+- [x] **F3-04 Capa de control común** (`services/control`): cada acción tiene un nivel
+  (1 observar, 2 recomendar, 3 ejecutar bajo mandato, 4 alto impacto). La persona lo
+  puede todo, pero el nivel 4 lo confirma siempre con su teléfono. Cualquier otro
+  actor necesita un permiso vigente que cubra la acción y el nivel, y el nivel 4 no se
+  delega nunca. Toda decisión queda en un registro de solo agregar (`control.decisions`):
+  sin constancia, la operación no sigue. Ya pasan por aquí las transferencias y **dar
+  permiso de pago a una plataforma**, que ahora pide la cara con los topes y la
+  vigencia dentro de lo firmado. En el sandbox, «Simular una solicitud» en Permisos de
+  pago crea una solicitud de Mercatus para probarlo.
 - [ ] **F3-01 Previsión de saldo y aviso de déficit** hasta el próximo ingreso, con los
   pagos de la tarjeta. *Alta.*
 - [ ] **F3-02 Bolsillos**: dinero apartado dentro de la cuenta («para la tarjeta»). *Alta.*

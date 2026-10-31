@@ -46,8 +46,9 @@ type Server struct {
 	devices *deviceConfig
 	// sessions habilita cerrar sesión en el banco.
 	sessions *sessions.Store
-	// stepUp pide confirmar con el teléfono las operaciones de riesgo.
-	stepUp *stepUpConfig
+	// control decide las operaciones del titular y pide confirmar con el
+	// teléfono las de riesgo.
+	control *controlConfig
 	// sandbox habilita el saldo de prueba. Solo en el sandbox.
 	sandbox *sandboxConfig
 	// aliases habilita el directorio de celulares.

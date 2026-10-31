@@ -81,6 +81,9 @@ type approveConsentBody struct {
 	MaxTotal        *int64 `json:"max_total,omitempty"`
 	// Días de vigencia del permiso.
 	ExpiresInDays int `json:"expires_in_days"`
+	// Confirmation llega en el segundo intento: dar poder sobre el dinero es de
+	// alto impacto y se confirma siempre con el teléfono.
+	Confirmation *operationConfirmation `json:"confirmation,omitempty"`
 }
 
 type mandateJSON struct {
@@ -156,11 +159,20 @@ func (s *Server) handleApproveConsent(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 
+	grant := grantOperation(request, body, s.merchantName(r.Context(), request.ClientID))
+	if !s.authorizeOperation(w, r, principal, grant, body.Confirmation) {
+		return
+	}
+
+	// La evidencia del consentimiento: qué solicitud, qué dispositivo la aprobó
+	// y con qué confirmación. Es lo que se presenta si alguien dice que nunca
+	// autorizó nada.
+	evidence := "consent:" + request.ID + ";device:" + principal.DeviceID
+	if body.Confirmation != nil {
+		evidence += ";confirmation:" + body.Confirmation.ChallengeID
+	}
 	mandate, err := s.core.GrantMandate(r.Context(), body.AccountID, request.ClientID,
-		principal.CustomerID,
-		// La evidencia del consentimiento: qué solicitud y qué dispositivo la
-		// aprobó. Es lo que se presenta si alguien dice que nunca autorizó nada.
-		"consent:"+request.ID+";device:"+principal.DeviceID,
+		principal.CustomerID, evidence,
 		body.MaxPerOperation, body.MaxTotal,
 		time.Now().AddDate(0, 0, body.ExpiresInDays))
 	if err != nil {

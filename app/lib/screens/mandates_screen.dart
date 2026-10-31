@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../auth/device_keys.dart';
 import '../money.dart';
+import 'consent_screen.dart';
 
 /// Los permisos que la persona tiene otorgados, y el sitio donde los retira.
 ///
@@ -15,12 +17,26 @@ import '../money.dart';
 /// pregunta que trae aquí a alguien suele ser "¿a quién le di acceso?", y esa
 /// respuesta incluye el pasado.
 class MandatesScreen extends StatefulWidget {
-  const MandatesScreen({super.key, required this.client});
+  const MandatesScreen({super.key, required this.client, this.testRequest});
 
   final BffClient client;
 
+  /// En el sandbox, para simular que una plataforma pide permiso. Nulo fuera
+  /// de él.
+  final TestConsentRequest? testRequest;
+
   @override
   State<MandatesScreen> createState() => _MandatesScreenState();
+}
+
+/// Lo necesario para simular una solicitud en el sandbox: desde qué cuenta se
+/// concedería y con qué se firma la confirmación.
+class TestConsentRequest {
+  const TestConsentRequest({required this.accountId, required this.currency, this.confirmer});
+
+  final String accountId;
+  final String currency;
+  final TransferConfirmer? confirmer;
 }
 
 class _MandatesScreenState extends State<MandatesScreen> {
@@ -58,10 +74,45 @@ class _MandatesScreenState extends State<MandatesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final test = widget.testRequest;
     return Scaffold(
       appBar: AppBar(title: const Text('Permisos de pago')),
       body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
+      floatingActionButton: test == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _requesting ? null : () => _simulateRequest(test),
+              icon: const Icon(Icons.science_outlined),
+              label: const Text('Simular una solicitud'),
+            ),
     );
+  }
+
+  bool _requesting = false;
+
+  /// La plataforma de prueba pide permiso y se abre la pantalla donde se decide,
+  /// como si la persona hubiera llegado desde el enlace de la plataforma.
+  Future<void> _simulateRequest(TestConsentRequest test) async {
+    setState(() => _requesting = true);
+    try {
+      final handoff = await widget.client.sandboxConsentRequest(test.currency);
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute<Mandate?>(
+        builder: (_) => ConsentScreen(
+          client: widget.client,
+          handoffCode: handoff,
+          accountId: test.accountId,
+          confirmer: test.confirmer,
+        ),
+      ));
+      if (!mounted) return;
+      await _load();
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+    } finally {
+      if (mounted) setState(() => _requesting = false);
+    }
   }
 
   Widget _buildBody() {

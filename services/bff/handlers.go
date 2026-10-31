@@ -209,7 +209,7 @@ type transferRequest struct {
 	Description   string `json:"description"`
 	// Confirmation llega en el segundo intento, cuando la operación pidió
 	// confirmarse con el teléfono.
-	Confirmation *transferConfirmation `json:"confirmation,omitempty"`
+	Confirmation *operationConfirmation `json:"confirmation,omitempty"`
 }
 
 type transferResponse struct {
@@ -269,14 +269,14 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
-	ok := s.stepUpTransfer(w, r, p, stepup.Transfer{
+	ok := s.authorizeOperation(w, r, p, transferOperation(stepup.Transfer{
 		CustomerID:     p.CustomerID,
 		FromAccountID:  req.FromAccountID,
 		ToAccountID:    req.ToAccountID,
 		AmountMicros:   req.AmountMicros,
 		Currency:       req.Currency,
 		IdempotencyKey: idempotencyKey,
-	}, destination.Name, req.Confirmation)
+	}, destination.Name), req.Confirmation)
 	if !ok {
 		return
 	}
@@ -294,11 +294,11 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
-	if s.stepUp != nil && p.Factor != "" {
+	if s.control != nil && p.Factor != "" {
 		// Queda conocido —los envíos chicos ya no piden la cara— y arriba en los
 		// recientes. Si no se pudo anotar, la próxima vez se vuelve a confirmar,
 		// que es el lado seguro del error.
-		if err := s.stepUp.policy.Remember(r.Context(), p.CustomerID, req.ToAccountID); err != nil {
+		if err := s.control.payees.Remember(r.Context(), p.CustomerID, req.ToAccountID); err != nil {
 			s.logger.ErrorContext(r.Context(), "anotar destinatario", "error", err)
 		}
 	}

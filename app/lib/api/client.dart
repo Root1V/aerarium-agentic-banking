@@ -410,6 +410,7 @@ extension MandateApi on BffClient {
     required int expiresInDays,
     int? maxPerOperationMicros,
     int? maxTotalMicros,
+    TransferConfirmation? confirmation,
   }) async {
     final json = await _post(
       '/v1/consent-requests/$handoffCode/approve',
@@ -420,9 +421,21 @@ extension MandateApi on BffClient {
         if (maxPerOperationMicros != null)
           'max_per_operation': maxPerOperationMicros,
         if (maxTotalMicros != null) 'max_total': maxTotalMicros,
+        if (confirmation != null) 'confirmation': confirmation.toJson(),
       },
     );
     return Mandate.fromJson(json);
+  }
+
+  /// Hace que la plataforma de prueba pida permiso de pago. Solo en el sandbox.
+  /// Devuelve el código con el que se abre la solicitud.
+  Future<String> sandboxConsentRequest(String currency) async {
+    final json = await _post(
+      '/v1/sandbox/consent-request',
+      headers: const {},
+      body: {'currency': currency},
+    );
+    return json['handoff_code'] as String;
   }
 
   /// Rechaza la solicitud sin conceder nada.

@@ -239,7 +239,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openMandates() {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => MandatesScreen(client: widget.client),
+      builder: (_) => MandatesScreen(
+        client: widget.client,
+        testRequest: widget.offerTestFunds && _home != null
+            ? TestConsentRequest(
+                accountId: widget.accountId,
+                currency: _home!.balance.currency,
+                confirmer: widget.confirmer,
+              )
+            : null,
+      ),
     ));
   }
 

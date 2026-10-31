@@ -5,8 +5,9 @@
 // engañada por teléfono, pueden mover dinero con ella. Las operaciones de riesgo
 // piden además firmar ESA operación con la cara (doc 14; Res. SBS 2286-2024).
 //
-// Aquí solo vive la política —qué es de riesgo— y la memoria de destinatarios
-// conocidos. La firma la verifica el paquete devices.
+// Aquí solo vive la política de transferencias —qué es de riesgo— y la memoria
+// de destinatarios conocidos. Quien la consulta es la capa de control (paquete
+// control), que decide todas las operaciones; la firma la verifica devices.
 package stepup
 
 import (

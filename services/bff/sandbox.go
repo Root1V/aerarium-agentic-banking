@@ -9,6 +9,7 @@ import (
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"github.com/aibank/aibank/services/aliases"
+	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
 )
 
@@ -29,12 +30,17 @@ const SandboxFundsMicros int64 = 250_000_000
 type sandboxConfig struct {
 	cashPrefix    string
 	productPrefix string
+	// platform es la integración registrada que "pide" permisos de prueba.
+	platform string
 }
+
+// SandboxPlatform es la integración de prueba que crea el arranque del sandbox.
+const SandboxPlatform = "mercatus_sandbox"
 
 // WithSandboxFunds habilita el saldo de prueba. `cashPrefix` + moneda es la caja
 // que lo financia; `productPrefix` + moneda, el producto del destinatario.
 func (s *Server) WithSandboxFunds(cashPrefix, productPrefix string) *Server {
-	s.sandbox = &sandboxConfig{cashPrefix: cashPrefix, productPrefix: productPrefix}
+	s.sandbox = &sandboxConfig{cashPrefix: cashPrefix, productPrefix: productPrefix, platform: SandboxPlatform}
 	return s
 }
 
@@ -44,6 +50,50 @@ func (s *Server) sandboxRoutes(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"available": true, "amount_micros": SandboxFundsMicros})
 	})
 	mux.Handle("POST /v1/sandbox/funds", s.requireAuth(s.handleSandboxFunds))
+	if s.consents != nil {
+		mux.Handle("POST /v1/sandbox/consent-request", s.requireAuth(s.handleSandboxConsentRequest))
+	}
+}
+
+// Topes de la solicitud de prueba: 20 por pago, 100 en total.
+const (
+	sandboxConsentPerOperation int64 = 20_000_000
+	sandboxConsentTotal        int64 = 100_000_000
+)
+
+// handleSandboxConsentRequest hace que la plataforma de prueba le pida permiso
+// de pago al titular, como lo haría Mercatus desde su API. Sin esto, la
+// pantalla donde se concede un permiso solo se alcanza con un socio de verdad.
+func (s *Server) handleSandboxConsentRequest(w http.ResponseWriter, r *http.Request, _ *Principal) {
+	var body struct {
+		Currency string `json:"currency"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Currency == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "falta la moneda")
+		return
+	}
+	ctx := r.Context()
+	if _, err := s.consents.FindClient(ctx, s.sandbox.platform); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "no hay una plataforma de prueba registrada")
+		return
+	}
+	perOperation, total := sandboxConsentPerOperation, sandboxConsentTotal
+	request, err := s.consents.NewConsentRequest(ctx, oauth.ConsentRequest{
+		ClientID:                 s.sandbox.platform,
+		RequestedMaxPerOperation: &perOperation,
+		RequestedMaxTotal:        &total,
+		Currency:                 body.Currency,
+		Purpose:                  "Pagar los servicios que contrata tu agente (prueba)",
+	})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "solicitud de prueba", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"handoff_code": request.HandoffCode})
 }
 
 type sandboxFundsResponse struct {

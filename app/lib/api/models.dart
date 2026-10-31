@@ -515,7 +515,17 @@ class ConfirmationChallenge {
   final String payload;
   final int amountMicros;
   final String currency;
+
+  /// A quién se le envía, o a quién se le da el permiso.
   final String toName;
+
+  /// Qué se confirma: `transfer` o `grant_permission`.
+  final String kind;
+
+  /// Los topes y la vigencia del permiso que se da. Nulos: sin tope.
+  final int? maxPerOperationMicros;
+  final int? maxTotalMicros;
+  final int? expiresInDays;
 
   const ConfirmationChallenge({
     required this.id,
@@ -523,6 +533,10 @@ class ConfirmationChallenge {
     required this.amountMicros,
     required this.currency,
     required this.toName,
+    this.kind = 'transfer',
+    this.maxPerOperationMicros,
+    this.maxTotalMicros,
+    this.expiresInDays,
   });
 
   factory ConfirmationChallenge.fromJson(Map<String, dynamic> json) {
@@ -533,6 +547,10 @@ class ConfirmationChallenge {
       amountMicros: (summary['amount_micros'] as num?)?.toInt() ?? 0,
       currency: summary['currency'] as String? ?? '',
       toName: summary['to_name'] as String? ?? '',
+      kind: summary['kind'] as String? ?? 'transfer',
+      maxPerOperationMicros: (summary['max_per_operation'] as num?)?.toInt(),
+      maxTotalMicros: (summary['max_total'] as num?)?.toInt(),
+      expiresInDays: (summary['expires_in_days'] as num?)?.toInt(),
     );
   }
 }
