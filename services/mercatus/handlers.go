@@ -14,6 +14,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
 )
@@ -294,8 +295,12 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	}
 
 	var payer string
+	var mandate *coreclient.Mandate
 	if req.MandateID != "" {
-		payer, ok = s.resolveMandateAccount(w, r, claims, req.MandateID, req.PayerAccountID)
+		mandate, ok = s.resolveMandate(w, r, claims, req.MandateID, req.PayerAccountID)
+		if ok {
+			payer = mandate.AccountID
+		}
 	} else {
 		payer, ok = s.resolveOwnedAccount(w, r, claims, req.PayerAccountID)
 	}
@@ -319,6 +324,10 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	// La clave del core se compone con el client_id: dos integraciones distintas
 	// que elijan la misma clave son operaciones distintas y no deben colapsar.
 	coreKey := claims.Subject + ":" + key
+
+	if mandate != nil && !s.decideMandatePayment(w, r, claims, mandate, payee, req, coreKey) {
+		return
+	}
 
 	var result *coreclient.AuthorizeResult
 	var err error
@@ -528,24 +537,24 @@ func (s *Server) resolveOwnedAccount(w http.ResponseWriter, r *http.Request, cla
 	return id, true
 }
 
-// resolveMandateAccount comprueba que el mandato ampare a esta integración y
-// devuelve la cuenta que cubre.
+// resolveMandate comprueba que el mandato ampare a esta integración y lo
+// devuelve; la cuenta pagadora es la que cubre.
 //
 // El pagador que mande la plataforma tiene que COINCIDIR con el del mandato. No
 // se toma el del mandato en silencio: si la plataforma cree estar pagando desde
 // otra cuenta, es un error suyo que conviene que vea, no algo que corregir por
 // detrás.
-func (s *Server) resolveMandateAccount(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, mandateID, declaredPayer string) (string, bool) {
+func (s *Server) resolveMandate(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, mandateID, declaredPayer string) (*coreclient.Mandate, bool) {
 	mandate, err := s.core.GetMandate(r.Context(), mandateID)
 	if err != nil {
 		mandateError(w, err)
-		return "", false
+		return nil, false
 	}
 
 	// Un mandato otorgado a otra integración no existe para esta.
 	if mandate.Grantee != claims.Subject {
 		writeError(w, http.StatusNotFound, CodeMandateNotFound, "el mandato no existe")
-		return "", false
+		return nil, false
 	}
 
 	if declaredPayer != "" {
@@ -553,11 +562,72 @@ func (s *Server) resolveMandateAccount(w http.ResponseWriter, r *http.Request, c
 		if err != nil || declared != mandate.AccountID {
 			writeError(w, http.StatusForbidden, CodeMandateAccountScope,
 				"el permiso no cubre la cuenta pagadora indicada")
-			return "", false
+			return nil, false
 		}
 	}
 
-	return mandate.AccountID, true
+	return mandate, true
+}
+
+// decideMandatePayment pasa un pago bajo mandato por la capa de control, que lo
+// deja en el registro de decisiones del titular. Devuelve `false` cuando ya
+// respondió y el pago no debe seguir.
+//
+// El actor es la plataforma: hasta que se acuerde con ella cómo identificar a
+// cada agente (F3-05), es lo único que el banco sabe de quién paga. Los topes los
+// vuelve a comprobar el core al retener, en la misma transacción; lo que se
+// decide aquí es lo que queda escrito, y por qué.
+func (s *Server) decideMandatePayment(w http.ResponseWriter, r *http.Request, claims *oauth.Claims,
+	mandate *coreclient.Mandate, payee string, req authorizeRequest, coreKey string) bool {
+	if s.control == nil {
+		return true
+	}
+	decision, err := s.control.Decide(r.Context(), control.Request{
+		CustomerID:   mandate.GrantedBy,
+		Actor:        control.Actor{Kind: control.ActorAgent, ID: claims.Subject},
+		Action:       control.ActionMandatePayment,
+		AmountMicros: req.Amount,
+		Counterparty: payee,
+		Operation: []byte("mandate_payment" +
+			"\nmandate=" + mandate.ID +
+			"\npayer=" + mandate.AccountID +
+			"\npayee=" + payee +
+			"\namount=" + strconv.FormatInt(req.Amount, 10) +
+			"\ncurrency=" + req.Currency +
+			"\nidempotency_key=" + coreKey),
+		Grant: &control.Grant{
+			Ref:             "mandate:" + mandate.ID,
+			Level:           control.LevelMandate,
+			Actions:         []control.Action{control.ActionMandatePayment},
+			MaxPerOperation: mandate.MaxPerOperation,
+			Remaining:       mandate.RemainingMicros(),
+			ExpiresAt:       mandate.ExpiresAt,
+			Revoked:         !mandate.Usable(),
+		},
+	})
+	if err != nil {
+		// Sin constancia no hay pago. Es transitorio: la misma clave no duplica.
+		s.log.ErrorContext(r.Context(), "capa de control", "error", err)
+		writeError(w, http.StatusServiceUnavailable, CodeServiceUnavailable,
+			"el servicio no está disponible; reintenta con la misma Idempotency-Key")
+		return false
+	}
+	if decision.Outcome == control.Allow {
+		return true
+	}
+	// Los mismos códigos que daría el core: el contrato no cambia por decidir
+	// antes.
+	switch {
+	case decision.Reason == control.ReasonOverLimit:
+		mandateError(w, coreclient.ErrMandateLimitExceeded)
+	case decision.Reason == control.ReasonGrantInactive && mandate.Status == corev1.MandateStatus_MANDATE_STATUS_REVOKED:
+		mandateError(w, coreclient.ErrMandateRevoked)
+	case decision.Reason == control.ReasonGrantInactive:
+		mandateError(w, coreclient.ErrMandateExpired)
+	default:
+		writeError(w, http.StatusForbidden, CodeMandateAccountScope, "el permiso no cubre este pago")
+	}
+	return false
 }
 
 type mandateJSON struct {

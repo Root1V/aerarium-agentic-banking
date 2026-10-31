@@ -91,8 +91,12 @@ type Grant struct {
 	Actions []Action
 	// MaxPerOperation en micras; nil es sin tope por operación.
 	MaxPerOperation *int64
-	ExpiresAt       time.Time
-	Revoked         bool
+	// Remaining es lo que queda del tope total, en micras; nil es sin tope total.
+	// Es una foto: quien lleva la cuenta de verdad (el core, para los mandatos) la
+	// vuelve a comprobar al mover el dinero.
+	Remaining *int64
+	ExpiresAt time.Time
+	Revoked   bool
 }
 
 // Request es una operación por decidir.
@@ -249,7 +253,8 @@ func (s *Service) forDelegate(req Request, level Level) Decision {
 		return deny(ReasonOutOfScope)
 	case g.Level < level:
 		return deny(ReasonLevelTooLow)
-	case g.MaxPerOperation != nil && req.AmountMicros > *g.MaxPerOperation:
+	case g.MaxPerOperation != nil && req.AmountMicros > *g.MaxPerOperation,
+		g.Remaining != nil && req.AmountMicros > *g.Remaining:
 		return deny(ReasonOverLimit)
 	}
 	return Decision{Outcome: Allow, Level: level}
