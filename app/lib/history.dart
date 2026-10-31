@@ -32,6 +32,13 @@ class PaymentGroup extends HistoryItem {
 
   int get count => movements.length;
 
+  /// El agente que hizo los pagos, si fue uno solo. Vacío si fueron varios o si
+  /// los pagos no dicen de qué agente son.
+  String get agentName {
+    final names = movements.map((m) => m.agentName).toSet();
+    return names.length == 1 ? names.first : '';
+  }
+
   /// Total, con signo: lo que salió del saldo.
   Money get total => Money(
         -movements.fold<int>(0, (sum, m) => sum + m.amount.amountMicros),

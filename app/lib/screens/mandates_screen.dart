@@ -178,7 +178,7 @@ class _MandatesScreenState extends State<MandatesScreen> {
       builder: (context) => AlertDialog(
         title: const Text('¿Retirar el permiso?'),
         content: Text(
-          '${mandate.grantedTo} no podrá iniciar pagos nuevos desde tu cuenta.\n\n'
+          '${mandate.holderName} no podrá iniciar pagos nuevos desde tu cuenta.\n\n'
           'Los pagos que ya estén en curso pueden completarse; para volver a '
           'darle permiso tendrán que pedírtelo otra vez.',
         ),
@@ -234,7 +234,7 @@ class _MandateCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(mandate.grantedTo, style: theme.textTheme.titleMedium),
+                  child: Text(mandate.holderName, style: theme.textTheme.titleMedium),
                 ),
                 _StatusChip(status: mandate.status),
               ],
