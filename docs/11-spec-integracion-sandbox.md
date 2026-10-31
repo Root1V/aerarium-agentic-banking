@@ -286,7 +286,7 @@ demás. Acotarlo por cuenta convierte ese incidente en un problema de un agente.
 | 404 | `authorization_not_found` | Ídem para autorizaciones |
 | 409 | `idempotency_key_reused` | Misma clave, payload distinto |
 | 409 | `authorization_expired` | Se intentó capturar una retención vencida que el barrendero todavía no liberó |
-| 409 | `authorization_not_capturable` | Se intentó capturar algo que ya no está vivo: venció y se liberó, o se cobró y se devolvió. Consulten su estado con `GET` |
+| 409 | `authorization_not_capturable` | Se intentó capturar algo que venció y se liberó sin cobrarse nunca. El dinero ya volvió al pagador |
 | 409 | `nothing_to_refund` | Reembolso sobre algo que no se cobró, o que se liberó sin cobrarse |
 | 422 | `refund_exceeds_capture` | El reembolso supera lo que queda por devolver |
 | 422 | `amount_mismatch` / `recipient_mismatch` | La verificación del vendedor no coincide |
@@ -300,8 +300,9 @@ Los errores de mandatos y consentimiento (modelo B) están en la [spec 13 §5](1
 
 **Dos operaciones son idempotentes por naturaleza, y no devuelven error al repetirse:**
 
-- **Capturar algo ya capturado** devuelve `200` con el mismo `settled_at`. Un reintento
-  tras un timeout no obliga a adivinar si el dinero se movió.
+- **Capturar algo ya capturado** devuelve `200` con el mismo `settled_at`, **también si
+  después se devolvió**: el `status` es el de hoy (`partially_refunded`, `refunded`). Un
+  reintento tras un timeout no obliga a adivinar si el dinero se movió.
 - **Reembolsar algo ya devuelto entero** devuelve `200` con `refunded: 0`. No se mueve
   dinero.
 

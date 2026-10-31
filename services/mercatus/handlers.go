@@ -362,9 +362,10 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request, claims *o
 	captured, err := s.core.Capture(r.Context(), auth.ID)
 	if err != nil {
 		if errors.Is(err, coreclient.ErrInvalidState) {
-			// La retención ya no está viva: venció y el barrendero la liberó, o
-			// se cobró y se devolvió. Es un conflicto de estado, no una captura
-			// repetida: capturar dos veces SÍ funciona y devuelve la misma captura.
+			// La retención venció y el barrendero la liberó sin cobrarla. Es un
+			// conflicto de estado, no una captura repetida: capturar algo ya
+			// cobrado SÍ funciona, aunque después se haya devuelto, y devuelve la
+			// misma captura con el estado de hoy.
 			//
 			// Si venció pero el barrendero no pasó todavía, el core responde
 			// Expired antes de llegar aquí, y el cliente recibe

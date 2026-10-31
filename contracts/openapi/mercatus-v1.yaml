@@ -409,7 +409,11 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Liquidada.
+          description: |
+            Liquidada. También al capturar algo que ya se cobró, aunque después se
+            haya devuelto: la respuesta trae el mismo `settled_at` y el `status`
+            de hoy (`captured`, `partially_refunded` o `refunded`). La captura se
+            hizo una vez, y un reintento lo confirma en vez de dar error.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Authorization" }
@@ -426,11 +430,8 @@ paths:
 
             - `authorization_expired`: la retención venció y el barrendero todavía
               no la liberó. El dinero vuelve al pagador; hay que autorizar de nuevo.
-            - `authorization_not_capturable`: ya no está viva — venció y se
-              liberó, o se cobró y se devolvió. Consulten su estado con `GET`.
-              Si el `GET` dice `refunded` o `partially_refunded`, una captura
-              anterior SÍ se hizo: este 409 a un reintento no significa que el
-              dinero no se movió.
+            - `authorization_not_capturable`: venció y se liberó sin cobrarse
+              nunca. El dinero ya volvió al pagador; hay que autorizar de nuevo.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

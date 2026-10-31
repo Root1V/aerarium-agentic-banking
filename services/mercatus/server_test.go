@@ -762,6 +762,27 @@ func TestReembolsarLoYaDevueltoNoMueveDinero(t *testing.T) {
 	}
 }
 
+// Capturar algo ya cobrado y devuelto no es un error: la captura se hizo, y un
+// reintento lo confirma con el mismo settled_at y el estado de hoy (M-09).
+func TestCapturarLoYaDevueltoConfirmaLaCapturaOriginal(t *testing.T) {
+	f := setup(t)
+	_, auth, _ := f.authorize(t, 2_000000)
+	id := auth["authorization_id"].(string)
+
+	status, first, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("capturar: %d", status)
+	}
+	if s, _, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil); s != http.StatusOK {
+		t.Fatalf("reembolsar: %d", s)
+	}
+
+	status, again, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if status != http.StatusOK || again["status"] != "refunded" || again["settled_at"] != first["settled_at"] {
+		t.Errorf("recapturar: %d %v; se esperaba 200, refunded y settled_at %v", status, again, first["settled_at"])
+	}
+}
+
 func TestUnaAutorizacionAjenaNoSePuedeCapturar(t *testing.T) {
 	f := setup(t)
 	_, auth, _ := f.authorize(t, 1_000000)
