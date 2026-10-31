@@ -18,6 +18,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -42,6 +43,7 @@ type fixture struct {
 	core     *coreclient.Client
 	store    *oauth.Store
 	server   *Server
+	agents   *agents.Store
 	ctx      context.Context
 	clientID string
 	token    string
@@ -122,19 +124,24 @@ func setup(t *testing.T) *fixture {
 		t.Fatalf("registrar cliente: %v", err)
 	}
 
+	agentStore := agents.NewStore(db)
+	if err := agentStore.Migrate(ctx); err != nil {
+		t.Fatalf("migrar agentes: %v", err)
+	}
+
 	oauthSrv := oauth.NewServer(store, issuer, nil)
 	server := NewServer(core, oauthSrv, store, Config{
 		Sandbox:              true,
 		ProductByCurrency:    products,
 		SandboxCashAccountID: cash.Id,
-	}, nil)
+	}, nil).WithAgents(agentStore)
 
 	srv := httptest.NewServer(server.Handler())
 	srv.Client().Transport = &http.Transport{DisableKeepAlives: true}
 	t.Cleanup(srv.Close)
 
 	f := &fixture{
-		srv: srv, core: core, store: store, server: server,
+		srv: srv, core: core, store: store, server: server, agents: agentStore,
 		ctx: ctx, clientID: clientID,
 		productCode: products["USD"], cashID: cash.Id,
 	}

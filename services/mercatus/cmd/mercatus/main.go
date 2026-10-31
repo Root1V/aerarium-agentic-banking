@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/mercatus"
 	"github.com/aibank/aibank/services/oauth"
@@ -91,11 +92,17 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	// Los agentes de cada plataforma, con las claves con las que firman sus pagos.
+	agentStore := agents.NewStore(db)
+	if err := agentStore.Migrate(ctx); err != nil {
+		return err
+	}
+
 	server := mercatus.NewServer(core, oauth.NewServer(store, issuer, log), store, mercatus.Config{
 		Sandbox:              sandbox,
 		ProductByCurrency:    productsFromEnv(),
 		SandboxCashAccountID: cashAccount,
-	}, log).WithControl(ctrl)
+	}, log).WithControl(ctrl).WithAgents(agentStore)
 
 	addr := env("BIND_ADDR", "127.0.0.1:8081")
 	httpServer := &http.Server{
