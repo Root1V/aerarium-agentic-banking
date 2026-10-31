@@ -33,6 +33,11 @@ class Movement {
   /// Vacío en todo lo demás.
   final String merchant;
 
+  /// Qué agente de la plataforma pagó y qué compró, con las palabras que el
+  /// agente declaró al pagar. Vacíos en los pagos de antes y en todo lo demás.
+  final String agentName;
+  final String purchase;
+
   /// La otra persona de una transferencia: a quién se le envió o de quién se
   /// recibió. Null en todo lo demás.
   final Account? counterparty;
@@ -47,6 +52,8 @@ class Movement {
     required this.description,
     required this.postedAt,
     this.merchant = '',
+    this.agentName = '',
+    this.purchase = '',
     this.counterparty,
   });
 
@@ -58,6 +65,8 @@ class Movement {
         kind: json['kind'] as String,
         description: (json['description'] as String?) ?? '',
         merchant: (json['merchant'] as String?) ?? '',
+        agentName: (json['agent_name'] as String?) ?? '',
+        purchase: (json['purchase'] as String?) ?? '',
         counterparty: json['counterparty'] == null
             ? null
             : Account.fromJson(json['counterparty'] as Map<String, dynamic>),
@@ -236,6 +245,10 @@ class ConsentPrompt {
   /// podría hacerse pasar por otra en la pantalla del banco.
   final String requestedBy;
 
+  /// El agente de esa plataforma al que se le da el permiso: solo él lo podrá
+  /// usar. Vacío en las solicitudes de antes, que eran para toda la plataforma.
+  final String agentName;
+
   /// Para qué, en palabras de la plataforma. Se muestra literalmente.
   final String purpose;
   final String currency;
@@ -257,6 +270,7 @@ class ConsentPrompt {
     required this.maxTotalMicros,
     required this.status,
     required this.expiresAt,
+    this.agentName = '',
   });
 
   bool get isPending => status == 'PENDING';
@@ -264,6 +278,7 @@ class ConsentPrompt {
   factory ConsentPrompt.fromJson(Map<String, dynamic> json) => ConsentPrompt(
         consentRequestId: json['consent_request_id'] as String,
         requestedBy: json['requested_by'] as String? ?? '',
+        agentName: json['agent_name'] as String? ?? '',
         purpose: json['purpose'] as String? ?? '',
         currency: json['currency'] as String? ?? '',
         maxPerOperationMicros: json['max_per_operation'] as int?,
@@ -278,8 +293,12 @@ class Mandate {
   final String id;
   final String accountId;
 
-  /// A quién se le concedió.
+  /// A qué plataforma se le concedió.
   final String grantedTo;
+
+  /// Qué agente de esa plataforma lo puede usar. Vacío en los permisos de
+  /// antes, que valen para toda la plataforma.
+  final String agentName;
   final String currency;
 
   /// `active` · `revoked` · `expired`.
@@ -313,7 +332,11 @@ class Mandate {
     required this.expiresAt,
     required this.revokedAt,
     this.spend,
+    this.agentName = '',
   });
+
+  /// Cómo se nombra a quien tiene el permiso: el agente y su plataforma.
+  String get holderName => grantee(agentName, grantedTo);
 
   /// Si el permiso habilita pagos ahora mismo.
   bool get isActive => status == 'active';
@@ -326,6 +349,7 @@ class Mandate {
         id: json['mandate_id'] as String,
         accountId: json['account_id'] as String? ?? '',
         grantedTo: json['granted_to'] as String? ?? '',
+        agentName: json['agent_name'] as String? ?? '',
         currency: json['currency'] as String? ?? '',
         status: json['status'] as String? ?? 'unknown',
         maxPerOperationMicros: json['max_per_operation'] as int?,
@@ -516,8 +540,11 @@ class ConfirmationChallenge {
   final int amountMicros;
   final String currency;
 
-  /// A quién se le envía, o a quién se le da el permiso.
+  /// A quién se le envía, o a qué plataforma se le da el permiso.
   final String toName;
+
+  /// El agente de esa plataforma que podrá usar el permiso.
+  final String agentName;
 
   /// Qué se confirma: `transfer` o `grant_permission`.
   final String kind;
@@ -534,6 +561,7 @@ class ConfirmationChallenge {
     required this.currency,
     required this.toName,
     this.kind = 'transfer',
+    this.agentName = '',
     this.maxPerOperationMicros,
     this.maxTotalMicros,
     this.expiresInDays,
@@ -548,12 +576,18 @@ class ConfirmationChallenge {
       currency: summary['currency'] as String? ?? '',
       toName: summary['to_name'] as String? ?? '',
       kind: summary['kind'] as String? ?? 'transfer',
+      agentName: summary['agent_name'] as String? ?? '',
       maxPerOperationMicros: (summary['max_per_operation'] as num?)?.toInt(),
       maxTotalMicros: (summary['max_total'] as num?)?.toInt(),
       expiresInDays: (summary['expires_in_days'] as num?)?.toInt(),
     );
   }
 }
+
+/// A quién se le da un permiso, en palabras: «Agente de viajes de Mercatus», o
+/// solo la plataforma si el permiso no es de un agente.
+String grantee(String agentName, String platform) =>
+    agentName.isEmpty ? platform : '$agentName de $platform';
 
 /// La firma de una confirmación, para repetir la operación con ella.
 class TransferConfirmation {

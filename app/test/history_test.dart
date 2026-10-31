@@ -41,6 +41,8 @@ Movement _other(String kind, int micros, {int sign = 1}) => Movement(
     );
 
 void main() {
+  _agentTests();
+
   group('agrupación', () {
     test('cien pagos seguidos a la misma plataforma son una fila', () {
       final items = groupHistory([for (var i = 0; i < 120; i++) _pay('Mercatus', 1000)]);
@@ -283,5 +285,46 @@ void main() {
       expect(find.text('Hoy'), findsNothing);
       expect(find.text('Retirar permiso'), findsOneWidget);
     });
+  });
+}
+
+/// Qué agente pagó y qué compró (AE-10): el grupo dice el agente si fue uno
+/// solo, y cada pago, lo que el agente declaró al pagar.
+void _agentTests() {
+  Movement byAgent(String agent, String purchase) => Movement(
+        id: 'm${_seq++}',
+        cursor: 'c$_seq',
+        amount: Money(1000, 'USD'),
+        sign: -1,
+        kind: 'authorization_hold',
+        description: '',
+        merchant: 'Mercatus',
+        agentName: agent,
+        purchase: purchase,
+        postedAt: DateTime(2026, 10, 25),
+      );
+
+  test('el grupo nombra al agente si todos los pagos son suyos', () {
+    final one = groupHistory([byAgent('Agente de viajes', 'a'), byAgent('Agente de viajes', 'b')]);
+    expect((one.single as PaymentGroup).agentName, 'Agente de viajes');
+    final two = groupHistory([byAgent('Agente de viajes', 'a'), byAgent('Agente de compras', 'b')]);
+    expect((two.single as PaymentGroup).agentName, '', reason: 'varios agentes: no se nombra a uno');
+  });
+
+  test('el pago lee lo que declaró el agente', () {
+    final m = Movement.fromJson({
+      'id': 'x',
+      'cursor': 'c',
+      'amount': {'amount_micros': 1000, 'currency': 'USD'},
+      'sign': -1,
+      'kind': 'authorization_hold',
+      'description': '',
+      'merchant': 'Mercatus',
+      'agent_name': 'Agente de viajes',
+      'purchase': 'Búsqueda de vuelos Lima–Cusco',
+      'posted_at': '2026-10-31T10:00:00Z',
+    });
+    expect(m.agentName, 'Agente de viajes');
+    expect(m.purchase, 'Búsqueda de vuelos Lima–Cusco');
   });
 }

@@ -805,10 +805,13 @@ impl AuthorizationService for AuthorizationApi {
             .await
             .map_err(auth_to_status)?
             .into_iter()
-            .map(|(transaction_id, grantee)| pb::HoldGrantee {
-                transaction_id: transaction_id.to_string(),
-                grantee,
-            })
+            .map(
+                |(transaction_id, grantee, authorization_id)| pb::HoldGrantee {
+                    transaction_id: transaction_id.to_string(),
+                    grantee,
+                    authorization_id: authorization_id.to_string(),
+                },
+            )
             .collect();
 
         Ok(Response::new(pb::LookupHoldGranteesResponse { holds }))

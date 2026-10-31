@@ -16,6 +16,8 @@ import (
 const (
 	accountPrefix       = "acc_"
 	authorizationPrefix = "auth_"
+	agentPrefix         = "agt_"
+	agentKeyPrefix      = "key_"
 )
 
 var errBadID = errors.New("identificador con formato inválido")

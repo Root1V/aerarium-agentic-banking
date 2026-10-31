@@ -439,6 +439,9 @@ message HoldGrantee {
   string transaction_id = 1;
   // client_id de la integración titular del mandato.
   string grantee = 2;
+  // La autorización de la que es la retención: con ella el canal del titular
+  // encuentra la intención del pago (qué compró el agente).
+  string authorization_id = 3;
 }
 
 message LookupHoldGranteesResponse {

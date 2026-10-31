@@ -107,3 +107,12 @@ CREATE TABLE IF NOT EXISTS oauth.consent_requests (
 
 CREATE INDEX IF NOT EXISTS idx_consent_requests_client
     ON oauth.consent_requests (client_id, created_at DESC);
+
+-- El agente al que se le pide el permiso (AE-10). El mandato que nazca solo lo
+-- puede usar él. El nombre se guarda tal como lo vio el titular al decidir.
+-- Nulo en las solicitudes de antes de AE-10: esos mandatos valen para toda la
+-- plataforma hasta que vencen.
+ALTER TABLE oauth.consent_requests ADD COLUMN IF NOT EXISTS agent_id UUID;
+ALTER TABLE oauth.consent_requests ADD COLUMN IF NOT EXISTS agent_name TEXT;
+CREATE INDEX IF NOT EXISTS idx_consent_requests_mandate
+    ON oauth.consent_requests (mandate_id) WHERE mandate_id IS NOT NULL;

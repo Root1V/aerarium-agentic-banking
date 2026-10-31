@@ -55,7 +55,7 @@ func setupModelB(t *testing.T) *modelBFixture {
 	// El servicio ya tiene un store; se le enchufa al BFF el mismo, que es lo que
 	// une los dos lados del flujo.
 	bffAuth := bffsim.NewAuthenticator()
-	bffServer := bff.NewServer(f.core, bffAuth, nil).WithConsents(store)
+	bffServer := bff.NewServer(f.core, bffAuth, nil).WithConsents(store).WithAgents(f.agents)
 	ts := httptest.NewServer(bffServer.Handler())
 	ts.Client().Transport = &http.Transport{DisableKeepAlives: true}
 	t.Cleanup(ts.Close)
@@ -90,7 +90,7 @@ func setupModelB(t *testing.T) *modelBFixture {
 // requestConsent: la plataforma pide permiso.
 func (f *modelBFixture) requestConsent(t *testing.T, maxPerOp, maxTotal *int64) map[string]any {
 	t.Helper()
-	body := map[string]any{"currency": "USD", "purpose": "Pagos del agente de investigación"}
+	body := map[string]any{"currency": "USD", "purpose": "Pagos del agente de investigación", "agent_id": f.agentID}
 	if maxPerOp != nil {
 		body["max_per_operation"] = *maxPerOp
 	}
@@ -302,6 +302,9 @@ func TestUnMandatoAjenoNoExisteParaOtraPlataforma(t *testing.T) {
 		t.Fatalf("registrar: %v", err)
 	}
 	tokenAjeno := f.fetchToken(t, f.srv, otro, secret, "")
+	// Con un agente propio, firmado como corresponde: lo que se prueba es el
+	// mandato, no la firma.
+	defer f.signAs(t, otro)()
 
 	status, out, _ := f.do(t, http.MethodGet, "/v1/mandates/"+mandateID, tokenAjeno, nil, nil)
 	if status != http.StatusNotFound || out["error"] != CodeMandateNotFound {
@@ -480,4 +483,71 @@ func TestUnPagoBajoMandatoSinSaldoDevuelve402(t *testing.T) {
 	if status != http.StatusPaymentRequired || out["error"] != CodeInsufficientFunds {
 		t.Errorf("status = %d, error = %v; se esperaba 402 %s", status, out["error"], CodeInsufficientFunds)
 	}
+}
+
+// ---------------------------------------------------------------- el agente del permiso (AE-10)
+
+func TestUnPermisoSeLePideAUnAgente(t *testing.T) {
+	f := setupModelB(t)
+	status, out, _ := f.do(t, http.MethodPost, "/v1/consent-requests", f.token,
+		map[string]any{"currency": "USD", "purpose": "Pagos"}, nil)
+	if status != http.StatusBadRequest || out["error"] != CodeMalformedRequest {
+		t.Errorf("sin agent_id: %d %v", status, out)
+	}
+
+	request := f.requestConsent(t, nil, nil)
+	if request["agent_id"] != f.agentID {
+		t.Errorf("agent_id de la solicitud: %v", request["agent_id"])
+	}
+	// El titular ve el nombre del agente al decidir.
+	_, prompt := f.callBFF(t, http.MethodGet, "/v1/consent-requests/"+request["handoff_code"].(string), f.holderToken, nil)
+	if prompt["agent_name"] != "Agente de pruebas" {
+		t.Errorf("lo que ve el titular: %v", prompt)
+	}
+}
+
+func TestElPermisoDeUnAgenteNoLoUsaOtro(t *testing.T) {
+	f := setupModelB(t)
+	mandateID := f.grantMandate(t, nil, nil)
+	defer f.signAs(t, f.clientID)()
+
+	status, out := f.payUnderMandate(t, mandateID, 1_000000)
+	if status != http.StatusForbidden || out["error"] != CodeMandateAgentScope {
+		t.Errorf("otro agente con el permiso: %d %v", status, out)
+	}
+}
+
+// El titular ve en su historial qué agente pagó y qué compró, con las palabras
+// que el agente declaró al pagar.
+func TestElTitularVeQueComproElAgente(t *testing.T) {
+	f := setupModelB(t)
+	mandateID := f.grantMandate(t, nil, nil)
+	status, out, _ := f.do(t, http.MethodPost, "/v1/authorizations", f.token, map[string]any{
+		"mandate_id":       mandateID,
+		"payer_account_id": encodeID(accountPrefix, f.agentAcct),
+		"payee_account_id": f.payee,
+		"amount":           2_000000,
+		"currency":         "USD",
+		"intent": map[string]any{"reference": "conversacion-7",
+			"description": "Text Summarizer: resumen de un texto en 2 oraciones"},
+	}, map[string]string{"Idempotency-Key": "cart-" + uuid.NewString()})
+	if status != http.StatusCreated {
+		t.Fatalf("pagar: %d %v", status, out)
+	}
+
+	status, page := f.callBFF(t, http.MethodGet, "/v1/accounts/"+f.agentAcct+"/movements", f.holderToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("movimientos: %d %v", status, page)
+	}
+	for _, m := range page["movements"].([]any) {
+		mv := m.(map[string]any)
+		if mv["merchant"] != "Mercatus" {
+			continue
+		}
+		if mv["agent_name"] != "Agente de pruebas" || mv["purchase"] != "Text Summarizer: resumen de un texto en 2 oraciones" {
+			t.Errorf("el pago en el historial: %v", mv)
+		}
+		return
+	}
+	t.Errorf("el pago no aparece en el historial: %v", page)
 }

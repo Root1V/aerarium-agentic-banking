@@ -413,9 +413,10 @@ class _PaymentGroupTile extends StatelessWidget {
       title: Text('Pagos a ${group.merchant}'),
       // "Últimos 10 pagos" y no "10 pagos" cuando la racha sigue más atrás de lo
       // cargado: el conteo de un grupo cortado no es el total.
-      subtitle: Text(group.continuesBeyond
-          ? 'Últimos ${group.count} pagos'
-          : '${group.count} pagos'),
+      subtitle: Text([
+        group.continuesBeyond ? 'Últimos ${group.count} pagos' : '${group.count} pagos',
+        if (group.agentName.isNotEmpty) group.agentName,
+      ].join(' · ')),
       trailing: Text(
         group.total.format(withSign: true),
         style: const TextStyle(
@@ -441,11 +442,16 @@ class _MovementTile extends StatelessWidget {
         child: Icon(incoming ? Icons.south_west : Icons.north_east),
       ),
       title: Text(movement.label),
-      // El concepto, salvo que repita el título ("Saldo de prueba" / "saldo de prueba").
-      subtitle: movement.description.isEmpty ||
-              movement.description.toLowerCase() == movement.label.toLowerCase()
-          ? null
-          : Text(movement.description),
+      // En el pago de un agente, qué compró; en lo demás, el concepto, salvo que
+      // repita el título ("Saldo de prueba" / "saldo de prueba").
+      subtitle: movement.purchase.isNotEmpty
+          ? Text(movement.agentName.isEmpty
+              ? movement.purchase
+              : '${movement.agentName} · ${movement.purchase}')
+          : movement.description.isEmpty ||
+                  movement.description.toLowerCase() == movement.label.toLowerCase()
+              ? null
+              : Text(movement.description),
       trailing: Text(
         movement.signedAmount.format(withSign: true),
         style: TextStyle(

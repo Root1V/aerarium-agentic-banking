@@ -8,6 +8,52 @@
 > modelo A. El análisis de por qué el modelo B es como es está en
 > [doc 12](12-modelo-b-iniciacion-de-pagos.md).
 
+## 0. Versión 1.1 — identidad del agente (borrador)
+
+> **Borrador del 09/11/2026**, acordado en AE-10, AE-11 y AE-12 del canal. Lo
+> normativo es [`mercatus-v1.yaml`](../contracts/openapi/mercatus-v1.yaml) 1.1;
+> esto es el recorrido. **Todo es obligatorio**: es la condición para que un
+> agente pague.
+
+Hasta la 1.0, el banco sabía qué plataforma pagaba, pero no qué agente ni para
+qué. Desde la 1.1:
+
+| Qué | Cómo |
+|---|---|
+| Cada agente se registra | `POST /v1/agents` con nombre y clave pública Ed25519 (JWK). Devuelve `agt_…` y `key_…` |
+| Rotar la clave sin baja | `POST /v1/agents/{id}/keys`. Valen las dos hasta retirar la vieja (`DELETE …/keys/{key_id}`) o 7 días |
+| Dar de baja | `DELETE /v1/agents/{id}`. Sus claves y sus permisos dejan de servir al momento |
+| El permiso es de un agente | `agent_id` obligatorio en `POST /v1/consent-requests`. El titular ve su nombre |
+| La cuenta es de un agente (A) | `agent_id` en `POST /v1/accounts`. Sin él, la cuenta cobra pero no paga |
+| Cada pago dice quién y por qué | `agent_id` e `intent: {reference, description}` obligatorios en `POST /v1/authorizations` |
+| El agente firma | RFC 9421: `Content-Digest`, `Signature-Input`, `Signature`, con `keyid` = `key_…` |
+
+```bash
+# El pago, firmado. `services/mercatus/cmd/demo` lo hace a mano, sin bibliotecas.
+curl -X POST "$API/v1/authorizations" \
+  -H "Authorization: Bearer $TOKEN" -H "Idempotency-Key: cart_9c2f1e88" \
+  -H "Content-Digest: sha-256=:…:" \
+  -H 'Signature-Input: sig1=("@method" "@path" "content-digest");created=1793480000;keyid="key_…";alg="ed25519"' \
+  -H "Signature: sig1=:…:" \
+  -d '{"payer_account_id":"acc_…","payee_account_id":"acc_…","amount":1000,"currency":"USD",
+       "agent_id":"agt_…","intent":{"reference":"conv_8f2a91","description":"Text Summarizer: resumen de un texto en 2 oraciones"}}'
+```
+
+**Lo que ve el titular.** En la pantalla del permiso, el agente primero («Agente
+de viajes, agente de Mercatus»), y lo mismo al confirmar con la cara. En su
+historial, cada pago dice qué agente lo hizo y la `description` tal cual: por eso
+no puede llevar datos de terceros.
+
+**Transición.** Los mandatos concedidos antes de la 1.1 no tienen agente: siguen
+sirviendo a cualquier agente de la plataforma hasta que vencen, aunque el pago
+igual va firmado y con `intent`. No se conceden mandatos nuevos sin agente. Una
+sub-cuenta abierta antes se ata a su agente repitiendo `POST /v1/accounts` con el
+mismo `owner_reference` y su `agent_id`.
+
+Los errores nuevos están en [doc 11 §7](11-spec-integracion-sandbox.md#7-errores-la-tabla-completa).
+
+---
+
 ## Los dos modelos en una página
 
 |  | **Modelo A — ómnibus** | **Modelo B — cuenta propia** |

@@ -1043,7 +1043,8 @@ async fn cada_retencion_bajo_mandato_dice_de_que_plataforma_es(pool: PgPool) {
         found,
         vec![(
             con_mandato.authorization.hold_transaction_id,
-            "mercatus_sandbox".to_string()
+            "mercatus_sandbox".to_string(),
+            con_mandato.authorization.id,
         )]
     );
 }

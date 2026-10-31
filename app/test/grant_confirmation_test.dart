@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:aibank_app/auth/device_keys.dart';
 import 'package:aibank_app/screens/consent_screen.dart';
 import 'package:aibank_app/screens/mandates_screen.dart';
@@ -101,6 +103,27 @@ void main() {
     });
     expect(approve['max_per_operation'], 20000000, reason: 'los mismos topes que se firmaron');
     expect(find.text('Dar permiso'), findsNothing, reason: 'concedido, la pantalla se cierra');
+  });
+
+  testWidgets('el permiso se le da a un agente, y la cara lo dice', (tester) async {
+    final bank = FakeBank({
+      'GET /v1/consent-requests/$_handoff': (_) => json({..._prompt(), 'agent_name': 'Agente de compras'}),
+      'POST /v1/consent-requests/$_handoff/approve': (body) {
+        if (body['confirmation'] != null) return json(<String, Object>{}, 500);
+        final need = jsonDecode(_needsConfirmation().body) as Map<String, dynamic>;
+        (need['summary'] as Map<String, dynamic>)['agent_name'] = 'Agente de compras';
+        return json(need, 428);
+      },
+    });
+    final keys = RecordingKeys();
+    await _open(tester, bank, keys);
+
+    expect(find.text('Agente de compras'), findsOneWidget);
+    expect(find.text('agente de Mercatus, quiere poder pagar desde tu cuenta'), findsOneWidget);
+
+    await tester.tap(find.text('Dar permiso'));
+    await tester.pumpAndSettle();
+    expect(keys.reasons.single, 'Das permiso a Agente de compras de Mercatus para pagar desde tu cuenta');
   });
 
   testWidgets('cerrar el diálogo de la cara no concede nada', (tester) async {

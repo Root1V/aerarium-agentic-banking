@@ -28,6 +28,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/oauth"
 )
@@ -83,6 +84,8 @@ type Server struct {
 	// control decide y registra cada pago bajo mandato. Sin él, los decide solo
 	// el core.
 	control *control.Service
+	// agents registra a los agentes de cada plataforma y sus claves.
+	agents *agents.Store
 }
 
 func NewServer(core *coreclient.Client, oauthSrv *oauth.Server, store *oauth.Store, cfg Config, log *slog.Logger) *Server {
@@ -109,6 +112,12 @@ func (s *Server) WithControl(ctrl *control.Service) *Server {
 	return s
 }
 
+// WithAgents habilita el registro de agentes y sus claves.
+func (s *Server) WithAgents(store *agents.Store) *Server {
+	s.agents = store
+	return s
+}
+
 // Handler arma el enrutador completo.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -132,6 +141,16 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/authorizations/{id}/refund",
 		s.authorized(oauth.ScopePaymentsWrite, s.handleRefund))
 	mux.Handle("GET /v1/authorizations/{id}", s.authorized(oauth.ScopePaymentsRead, s.handleGet))
+
+	// Los agentes de la plataforma, cada uno con su clave para firmar los pagos.
+	if s.agents != nil {
+		mux.Handle("POST /v1/agents", s.authorized(oauth.ScopePaymentsWrite, s.handleRegisterAgent))
+		mux.Handle("GET /v1/agents/{id}", s.authorized(oauth.ScopePaymentsRead, s.handleGetAgent))
+		mux.Handle("DELETE /v1/agents/{id}", s.authorized(oauth.ScopePaymentsWrite, s.handleRevokeAgent))
+		mux.Handle("POST /v1/agents/{id}/keys", s.authorized(oauth.ScopePaymentsWrite, s.handleAddAgentKey))
+		mux.Handle("DELETE /v1/agents/{id}/keys/{keyID}",
+			s.authorized(oauth.ScopePaymentsWrite, s.handleRetireAgentKey))
+	}
 
 	// Modelo B: la plataforma pide permiso sobre la cuenta de un cliente del
 	// banco, y consulta el permiso que el titular le otorgó.

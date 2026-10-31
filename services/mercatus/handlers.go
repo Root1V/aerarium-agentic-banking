@@ -1,6 +1,7 @@
 package mercatus
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
@@ -32,6 +34,9 @@ type openAccountRequest struct {
 	// InitialBalance solo se admite en sandbox: es lo que permite probar de verdad
 	// el camino de insufficient_funds abriendo una cuenta con $0.10.
 	InitialBalance int64 `json:"initial_balance,omitempty"`
+	// AgentID ata la cuenta a un agente: solo él la puede usar para pagar. Una
+	// cuenta sin agente —la de un vendedor— cobra, pero no paga (AE-10).
+	AgentID string `json:"agent_id,omitempty"`
 }
 
 type accountResponse struct {
@@ -78,6 +83,9 @@ func (s *Server) handleOpenAccount(w http.ResponseWriter, r *http.Request, claim
 		writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
 		return
 	} else if found {
+		if !s.bindAccountAgent(w, r, claims, req.AgentID, sub.AccountID) {
+			return
+		}
 		writeJSON(w, http.StatusOK, accountResponse{
 			AccountID: encodeID(accountPrefix, sub.AccountID),
 			Currency:  sub.Currency,
@@ -121,11 +129,39 @@ func (s *Server) handleOpenAccount(w http.ResponseWriter, r *http.Request, claim
 		}
 	}
 
+	if !s.bindAccountAgent(w, r, claims, req.AgentID, account.Id) {
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, accountResponse{
 		AccountID: encodeID(accountPrefix, account.Id),
 		Currency:  account.Currency,
 		Status:    "active",
 	})
+}
+
+// bindAccountAgent ata la cuenta al agente indicado, si se indicó. Vale también
+// al reabrir una cuenta que ya existía: es como se ata una cuenta de antes de
+// AE-10 a su agente.
+func (s *Server) bindAccountAgent(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, publicAgentID, accountID string) bool {
+	if publicAgentID == "" || s.agents == nil {
+		return true
+	}
+	agentID, err := decodeID(agentPrefix, publicAgentID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, CodeAgentNotFound, "el agente no existe")
+		return false
+	}
+	err = s.agents.BindAccount(r.Context(), claims.Subject, agentID, accountID)
+	if errors.Is(err, agents.ErrAccountBound) {
+		writeError(w, http.StatusConflict, CodeAccountAgentConflict, "la cuenta ya es de otro agente")
+		return false
+	}
+	if err != nil {
+		s.agentError(w, r, err)
+		return false
+	}
+	return true
 }
 
 // accountCode compone el código de la cuenta en el core.
@@ -249,6 +285,11 @@ type authorizeRequest struct {
 	// pago es idéntico en los dos modelos — lo único que cambia es de dónde sale
 	// la autoridad para mover el dinero.
 	MandateID string `json:"mandate_id,omitempty"`
+	// AgentID es el agente que paga. Tiene que ser el dueño de la clave con la
+	// que viene firmada la petición (AE-10, AE-11).
+	AgentID string `json:"agent_id"`
+	// Intent es por qué se paga: la tarea y qué se compró. Lo lee el titular.
+	Intent *agents.Intent `json:"intent"`
 }
 
 type authorizationResponse struct {
@@ -272,9 +313,34 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 		return
 	}
 
+	// La firma cubre el cuerpo entero, así que se lee antes de interpretarlo.
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, CodeMalformedRequest, "cuerpo ilegible")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	signer, ok := s.verifyAgentSignature(w, r, claims, body)
+	if !ok {
+		return
+	}
+
 	var req authorizeRequest
 	if !decodeBody(w, r, &req) {
 		return
+	}
+	if signer != nil {
+		if agentID, err := decodeID(agentPrefix, req.AgentID); err != nil || agentID != signer.AgentID {
+			// El cuerpo dice un agente y la clave es de otro: o es un error de la
+			// plataforma, o alguien firma por quien no es. En los dos casos, no.
+			writeError(w, http.StatusUnauthorized, CodeAgentSignatureInvalid,
+				"agent_id tiene que ser el dueño de la clave que firma")
+			return
+		}
+		if req.Intent == nil || req.Intent.Validate() != nil {
+			writeError(w, http.StatusBadRequest, CodeMalformedRequest, agents.ErrBadIntent.Error())
+			return
+		}
 	}
 	if req.Amount <= 0 {
 		writeError(w, http.StatusBadRequest, CodeMalformedRequest, "amount debe ser mayor que cero")
@@ -307,6 +373,9 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	if !ok {
 		return
 	}
+	if signer != nil && !s.checkAgentScope(w, r, signer, mandate, payer) {
+		return
+	}
 
 	if payer == payee {
 		writeError(w, http.StatusUnprocessableEntity, CodeSameAccount,
@@ -325,12 +394,11 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	// que elijan la misma clave son operaciones distintas y no deben colapsar.
 	coreKey := claims.Subject + ":" + key
 
-	if mandate != nil && !s.decideMandatePayment(w, r, claims, mandate, payee, req, coreKey) {
+	if mandate != nil && !s.decideMandatePayment(w, r, claims, signer, mandate, payee, req, coreKey) {
 		return
 	}
 
 	var result *coreclient.AuthorizeResult
-	var err error
 	if req.MandateID != "" {
 		// El core comprueba el permiso y retiene en la MISMA transacción: entre
 		// "tiene permiso" y "se retuvo" no cabe una revocación.
@@ -346,6 +414,16 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	}
 
 	auth := result.Authorization
+	if signer != nil {
+		// Sin la intención guardada, el titular vería un pago sin saber para qué.
+		// Un reintento con la misma clave la vuelve a guardar sin duplicar el pago.
+		if err := s.agents.RecordIntent(r.Context(), auth.ID, signer.AgentID, claims.Subject, *req.Intent); err != nil {
+			s.log.ErrorContext(r.Context(), "guardar la intención del pago", "error", err)
+			writeError(w, http.StatusServiceUnavailable, CodeServiceUnavailable,
+				"el servicio no está disponible; reintenta con la misma Idempotency-Key")
+			return
+		}
+	}
 	status := http.StatusCreated
 	if result.Replayed {
 		// 200 y no 201: no se creó nada. El encabezado lo hace distinguible en los
@@ -573,18 +651,23 @@ func (s *Server) resolveMandate(w http.ResponseWriter, r *http.Request, claims *
 // deja en el registro de decisiones del titular. Devuelve `false` cuando ya
 // respondió y el pago no debe seguir.
 //
-// El actor es la plataforma: hasta que se acuerde con ella cómo identificar a
-// cada agente (F3-05), es lo único que el banco sabe de quién paga. Los topes los
-// vuelve a comprobar el core al retener, en la misma transacción; lo que se
-// decide aquí es lo que queda escrito, y por qué.
+// El actor es el agente que firmó el pago (AE-10). Los topes los vuelve a
+// comprobar el core al retener, en la misma transacción; lo que se decide aquí es
+// lo que queda escrito, y por qué.
 func (s *Server) decideMandatePayment(w http.ResponseWriter, r *http.Request, claims *oauth.Claims,
-	mandate *coreclient.Mandate, payee string, req authorizeRequest, coreKey string) bool {
+	signer *agents.Signer, mandate *coreclient.Mandate, payee string, req authorizeRequest, coreKey string) bool {
 	if s.control == nil {
 		return true
 	}
+	// El actor es el agente que firmó. Sin registro de agentes, la plataforma.
+	actor, intent := claims.Subject, ""
+	if signer != nil {
+		actor = signer.AgentID
+		intent = "\nintent_reference=" + req.Intent.Reference + "\nintent_description=" + req.Intent.Description
+	}
 	decision, err := s.control.Decide(r.Context(), control.Request{
 		CustomerID:   mandate.GrantedBy,
-		Actor:        control.Actor{Kind: control.ActorAgent, ID: claims.Subject},
+		Actor:        control.Actor{Kind: control.ActorAgent, ID: actor},
 		Action:       control.ActionMandatePayment,
 		AmountMicros: req.Amount,
 		Counterparty: payee,
@@ -594,7 +677,8 @@ func (s *Server) decideMandatePayment(w http.ResponseWriter, r *http.Request, cl
 			"\npayee=" + payee +
 			"\namount=" + strconv.FormatInt(req.Amount, 10) +
 			"\ncurrency=" + req.Currency +
-			"\nidempotency_key=" + coreKey),
+			"\nidempotency_key=" + coreKey +
+			"\nplatform=" + claims.Subject + intent),
 		Grant: &control.Grant{
 			Ref:             "mandate:" + mandate.ID,
 			Level:           control.LevelMandate,

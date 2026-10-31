@@ -15,6 +15,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -79,6 +83,11 @@ type demo struct {
 	// steps numera los pasos según se ejecutan. El modelo A salta los tres del
 	// consentimiento, y numerarlos a mano dejaría huecos en su salida.
 	steps int
+	// El agente que paga: su identificador, el de su clave y la clave privada.
+	// En un cliente real la clave vive en un gestor de claves, no en memoria.
+	agentID  string
+	agentKey string
+	agentPK  ed25519.PrivateKey
 }
 
 // ------------------------------------------------------------------ modelo A
@@ -89,12 +98,18 @@ func (d *demo) modelA(clientID, clientSecret string) error {
 	if err := d.authenticate(clientID, clientSecret); err != nil {
 		return err
 	}
+	if err := d.registerAgent(); err != nil {
+		return err
+	}
 
-	payer, err := d.openAgentAccount("agent-demo-payer", 50_000_000)
+	// La cuenta pagadora es del agente: solo él paga con ella. Cada recorrido
+	// registra un agente nuevo, así que su cuenta también es nueva.
+	payer, err := d.openAgentAccount("agent-demo-payer-"+d.agentID, 50_000_000, d.agentID)
 	if err != nil {
 		return err
 	}
-	payee, err := d.openAgentAccount("agent-demo-payee", 0)
+	// La del vendedor no es de ningún agente: cobra, pero no paga.
+	payee, err := d.openAgentAccount("agent-demo-payee", 0, "")
 	if err != nil {
 		return err
 	}
@@ -114,10 +129,13 @@ func (d *demo) modelB(clientID, clientSecret string) error {
 	if err := d.authenticate(clientID, clientSecret); err != nil {
 		return err
 	}
+	if err := d.registerAgent(); err != nil {
+		return err
+	}
 
 	// El receptor sigue siendo una cuenta de la plataforma: lo que cambia es de
 	// dónde sale el dinero, no a dónde llega.
-	payee, err := d.openAgentAccount("agent-demo-payee", 0)
+	payee, err := d.openAgentAccount("agent-demo-payee", 0, "")
 	if err != nil {
 		return err
 	}
@@ -182,8 +200,35 @@ type accountResponse struct {
 	Status    string `json:"status"`
 }
 
-func (d *demo) openAgentAccount(reference string, initial int64) (string, error) {
-	d.step("Sub-cuenta del agente %q", reference)
+// registerAgent da de alta al agente con una clave Ed25519 nueva. Con ella firma
+// cada pago: es lo que prueba que pagó él y no otro agente de la plataforma.
+func (d *demo) registerAgent() error {
+	d.step("Registrar al agente, con su clave")
+
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+	var agent struct {
+		AgentID string `json:"agent_id"`
+		Keys    []struct {
+			KeyID string `json:"key_id"`
+		} `json:"keys"`
+	}
+	if err := d.partner.json("POST", "/v1/agents", map[string]any{
+		"name": "Agente de investigación",
+		"public_key": map[string]string{"kty": "OKP", "crv": "Ed25519",
+			"x": base64.RawURLEncoding.EncodeToString(public)},
+	}, &agent); err != nil {
+		return err
+	}
+	d.agentID, d.agentKey, d.agentPK = agent.AgentID, agent.Keys[0].KeyID, private
+	say("%s · clave %s", d.agentID, d.agentKey)
+	return nil
+}
+
+func (d *demo) openAgentAccount(reference string, initial int64, agentID string) (string, error) {
+	d.step("Sub-cuenta %q", reference)
 
 	body := map[string]any{
 		"owner_reference": reference,
@@ -192,6 +237,9 @@ func (d *demo) openAgentAccount(reference string, initial int64) (string, error)
 	}
 	if initial > 0 {
 		body["initial_balance"] = initial
+	}
+	if agentID != "" {
+		body["agent_id"] = agentID
 	}
 
 	var account accountResponse
@@ -252,6 +300,8 @@ func (d *demo) requestConsent() (*consentRequest, error) {
 		"max_per_operation": perOperation,
 		"max_total":         total,
 		"purpose":           "Pagos del agente de investigación de Acme S.A.",
+		// El permiso es para este agente: ningún otro de la plataforma lo usa.
+		"agent_id": d.agentID,
 	}, &request); err != nil {
 		return nil, err
 	}
@@ -269,6 +319,7 @@ func (d *demo) holderApproves(holder *sandboxHolder, handoff string) error {
 
 	var prompt struct {
 		RequestedBy     string `json:"requested_by"`
+		AgentName       string `json:"agent_name"`
 		Purpose         string `json:"purpose"`
 		MaxPerOperation *int64 `json:"max_per_operation"`
 		MaxTotal        *int64 `json:"max_total"`
@@ -276,7 +327,7 @@ func (d *demo) holderApproves(holder *sandboxHolder, handoff string) error {
 	if err := d.holder.json("GET", "/v1/consent-requests/"+handoff, nil, &prompt); err != nil {
 		return err
 	}
-	say("ve: %q pide %q", prompt.RequestedBy, prompt.Purpose)
+	say("ve: %q, agente de %q, pide %q", prompt.AgentName, prompt.RequestedBy, prompt.Purpose)
 
 	// Concede la MITAD de lo que le piden por operación. Es el caso interesante:
 	// el permiso vale por lo que decidió la persona, no por lo que se pidió.
@@ -339,6 +390,12 @@ func (d *demo) authorize(payer, payee, mandateID string) (*authorization, error)
 		"payee_account_id": payee,
 		"amount":           d.amount,
 		"currency":         d.currency,
+		// Quién paga y por qué. El titular lee `description` tal cual.
+		"agent_id": d.agentID,
+		"intent": map[string]any{
+			"reference":   fmt.Sprintf("demo-tarea-%d", time.Now().Unix()),
+			"description": "Demo: búsqueda de precios de vuelos Lima–Cusco",
+		},
 	}
 	if mandateID != "" {
 		// El único campo que distingue los dos modelos.
@@ -350,7 +407,7 @@ func (d *demo) authorize(payer, payee, mandateID string) (*authorization, error)
 	// nuevo. En un cliente real la genera el carrito, y un reintento CONSERVA la
 	// misma: es lo que impide cobrar dos veces tras un timeout.
 	key := fmt.Sprintf("demo-%d", time.Now().UnixNano())
-	if err := d.partner.jsonWithKey("POST", "/v1/authorizations", key, body, &auth); err != nil {
+	if err := d.partner.signed(key, body, d.agentKey, d.agentPK, &auth); err != nil {
 		return nil, err
 	}
 
@@ -448,6 +505,36 @@ func (a *api) jsonWithKey(method, path, idempotencyKey string, body, out any) er
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
+	return a.do(req, out)
+}
+
+// signed manda un pago firmado por el agente, según RFC 9421 (HTTP Message
+// Signatures). La firma cubre el método, la ruta y el cuerpo, a través de su
+// digest SHA-256 (RFC 9530): cambiar el monto o el receptor la invalida.
+func (a *api) signed(idempotencyKey string, body any, keyID string, key ed25519.PrivateKey, out any) error {
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	const path = "/v1/authorizations"
+	req, err := http.NewRequest("POST", a.base+path, bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", idempotencyKey)
+
+	sum := sha256.Sum256(encoded)
+	digest := "sha-256=:" + base64.StdEncoding.EncodeToString(sum[:]) + ":"
+	params := fmt.Sprintf(`("@method" "@path" "content-digest");created=%d;keyid=%q;alg="ed25519"`,
+		time.Now().Unix(), keyID)
+	base := `"@method": POST` + "\n" +
+		`"@path": ` + path + "\n" +
+		`"content-digest": ` + digest + "\n" +
+		`"@signature-params": ` + params
+	req.Header.Set("Content-Digest", digest)
+	req.Header.Set("Signature-Input", "sig1="+params)
+	req.Header.Set("Signature", "sig1=:"+base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(base)))+":")
 	return a.do(req, out)
 }
 

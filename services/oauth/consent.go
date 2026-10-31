@@ -49,6 +49,10 @@ type ConsentRequest struct {
 	RequestedMaxTotal        *int64
 	Currency                 string
 	Purpose                  string
+	// El agente al que se le pide el permiso, y su nombre tal como lo ve el
+	// titular. Vacíos en las solicitudes de antes de AE-10.
+	AgentID   string
+	AgentName string
 
 	Status     string
 	MandateID  string
@@ -81,10 +85,10 @@ func (s *Store) NewConsentRequest(ctx context.Context, req ConsentRequest) (*Con
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO oauth.consent_requests (
 			id, client_id, handoff_code, requested_max_per_operation_micros,
-			requested_max_total_micros, currency, purpose, expires_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			requested_max_total_micros, currency, purpose, expires_at, agent_id, agent_name
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, '')::uuid, NULLIF($10, ''))
 	`, req.ID, req.ClientID, req.HandoffCode, req.RequestedMaxPerOperation,
-		req.RequestedMaxTotal, req.Currency, req.Purpose, req.ExpiresAt)
+		req.RequestedMaxTotal, req.Currency, req.Purpose, req.ExpiresAt, req.AgentID, req.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("crear solicitud de consentimiento: %w", err)
 	}
@@ -94,25 +98,39 @@ func (s *Store) NewConsentRequest(ctx context.Context, req ConsentRequest) (*Con
 // FindConsentRequest busca por id (lo usa la plataforma) o por handoff_code (lo
 // usa la app del titular).
 func (s *Store) FindConsentRequest(ctx context.Context, idOrHandoff string) (*ConsentRequest, error) {
+	// Se busca por las dos columnas en una sola consulta: el identificador que
+	// tiene cada parte es distinto y ninguna debería tener que saber cuál usa la
+	// otra.
+	return s.findConsent(ctx, `handoff_code = $1 OR id::text = $1`, idOrHandoff)
+}
+
+// ConsentForMandate es la solicitud de la que nació un mandato: dice a qué agente
+// se le concedió. ErrConsentNotFound si el mandato no nació de una.
+func (s *Store) ConsentForMandate(ctx context.Context, mandateID string) (*ConsentRequest, error) {
+	if _, err := uuid.Parse(mandateID); err != nil {
+		return nil, ErrConsentNotFound
+	}
+	return s.findConsent(ctx, `mandate_id = $1::uuid`, mandateID)
+}
+
+func (s *Store) findConsent(ctx context.Context, where string, arg string) (*ConsentRequest, error) {
 	var (
 		c         ConsentRequest
 		mandateID sql.NullString
 		accountID sql.NullString
 		resolved  sql.NullTime
+		agentID   sql.NullString
+		agentName sql.NullString
 	)
-	// Se busca por las dos columnas en una sola consulta: el identificador que
-	// tiene cada parte es distinto y ninguna debería tener que saber cuál usa la
-	// otra.
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, client_id, handoff_code, requested_max_per_operation_micros,
 		       requested_max_total_micros, currency, purpose, status, mandate_id,
-		       account_id, created_at, expires_at, resolved_at
+		       account_id, created_at, expires_at, resolved_at, agent_id, agent_name
 		  FROM oauth.consent_requests
-		 WHERE handoff_code = $1 OR id::text = $1
-	`, idOrHandoff).Scan(
+		 WHERE `+where, arg).Scan(
 		&c.ID, &c.ClientID, &c.HandoffCode, &c.RequestedMaxPerOperation,
 		&c.RequestedMaxTotal, &c.Currency, &c.Purpose, &c.Status, &mandateID,
-		&accountID, &c.CreatedAt, &c.ExpiresAt, &resolved,
+		&accountID, &c.CreatedAt, &c.ExpiresAt, &resolved, &agentID, &agentName,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrConsentNotFound
@@ -129,6 +147,7 @@ func (s *Store) FindConsentRequest(ctx context.Context, idOrHandoff string) (*Co
 	if resolved.Valid {
 		c.ResolvedAt = &resolved.Time
 	}
+	c.AgentID, c.AgentName = agentID.String, agentName.String
 	return &c, nil
 }
 

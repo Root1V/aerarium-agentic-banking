@@ -323,7 +323,7 @@ func (s *Server) toMovementsJSON(ctx context.Context, movements []coreclient.Mov
 	if len(holds) == 0 {
 		return out
 	}
-	grantees, err := s.core.LookupHoldGrantees(ctx, holds)
+	found, err := s.core.LookupHolds(ctx, holds)
 	if err != nil {
 		// Sin el dato, el historial sale como antes: sin agrupar, pero correcto.
 		s.logger.WarnContext(ctx, "no se pudo resolver la plataforma de los pagos", "error", err)
@@ -333,17 +333,36 @@ func (s *Server) toMovementsJSON(ctx context.Context, movements []coreclient.Mov
 	// Una consulta al registro por plataforma, no por pago: 120 micropagos de la
 	// misma plataforma son 120 filas y un solo nombre.
 	names := make(map[string]string)
+	var authorizations []string
 	for i := range out {
-		grantee, ok := grantees[out[i].ID]
+		hold, ok := found[out[i].ID]
 		if !ok {
 			continue
 		}
-		name, seen := names[grantee]
+		name, seen := names[hold.Grantee]
 		if !seen {
-			name = s.merchantName(ctx, grantee)
-			names[grantee] = name
+			name = s.merchantName(ctx, hold.Grantee)
+			names[hold.Grantee] = name
 		}
 		out[i].Merchant = name
+		authorizations = append(authorizations, hold.AuthorizationID)
+	}
+
+	// Y qué agente pagó y qué compró, de una sola consulta para toda la página.
+	if s.agents == nil || len(authorizations) == 0 {
+		return out
+	}
+	intents, err := s.agents.IntentsFor(ctx, authorizations)
+	if err != nil {
+		s.logger.WarnContext(ctx, "no se pudo resolver qué compró cada agente", "error", err)
+		return out
+	}
+	for i := range out {
+		if hold, ok := found[out[i].ID]; ok {
+			if intent, ok := intents[hold.AuthorizationID]; ok {
+				out[i].AgentName, out[i].Purchase = intent.AgentName, intent.Description
+			}
+		}
 	}
 	return out
 }

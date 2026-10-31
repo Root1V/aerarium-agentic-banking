@@ -13,6 +13,7 @@ import (
 	kycsim "github.com/aibank/aibank/adapters/kyc/sim"
 	"github.com/aibank/aibank/clients/go/coreclient"
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/control"
@@ -128,6 +129,10 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 			}
 		}
 	}
+	agentStore := agents.NewStore(db)
+	if err := agentStore.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
 	auth := bff.ChainAuthenticator{bff.NewSessionAuthenticator(sess)}
 	server := bff.NewServer(f.core, auth, nil).
 		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
@@ -138,7 +143,8 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithSandboxFunds(cashPrefix, "RETAIL-").
 		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
 		WithCredit(cards).
-		WithConsents(consents)
+		WithConsents(consents).
+		WithAgents(agentStore)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
 	return &passkeyEnv{srv: ts, f: f, db: db}

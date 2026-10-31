@@ -173,7 +173,28 @@ func (c *Client) SummarizeLiveHolds(ctx context.Context, payerAccountID string) 
 // hecho bajo un mandato. Devuelve un mapa transaction_id → client_id; los
 // asientos que no son retenciones bajo mandato no aparecen.
 func (c *Client) LookupHoldGrantees(ctx context.Context, transactionIDs []string) (map[string]string, error) {
-	out := make(map[string]string)
+	holds, err := c.LookupHolds(ctx, transactionIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(holds))
+	for tx, h := range holds {
+		out[tx] = h.Grantee
+	}
+	return out, nil
+}
+
+// Hold es una retención hecha bajo un mandato: quién la cobra y de qué
+// autorización es.
+type Hold struct {
+	Grantee         string
+	AuthorizationID string
+}
+
+// LookupHolds es LookupHoldGrantees con la autorización de cada retención, que
+// es con lo que se encuentra la intención del pago.
+func (c *Client) LookupHolds(ctx context.Context, transactionIDs []string) (map[string]Hold, error) {
+	out := make(map[string]Hold)
 	if len(transactionIDs) == 0 {
 		return out, nil
 	}
@@ -184,7 +205,7 @@ func (c *Client) LookupHoldGrantees(ctx context.Context, transactionIDs []string
 		return nil, translateAuthorization(err, trailer)
 	}
 	for _, h := range resp.GetHolds() {
-		out[h.GetTransactionId()] = h.GetGrantee()
+		out[h.GetTransactionId()] = Hold{Grantee: h.GetGrantee(), AuthorizationID: h.GetAuthorizationId()}
 	}
 	return out, nil
 }

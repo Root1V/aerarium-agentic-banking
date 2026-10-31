@@ -450,13 +450,14 @@ impl AuthorizationService {
     pub async fn lookup_hold_grantees(
         &self,
         transaction_ids: &[Uuid],
-    ) -> Result<Vec<(Uuid, String)>, AuthorizationError> {
+    ) -> Result<Vec<(Uuid, String, Uuid)>, AuthorizationError> {
         if transaction_ids.is_empty() {
             return Ok(Vec::new());
         }
         let rows = sqlx::query!(
             r#"
-            SELECT a.hold_transaction_id AS "transaction_id!", m.grantee AS "grantee!"
+            SELECT a.hold_transaction_id AS "transaction_id!", m.grantee AS "grantee!",
+                   a.id AS "authorization_id!"
               FROM authorizations a
               JOIN authorization_mandates am ON am.authorization_id = a.id
               JOIN payment_mandates m ON m.id = am.mandate_id
@@ -468,7 +469,7 @@ impl AuthorizationService {
         .await?;
         Ok(rows
             .into_iter()
-            .map(|r| (r.transaction_id, r.grantee))
+            .map(|r| (r.transaction_id, r.grantee, r.authorization_id))
             .collect())
     }
 

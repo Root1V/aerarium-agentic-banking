@@ -304,7 +304,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
         challenge,
         DeviceUnlock.biometric,
         // Lo que la persona ve en el diálogo del sistema: qué está aprobando.
-        reason: 'Das permiso a ${challenge.toName} para pagar desde tu cuenta',
+        reason: 'Das permiso a ${grantee(challenge.agentName, challenge.toName)} para pagar desde tu cuenta',
       );
     } on DeviceKeyException catch (e) {
       if (e.failure == DeviceKeyFailure.cancelled) return null;
@@ -313,7 +313,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
       if (!mounted) return null;
       final pin = await Navigator.of(context).push<String>(MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => _PinPrompt(grantedTo: challenge.toName),
+        builder: (_) => _PinPrompt(grantedTo: grantee(challenge.agentName, challenge.toName)),
       ));
       if (pin == null) return null;
       try {
@@ -380,9 +380,15 @@ class _RequesterCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(prompt.requestedBy, style: theme.textTheme.titleLarge),
+            // El agente primero: es a él, y a nadie más de la plataforma, a quien
+            // se le da el permiso.
+            Text(prompt.agentName.isEmpty ? prompt.requestedBy : prompt.agentName,
+                style: theme.textTheme.titleLarge),
             const SizedBox(height: 4),
-            Text('quiere poder pagar desde tu cuenta',
+            Text(
+                prompt.agentName.isEmpty
+                    ? 'quiere poder pagar desde tu cuenta'
+                    : 'agente de ${prompt.requestedBy}, quiere poder pagar desde tu cuenta',
                 style: theme.textTheme.bodyMedium),
             if (prompt.purpose.isNotEmpty) ...[
               const SizedBox(height: 16),

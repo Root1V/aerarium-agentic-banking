@@ -40,6 +40,16 @@ const (
 	CodeMandateExpired       = "mandate_expired"
 	CodeMandateLimitExceeded = "mandate_limit_exceeded"
 	CodeMandateAccountScope  = "mandate_account_not_covered"
+
+	// Identidad del agente (AE-10, AE-11).
+	CodeAgentNotFound         = "agent_not_found"
+	CodeAgentRevoked          = "agent_revoked"
+	CodeAgentKeyInUse         = "agent_key_in_use"
+	CodeAgentLastKey          = "agent_last_key"
+	CodeAgentSignatureInvalid = "agent_signature_invalid"
+	CodeMandateAgentScope     = "mandate_agent_scope"
+	CodeAccountAgentScope     = "account_agent_scope"
+	CodeAccountAgentConflict  = "account_agent_conflict"
 )
 
 type errorBody struct {
