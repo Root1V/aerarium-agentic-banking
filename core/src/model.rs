@@ -76,7 +76,11 @@ pub struct NewProduct {
 
 impl NewProduct {
     /// Cuenta de depósito simple: sin sobregiro y sin topes regulatorios.
-    pub fn deposit_account(code: impl Into<String>, name: impl Into<String>, currency: &str) -> Self {
+    pub fn deposit_account(
+        code: impl Into<String>,
+        name: impl Into<String>,
+        currency: &str,
+    ) -> Self {
         Self {
             code: code.into(),
             name: name.into(),
@@ -89,7 +93,11 @@ impl NewProduct {
     }
 
     /// Aplica topes regulatorios de cuenta simplificada.
-    pub fn with_caps(mut self, max_balance_micros: Option<i64>, max_transaction_micros: Option<i64>) -> Self {
+    pub fn with_caps(
+        mut self,
+        max_balance_micros: Option<i64>,
+        max_transaction_micros: Option<i64>,
+    ) -> Self {
         self.max_balance_micros = max_balance_micros;
         self.max_transaction_micros = max_transaction_micros;
         self
@@ -154,11 +162,21 @@ pub struct EntryCommand {
 
 impl EntryCommand {
     pub fn debit(account_id: Uuid, amount_micros: i64, currency: &str) -> Self {
-        Self { account_id, direction: Direction::Debit, amount_micros, currency: currency.to_owned() }
+        Self {
+            account_id,
+            direction: Direction::Debit,
+            amount_micros,
+            currency: currency.to_owned(),
+        }
     }
 
     pub fn credit(account_id: Uuid, amount_micros: i64, currency: &str) -> Self {
-        Self { account_id, direction: Direction::Credit, amount_micros, currency: currency.to_owned() }
+        Self {
+            account_id,
+            direction: Direction::Credit,
+            amount_micros,
+            currency: currency.to_owned(),
+        }
     }
 }
 
@@ -175,7 +193,11 @@ pub struct PostingRequest {
 }
 
 impl PostingRequest {
-    pub fn new(idempotency_key: impl Into<String>, kind: impl Into<String>, entries: Vec<EntryCommand>) -> Self {
+    pub fn new(
+        idempotency_key: impl Into<String>,
+        kind: impl Into<String>,
+        entries: Vec<EntryCommand>,
+    ) -> Self {
         Self {
             idempotency_key: idempotency_key.into(),
             kind: kind.into(),

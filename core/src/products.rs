@@ -23,10 +23,14 @@ impl ProductRepository {
             )));
         }
         if product.max_balance_micros.is_some_and(|cap| cap <= 0) {
-            return Err(PostingError::Invalid("max_balance_micros must be positive".into()));
+            return Err(PostingError::Invalid(
+                "max_balance_micros must be positive".into(),
+            ));
         }
         if product.max_transaction_micros.is_some_and(|cap| cap <= 0) {
-            return Err(PostingError::Invalid("max_transaction_micros must be positive".into()));
+            return Err(PostingError::Invalid(
+                "max_transaction_micros must be positive".into(),
+            ));
         }
 
         let r = sqlx::query!(

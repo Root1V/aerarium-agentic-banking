@@ -9,8 +9,8 @@
 
 mod common;
 
-use aibank_core::reconciliation::{ExternalMovement, FindingKind, Reconciler};
 use aibank_core::AccountType;
+use aibank_core::reconciliation::{ExternalMovement, FindingKind, Reconciler};
 use chrono::{Duration, Utc};
 use common::*;
 use sqlx::PgPool;
@@ -25,17 +25,31 @@ async fn un_ledger_sano_concilia_sin_diferencias(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 300_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            300_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     ctx.posting
-        .post(&withdrawal(cash, customer, 120_000000, &format!("wd-{}", Uuid::new_v4())))
+        .post(&withdrawal(
+            cash,
+            customer,
+            120_000000,
+            &format!("wd-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
     let run = Reconciler::new(pool).check_internal().await.unwrap();
 
-    assert!(run.is_clean(), "diferencias inesperadas: {:?}", run.findings);
+    assert!(
+        run.is_clean(),
+        "diferencias inesperadas: {:?}",
+        run.findings
+    );
 }
 
 #[sqlx::test]
@@ -45,7 +59,12 @@ async fn se_detecta_un_saldo_que_se_separo_de_sus_asientos(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 200_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            200_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
@@ -59,11 +78,24 @@ async fn se_detecta_un_saldo_que_se_separo_de_sus_asientos(pool: PgPool) {
 
     let run = Reconciler::new(pool).check_internal().await.unwrap();
 
-    assert_eq!(run.count_of(FindingKind::BalanceDrift), 1, "hallazgos: {:?}", run.findings);
+    assert_eq!(
+        run.count_of(FindingKind::BalanceDrift),
+        1,
+        "hallazgos: {:?}",
+        run.findings
+    );
     let finding = run.findings.first().unwrap();
     assert_eq!(finding.account_id, Some(customer));
-    assert_eq!(finding.expected_micros, Some(200_000000), "lo que dicen los asientos");
-    assert_eq!(finding.actual_micros, Some(250_000000), "lo que dice el saldo materializado");
+    assert_eq!(
+        finding.expected_micros,
+        Some(200_000000),
+        "lo que dicen los asientos"
+    );
+    assert_eq!(
+        finding.actual_micros,
+        Some(250_000000),
+        "lo que dice el saldo materializado"
+    );
 }
 
 // Un contador de movimientos alterado sin cambiar el importe también es deriva:
@@ -75,7 +107,12 @@ async fn se_detecta_una_diferencia_en_el_numero_de_movimientos(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 10_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            10_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
@@ -138,7 +175,11 @@ async fn un_extracto_que_coincide_no_genera_diferencias(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(run.is_clean(), "diferencias inesperadas: {:?}", run.findings);
+    assert!(
+        run.is_clean(),
+        "diferencias inesperadas: {:?}",
+        run.findings
+    );
 }
 
 // El caso que más duele: el proveedor movió dinero y nosotros no nos enteramos.
@@ -237,8 +278,16 @@ async fn una_diferencia_de_importe_se_reporta_con_ambos_valores(pool: PgPool) {
 
     assert_eq!(run.count_of(FindingKind::AmountMismatch), 1);
     let finding = &run.findings[0];
-    assert_eq!(finding.expected_micros, Some(55_000000), "lo que dice el proveedor");
-    assert_eq!(finding.actual_micros, Some(50_000000), "lo que dice el ledger");
+    assert_eq!(
+        finding.expected_micros,
+        Some(55_000000),
+        "lo que dice el proveedor"
+    );
+    assert_eq!(
+        finding.actual_micros,
+        Some(50_000000),
+        "lo que dice el ledger"
+    );
 }
 
 // Los movimientos de otros orígenes no ensucian la conciliación de este proveedor.
@@ -265,7 +314,11 @@ async fn la_conciliacion_se_limita_al_alcance_indicado(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(run.is_clean(), "el movimiento de tarjetas no debía entrar: {:?}", run.findings);
+    assert!(
+        run.is_clean(),
+        "el movimiento de tarjetas no debía entrar: {:?}",
+        run.findings
+    );
 }
 
 // ---------------------------------------------------------------- limbo
@@ -278,17 +331,32 @@ async fn el_dinero_detenido_en_transito_se_reporta(pool: PgPool) {
 
     let transit = ctx
         .accounts
-        .create_internal(&format!("transit-{}", Uuid::new_v4()), "Tránsito", AccountType::Liability, "USD")
+        .create_internal(
+            &format!("transit-{}", Uuid::new_v4()),
+            "Tránsito",
+            AccountType::Liability,
+            "USD",
+        )
         .await
         .unwrap();
 
     ctx.posting
-        .post(&deposit(cash, customer, 200_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            200_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     // Una salida que se quedó a medias: el dinero entró en tránsito y nunca salió.
     ctx.posting
-        .post(&transfer(customer, transit.id, 80_000000, &format!("out-{}", Uuid::new_v4())))
+        .post(&transfer(
+            customer,
+            transit.id,
+            80_000000,
+            &format!("out-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
@@ -298,7 +366,12 @@ async fn el_dinero_detenido_en_transito_se_reporta(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(run.count_of(FindingKind::StaleSuspense), 1, "hallazgos: {:?}", run.findings);
+    assert_eq!(
+        run.count_of(FindingKind::StaleSuspense),
+        1,
+        "hallazgos: {:?}",
+        run.findings
+    );
     assert_eq!(run.findings[0].actual_micros, Some(80_000000));
 }
 
@@ -310,21 +383,41 @@ async fn una_cuenta_de_transito_saldada_no_genera_alerta(pool: PgPool) {
 
     let transit = ctx
         .accounts
-        .create_internal(&format!("transit-{}", Uuid::new_v4()), "Tránsito", AccountType::Liability, "USD")
+        .create_internal(
+            &format!("transit-{}", Uuid::new_v4()),
+            "Tránsito",
+            AccountType::Liability,
+            "USD",
+        )
         .await
         .unwrap();
 
     ctx.posting
-        .post(&deposit(cash, customer, 200_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            200_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     ctx.posting
-        .post(&transfer(customer, transit.id, 80_000000, &format!("out-{}", Uuid::new_v4())))
+        .post(&transfer(
+            customer,
+            transit.id,
+            80_000000,
+            &format!("out-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     // El movimiento se completó: el tránsito vuelve a cero.
     ctx.posting
-        .post(&transfer(transit.id, cash, 80_000000, &format!("settle-{}", Uuid::new_v4())))
+        .post(&transfer(
+            transit.id,
+            cash,
+            80_000000,
+            &format!("settle-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
@@ -333,7 +426,11 @@ async fn una_cuenta_de_transito_saldada_no_genera_alerta(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(run.is_clean(), "el tránsito quedó saldado: {:?}", run.findings);
+    assert!(
+        run.is_clean(),
+        "el tránsito quedó saldado: {:?}",
+        run.findings
+    );
 }
 
 // ---------------------------------------------------------------- rastro
@@ -347,7 +444,12 @@ async fn las_diferencias_quedan_abiertas_hasta_resolverse(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 100_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     sqlx::query("UPDATE account_balances SET balance_micros = 1 WHERE account_id = $1")

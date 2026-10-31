@@ -32,10 +32,21 @@ async fn una_cuenta_de_cliente_hereda_moneda_y_reglas_del_producto() {
 
     assert_eq!(account.currency, product.currency);
     assert_eq!(account.product_id, Some(product.id));
-    assert_eq!(account.account_type, AccountType::Liability, "el saldo del cliente es pasivo del banco");
+    assert_eq!(
+        account.account_type,
+        AccountType::Liability,
+        "el saldo del cliente es pasivo del banco"
+    );
     assert_eq!(account.owner, AccountOwner::Customer);
-    assert!(!account.allows_overdraft, "una cuenta simple no admite sobregiro");
-    assert_eq!(ctx.accounts.balance_micros(account.id).await.unwrap(), 0, "nace en cero");
+    assert!(
+        !account.allows_overdraft,
+        "una cuenta simple no admite sobregiro"
+    );
+    assert_eq!(
+        ctx.accounts.balance_micros(account.id).await.unwrap(),
+        0,
+        "nace en cero"
+    );
 }
 
 // ------------------------------------------------------- 2. sin sobregiro
@@ -46,11 +57,24 @@ async fn un_retiro_mayor_al_saldo_es_rechazado() {
     let product = ctx.simple_product(None, None).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
-    ctx.posting.post(&deposit(cash, customer, 100_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
-    let result = ctx.posting
-        .post(&withdrawal(cash, customer, 150_000000, &format!("wd-{}", Uuid::new_v4())))
+    let result = ctx
+        .posting
+        .post(&withdrawal(
+            cash,
+            customer,
+            150_000000,
+            &format!("wd-{}", Uuid::new_v4()),
+        ))
         .await;
 
     assert!(
@@ -70,8 +94,15 @@ async fn bajo_concurrencia_no_se_puede_sobregirar_la_cuenta() {
     let product = ctx.simple_product(None, None).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
-    ctx.posting.post(&deposit(cash, customer, 100_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
     // 10 retiros simultáneos de 60.00 sobre un saldo de 100.00: solo uno cabe.
     let barrier = Arc::new(tokio::sync::Barrier::new(10));
@@ -82,7 +113,12 @@ async fn bajo_concurrencia_no_se_puede_sobregirar_la_cuenta() {
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
             ctx.posting
-                .post(&withdrawal(cash, customer, 60_000000, &format!("wd-{}", Uuid::new_v4())))
+                .post(&withdrawal(
+                    cash,
+                    customer,
+                    60_000000,
+                    &format!("wd-{}", Uuid::new_v4()),
+                ))
                 .await
         }));
     }
@@ -99,7 +135,10 @@ async fn bajo_concurrencia_no_se_puede_sobregirar_la_cuenta() {
 
     assert_eq!(ok, 1, "exactamente un retiro cabe en el saldo");
     assert_eq!(rejected, 9);
-    assert_eq!(ctx.accounts.balance_micros(customer).await.unwrap(), 40_000000);
+    assert_eq!(
+        ctx.accounts.balance_micros(customer).await.unwrap(),
+        40_000000
+    );
 }
 
 #[tokio::test]
@@ -110,19 +149,37 @@ async fn una_cuenta_interna_si_admite_posicion_negativa() {
 
     let expense = ctx
         .accounts
-        .create_internal(&format!("exp-{}", Uuid::new_v4()), "Gastos operativos", AccountType::Expense, "USD")
+        .create_internal(
+            &format!("exp-{}", Uuid::new_v4()),
+            "Gastos operativos",
+            AccountType::Expense,
+            "USD",
+        )
         .await
         .unwrap();
 
     // El banco paga un gasto desde una caja sin fondos: la posición propia queda
     // en descubierto, lo que es válido porque no es dinero de un cliente.
     ctx.posting
-        .post(&transfer(expense.id, cash, 10_000000, &format!("exp-{}", Uuid::new_v4())))
+        .post(&transfer(
+            expense.id,
+            cash,
+            10_000000,
+            &format!("exp-{}", Uuid::new_v4()),
+        ))
         .await
         .expect("una cuenta interna puede quedar negativa");
 
-    assert_eq!(ctx.accounts.balance_micros(cash).await.unwrap(), -10_000000, "caja en descubierto");
-    assert_eq!(ctx.accounts.balance_micros(expense.id).await.unwrap(), 10_000000, "el gasto se registra");
+    assert_eq!(
+        ctx.accounts.balance_micros(cash).await.unwrap(),
+        -10_000000,
+        "caja en descubierto"
+    );
+    assert_eq!(
+        ctx.accounts.balance_micros(expense.id).await.unwrap(),
+        10_000000,
+        "el gasto se registra"
+    );
 }
 
 // ------------------------------------------------------- 3. topes del producto
@@ -134,18 +191,34 @@ async fn el_tope_de_saldo_del_producto_es_respetado() {
     let product = ctx.simple_product(Some(500_000000), None).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
-    ctx.posting.post(&deposit(cash, customer, 400_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.expect("cabe bajo el tope");
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            400_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .expect("cabe bajo el tope");
 
-    let result = ctx.posting
-        .post(&deposit(cash, customer, 200_000000, &format!("dep-{}", Uuid::new_v4())))
+    let result = ctx
+        .posting
+        .post(&deposit(
+            cash,
+            customer,
+            200_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await;
 
     assert!(
         matches!(result, Err(PostingError::BalanceCapExceeded(_))),
         "se esperaba BalanceCapExceeded, se obtuvo {result:?}"
     );
-    assert_eq!(ctx.accounts.balance_micros(customer).await.unwrap(), 400_000000);
+    assert_eq!(
+        ctx.accounts.balance_micros(customer).await.unwrap(),
+        400_000000
+    );
 }
 
 #[tokio::test]
@@ -155,8 +228,14 @@ async fn el_tope_por_operacion_del_producto_es_respetado() {
     let product = ctx.simple_product(None, Some(100_000000)).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
-    let result = ctx.posting
-        .post(&deposit(cash, customer, 250_000000, &format!("dep-{}", Uuid::new_v4())))
+    let result = ctx
+        .posting
+        .post(&deposit(
+            cash,
+            customer,
+            250_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await;
 
     assert!(
@@ -175,9 +254,33 @@ async fn el_saldo_materializado_coincide_con_la_proyeccion_del_ledger() {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
     let other = ctx.customer_account(&product).await;
 
-    ctx.posting.post(&deposit(cash, customer, 300_000000, &format!("dep-{}", Uuid::new_v4()))).await.unwrap();
-    ctx.posting.post(&transfer(customer, other, 120_000000, &format!("xf-{}", Uuid::new_v4()))).await.unwrap();
-    ctx.posting.post(&withdrawal(cash, customer, 50_000000, &format!("wd-{}", Uuid::new_v4()))).await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            300_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
+    ctx.posting
+        .post(&transfer(
+            customer,
+            other,
+            120_000000,
+            &format!("xf-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
+    ctx.posting
+        .post(&withdrawal(
+            cash,
+            customer,
+            50_000000,
+            &format!("wd-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
     for account in [cash, customer, other] {
         let materialized = ctx.accounts.balance(account).await.unwrap();
@@ -188,8 +291,14 @@ async fn el_saldo_materializado_coincide_con_la_proyeccion_del_ledger() {
         );
     }
 
-    assert_eq!(ctx.accounts.balance_micros(customer).await.unwrap(), 130_000000);
-    assert_eq!(ctx.accounts.balance_micros(other).await.unwrap(), 120_000000);
+    assert_eq!(
+        ctx.accounts.balance_micros(customer).await.unwrap(),
+        130_000000
+    );
+    assert_eq!(
+        ctx.accounts.balance_micros(other).await.unwrap(),
+        120_000000
+    );
 }
 
 // ------------------------------------------------------- 6. sin deadlock
@@ -201,8 +310,24 @@ async fn transferencias_cruzadas_simultaneas_no_producen_deadlock() {
     let (cash, alice) = ctx.cash_and_customer(&product).await;
     let bob = ctx.customer_account(&product).await;
 
-    ctx.posting.post(&deposit(cash, alice, 1_000_000000, &format!("dep-{}", Uuid::new_v4()))).await.unwrap();
-    ctx.posting.post(&deposit(cash, bob, 1_000_000000, &format!("dep-{}", Uuid::new_v4()))).await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            alice,
+            1_000_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            bob,
+            1_000_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
     // 20 transferencias simultáneas en direcciones opuestas entre las mismas dos
     // cuentas: sin orden determinista de bloqueo, esto deadlockea.
@@ -211,19 +336,40 @@ async fn transferencias_cruzadas_simultaneas_no_producen_deadlock() {
     for i in 0..20 {
         let ctx = Arc::clone(&ctx);
         let barrier = Arc::clone(&barrier);
-        let (from, to) = if i % 2 == 0 { (alice, bob) } else { (bob, alice) };
+        let (from, to) = if i % 2 == 0 {
+            (alice, bob)
+        } else {
+            (bob, alice)
+        };
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
-            ctx.posting.post(&transfer(from, to, 10_000000, &format!("xf-{}", Uuid::new_v4()))).await
+            ctx.posting
+                .post(&transfer(
+                    from,
+                    to,
+                    10_000000,
+                    &format!("xf-{}", Uuid::new_v4()),
+                ))
+                .await
         }));
     }
 
     for handle in handles {
-        handle.await.unwrap().expect("ninguna transferencia debe fallar por deadlock");
+        handle
+            .await
+            .unwrap()
+            .expect("ninguna transferencia debe fallar por deadlock");
     }
 
-    assert_eq!(ctx.accounts.balance_micros(alice).await.unwrap(), 1_000_000000, "10 idas y 10 vueltas se compensan");
-    assert_eq!(ctx.accounts.balance_micros(bob).await.unwrap(), 1_000_000000);
+    assert_eq!(
+        ctx.accounts.balance_micros(alice).await.unwrap(),
+        1_000_000000,
+        "10 idas y 10 vueltas se compensan"
+    );
+    assert_eq!(
+        ctx.accounts.balance_micros(bob).await.unwrap(),
+        1_000_000000
+    );
 }
 
 // ------------------------------------------------------- 7. cuentas de un cliente
@@ -258,7 +404,13 @@ async fn las_cuentas_de_un_cliente_son_solo_las_suyas() {
     assert_eq!(ids, vec![primera.id, segunda.id]);
     assert!(suyas.iter().all(|a| a.owner == AccountOwner::Customer));
 
-    assert!(ctx.accounts.list_for_customer(Uuid::new_v4()).await.unwrap().is_empty());
+    assert!(
+        ctx.accounts
+            .list_for_customer(Uuid::new_v4())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 // ------------------------------------------------------- 8. la otra persona
@@ -273,18 +425,49 @@ async fn el_extracto_dice_quien_esta_del_otro_lado() {
     let (cash, alice) = ctx.cash_and_customer(&product).await;
     let bob = ctx.customer_account(&product).await;
 
-    ctx.posting.post(&deposit(cash, alice, 100_000000, &format!("dep-{}", Uuid::new_v4()))).await.unwrap();
-    ctx.posting.post(&transfer(alice, bob, 30_000000, &format!("xf-{}", Uuid::new_v4()))).await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            alice,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
+    ctx.posting
+        .post(&transfer(
+            alice,
+            bob,
+            30_000000,
+            &format!("xf-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
     let bob_name = ctx.accounts.find_by_id(bob).await.unwrap().unwrap().name;
     let alice_name = ctx.accounts.find_by_id(alice).await.unwrap().unwrap().name;
 
     let de_alice = ctx.accounts.list_entries(alice, 10, None).await.unwrap();
-    let envio = de_alice[0].counterparty.as_ref().expect("la transferencia dice a quién");
-    assert_eq!((envio.account_id, envio.name.as_str()), (bob, bob_name.as_str()));
-    assert!(de_alice[1].counterparty.is_none(), "el depósito no expone la caja del banco");
+    let envio = de_alice[0]
+        .counterparty
+        .as_ref()
+        .expect("la transferencia dice a quién");
+    assert_eq!(
+        (envio.account_id, envio.name.as_str()),
+        (bob, bob_name.as_str())
+    );
+    assert!(
+        de_alice[1].counterparty.is_none(),
+        "el depósito no expone la caja del banco"
+    );
 
     let de_bob = ctx.accounts.list_entries(bob, 10, None).await.unwrap();
-    let recibo = de_bob[0].counterparty.as_ref().expect("y de quién se recibió");
-    assert_eq!((recibo.account_id, recibo.name.as_str()), (alice, alice_name.as_str()));
+    let recibo = de_bob[0]
+        .counterparty
+        .as_ref()
+        .expect("y de quién se recibió");
+    assert_eq!(
+        (recibo.account_id, recibo.name.as_str()),
+        (alice, alice_name.as_str())
+    );
 }

@@ -16,9 +16,9 @@
 //! secretos. Las trazas salen a herramientas de terceros; un número de documento
 //! o un PAN ahí dentro es una fuga.
 
+use opentelemetry::Context;
 use opentelemetry::propagation::{Extractor, Injector, TextMapPropagator};
 use opentelemetry::trace::TraceContextExt;
-use opentelemetry::Context;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
 use tonic::metadata::{MetadataKey, MetadataMap, MetadataValue};

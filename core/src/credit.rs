@@ -97,10 +97,11 @@ impl CreditRepository {
         .execute(&mut *tx)
         .await
         .map_err(PostingError::from_db)?;
-        let product_id = sqlx::query_scalar!("SELECT id FROM products WHERE code = $1", product_code)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(PostingError::from_db)?;
+        let product_id =
+            sqlx::query_scalar!("SELECT id FROM products WHERE code = $1", product_code)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(PostingError::from_db)?;
 
         let account_id = sqlx::query_scalar!(
             r#"
@@ -164,7 +165,10 @@ impl CreditRepository {
     }
 
     /// La línea viva (activa o bloqueada) del cliente, si tiene.
-    pub async fn find_open_for_customer(&self, customer_id: Uuid) -> Result<Option<CreditLine>, sqlx::Error> {
+    pub async fn find_open_for_customer(
+        &self,
+        customer_id: Uuid,
+    ) -> Result<Option<CreditLine>, sqlx::Error> {
         let row = sqlx::query_as!(
             LineRow,
             r#"

@@ -12,11 +12,11 @@
 
 mod common;
 
-use aibank_core::outbox::{pb, OutboxMessage, PublishError, Publisher, Relay};
 use aibank_core::PostingError;
+use aibank_core::outbox::{OutboxMessage, PublishError, Publisher, Relay, pb};
 use common::*;
-use sqlx::PgPool;
 use prost::Message;
+use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -97,7 +97,12 @@ async fn un_posting_exitoso_encola_su_evento_con_los_saldos_resultantes(pool: Pg
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 250_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            250_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
@@ -114,8 +119,14 @@ async fn un_posting_exitoso_encola_su_evento_con_los_saldos_resultantes(pool: Pg
         .iter()
         .find(|e| e.account_id == customer.to_string())
         .expect("el evento incluye el asiento del cliente");
-    assert_eq!(customer_entry.balance_after_micros, 250_000000, "el evento lleva el saldo resultante");
-    assert_eq!(customer_entry.amount.as_ref().unwrap().amount_micros, 250_000000);
+    assert_eq!(
+        customer_entry.balance_after_micros, 250_000000,
+        "el evento lleva el saldo resultante"
+    );
+    assert_eq!(
+        customer_entry.amount.as_ref().unwrap().amount_micros,
+        250_000000
+    );
     assert_eq!(customer_entry.amount.as_ref().unwrap().currency, "USD");
 }
 
@@ -128,14 +139,22 @@ async fn una_transaccion_rechazada_no_deja_evento(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     ctx.posting
-        .post(&deposit(cash, customer, 100_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
     // El rechazo ocurre en el COMMIT (trigger diferido de sobregiro): si el evento
     // se hubiera publicado antes, ya sería irreversible.
     let key = format!("wd-{}", Uuid::new_v4());
-    let result = ctx.posting.post(&withdrawal(cash, customer, 500_000000, &key)).await;
+    let result = ctx
+        .posting
+        .post(&withdrawal(cash, customer, 500_000000, &key))
+        .await;
     assert!(matches!(result, Err(PostingError::InsufficientFunds(_))));
 
     assert_eq!(
@@ -154,8 +173,16 @@ async fn un_replay_idempotente_no_emite_un_segundo_evento(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
     let key = format!("rep-{}", Uuid::new_v4());
 
-    let first = ctx.posting.post(&deposit(cash, customer, 40_000000, &key)).await.unwrap();
-    let second = ctx.posting.post(&deposit(cash, customer, 40_000000, &key)).await.unwrap();
+    let first = ctx
+        .posting
+        .post(&deposit(cash, customer, 40_000000, &key))
+        .await
+        .unwrap();
+    let second = ctx
+        .posting
+        .post(&deposit(cash, customer, 40_000000, &key))
+        .await
+        .unwrap();
     assert!(second.replayed);
 
     let events = events_of(&ctx, first.transaction.id).await;
@@ -172,12 +199,20 @@ async fn el_relay_publica_marca_y_no_republica(pool: PgPool) {
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 60_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            60_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
     let spy = Arc::new(SpyPublisher::default());
-    let relay = Relay::new(ctx.pool.clone(), Box::new(SharedPublisher(Arc::clone(&spy))));
+    let relay = Relay::new(
+        ctx.pool.clone(),
+        Box::new(SharedPublisher(Arc::clone(&spy))),
+    );
 
     let published = relay.run_once().await.unwrap();
     assert!(published >= 1, "el relay publica lo pendiente");
@@ -188,7 +223,10 @@ async fn el_relay_publica_marca_y_no_republica(pool: PgPool) {
         .filter(|m| m.aggregate_id == result.transaction.id)
         .collect();
     assert_eq!(ours.len(), 1);
-    assert_eq!(ours[0].event_type, "aibank.events.v1.LedgerTransactionPosted");
+    assert_eq!(
+        ours[0].event_type,
+        "aibank.events.v1.LedgerTransactionPosted"
+    );
     assert_eq!(ours[0].aggregate_type, "ledger_transaction");
 
     // Segunda pasada: lo ya publicado no vuelve a salir.
@@ -208,13 +246,21 @@ async fn el_relay_respeta_el_orden_de_emision(pool: PgPool) {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     let spy = Arc::new(SpyPublisher::default());
-    let relay = Relay::new(ctx.pool.clone(), Box::new(SharedPublisher(Arc::clone(&spy))));
+    let relay = Relay::new(
+        ctx.pool.clone(),
+        Box::new(SharedPublisher(Arc::clone(&spy))),
+    );
 
     let mut expected = Vec::new();
     for amount in [10_000000, 20_000000, 30_000000] {
         let r = ctx
             .posting
-            .post(&deposit(cash, customer, amount, &format!("dep-{}", Uuid::new_v4())))
+            .post(&deposit(
+                cash,
+                customer,
+                amount,
+                &format!("dep-{}", Uuid::new_v4()),
+            ))
             .await
             .unwrap();
         expected.push(r.transaction.id);
@@ -228,7 +274,10 @@ async fn el_relay_respeta_el_orden_de_emision(pool: PgPool) {
         .filter(|m| expected.contains(&m.aggregate_id))
         .map(|m| m.aggregate_id)
         .collect();
-    assert_eq!(got, expected, "los eventos salen en el orden en que se asentaron");
+    assert_eq!(
+        got, expected,
+        "los eventos salen en el orden en que se asentaron"
+    );
 }
 
 // ------------------------------------------------------------- 6
@@ -240,17 +289,28 @@ async fn si_el_bus_falla_el_evento_queda_pendiente_y_se_reintenta(pool: PgPool) 
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
     let spy = Arc::new(SpyPublisher::default());
-    let relay = Relay::new(ctx.pool.clone(), Box::new(SharedPublisher(Arc::clone(&spy))));
+    let relay = Relay::new(
+        ctx.pool.clone(),
+        Box::new(SharedPublisher(Arc::clone(&spy))),
+    );
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 90_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            90_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
     spy.set_failing(true);
     let published = relay.run_once().await.unwrap();
-    assert_eq!(published, 0, "con el bus caído no se marca nada como publicado");
+    assert_eq!(
+        published, 0,
+        "con el bus caído no se marca nada como publicado"
+    );
 
     let (attempts, last_error) = sqlx::query_as::<_, (i32, Option<String>)>(
         "SELECT attempts, last_error FROM outbox WHERE aggregate_id = $1",
@@ -271,5 +331,8 @@ async fn si_el_bus_falla_el_evento_queda_pendiente_y_se_reintenta(pool: PgPool) 
         .into_iter()
         .filter(|m| m.aggregate_id == result.transaction.id)
         .count();
-    assert_eq!(delivered, 1, "ningún evento se pierde por una caída del bus");
+    assert_eq!(
+        delivered, 1,
+        "ningún evento se pierde por una caída del bus"
+    );
 }

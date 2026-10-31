@@ -65,8 +65,17 @@ impl AccountRepository {
                 "currency must be ISO-4217, got '{currency}'"
             )));
         }
-        self.insert(code, name, account_type, AccountOwner::Internal, None, None, currency, true)
-            .await
+        self.insert(
+            code,
+            name,
+            account_type,
+            AccountOwner::Internal,
+            None,
+            None,
+            currency,
+            true,
+        )
+        .await
     }
 
     pub async fn find_by_code(&self, code: &str) -> Result<Option<Account>, sqlx::Error> {
@@ -182,7 +191,10 @@ impl AccountRepository {
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
-        Ok(Balance { balance_micros: row.balance_micros, entry_count: row.entry_count })
+        Ok(Balance {
+            balance_micros: row.balance_micros,
+            entry_count: row.entry_count,
+        })
     }
 
     pub async fn balance_micros(&self, account_id: Uuid) -> Result<i64, sqlx::Error> {
@@ -265,7 +277,10 @@ impl AccountRepository {
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
-        Ok(Balance { balance_micros: row.projected_micros, entry_count: row.projected_entries })
+        Ok(Balance {
+            balance_micros: row.projected_micros,
+            entry_count: row.projected_entries,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]

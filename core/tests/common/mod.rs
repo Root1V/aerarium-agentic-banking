@@ -6,8 +6,8 @@
 #![allow(clippy::inconsistent_digit_grouping)]
 
 use aibank_core::{
-    db, AccountRepository, AccountType, Direction, EntryCommand, NewProduct, PostingRequest,
-    PostingService, Product, ProductRepository,
+    AccountRepository, AccountType, Direction, EntryCommand, NewProduct, PostingRequest,
+    PostingService, Product, ProductRepository, db,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -66,7 +66,12 @@ impl Ctx {
         let suffix = Uuid::new_v4();
         let cash = self
             .accounts
-            .create_internal(&format!("cash-{suffix}"), "Caja operativa", AccountType::Asset, "USD")
+            .create_internal(
+                &format!("cash-{suffix}"),
+                "Caja operativa",
+                AccountType::Asset,
+                "USD",
+            )
             .await
             .expect("create cash account");
         let customer = self
@@ -94,7 +99,12 @@ impl Ctx {
             return existing.id;
         }
         self.accounts
-            .create_internal(&code, "Retenciones de autorizaciones", AccountType::Liability, currency)
+            .create_internal(
+                &code,
+                "Retenciones de autorizaciones",
+                AccountType::Liability,
+                currency,
+            )
             .await
             .expect("create holds account")
             .id
@@ -144,8 +154,18 @@ pub fn transfer(from: Uuid, to: Uuid, amount: i64, key: &str) -> PostingRequest 
         key,
         "p2p_transfer",
         vec![
-            EntryCommand { account_id: from, direction: Direction::Debit, amount_micros: amount, currency: "USD".into() },
-            EntryCommand { account_id: to, direction: Direction::Credit, amount_micros: amount, currency: "USD".into() },
+            EntryCommand {
+                account_id: from,
+                direction: Direction::Debit,
+                amount_micros: amount,
+                currency: "USD".into(),
+            },
+            EntryCommand {
+                account_id: to,
+                direction: Direction::Credit,
+                amount_micros: amount,
+                currency: "USD".into(),
+            },
         ],
     )
 }

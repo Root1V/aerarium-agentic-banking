@@ -14,6 +14,7 @@ Rust (core) · Go (adaptadores, BFF) · Python (riesgo/ML) · Dart/Flutter (app)
 ```bash
 docker compose -f platform/docker-compose.yml up -d   # Postgres en localhost:5434
 cd core && SQLX_OFFLINE=true cargo test               # 10 tests de invariantes del ledger
+cd core && cargo fmt --check                           # el formato, antes de cada commit
 ```
 
 Las migraciones se aplican solas al correr los tests (`sqlx::migrate!`).
@@ -477,6 +478,10 @@ la captura aunque el barrendero no haya pasado todavía.
 
 - Flujo git: cada feature en rama `feat/<nombre>`; revisión → merge a `main`. Estados en [roadmap.md](roadmap.md).
 - Regla del core: `core/` no depende de SDKs de proveedores; todo lo externo entra por adaptadores.
+- Formato: no se hace commit con el formato roto. Rust con `rustfmt` (`cargo fmt`, sin
+  opciones propias), desde el 31/10/2026; hasta entonces el core no lo usaba y se formateó
+  entero de una vez. Go con `gofmt`. Comprobarlo: `cd core && cargo fmt --check` y
+  `gofmt -l services`.
 - Montos: siempre enteros en **micras** — millonésimas (10⁻⁶) de la unidad mayor.
   1 USD = `1_000_000`; 1 centavo = `10_000`; $0,001 = `1_000`. Nunca coma flotante.
   El porqué de la escala 6, en [`core/src/money.rs`](core/src/money.rs).

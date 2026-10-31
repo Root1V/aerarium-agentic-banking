@@ -11,8 +11,8 @@ mod common;
 
 use aibank_core::telemetry;
 use common::*;
-use opentelemetry::trace::{TraceContextExt, TraceId};
 use opentelemetry::Context;
+use opentelemetry::trace::{TraceContextExt, TraceId};
 use sqlx::PgPool;
 use tonic::metadata::MetadataMap;
 use uuid::Uuid;
@@ -83,17 +83,21 @@ async fn el_evento_del_outbox_conserva_la_traza_de_su_origen(pool: PgPool) {
 
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 120_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            120_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
 
-    let stored: Option<String> = sqlx::query_scalar(
-        "SELECT trace_context FROM outbox WHERE aggregate_id = $1",
-    )
-    .bind(result.transaction.id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT trace_context FROM outbox WHERE aggregate_id = $1")
+            .bind(result.transaction.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     let traceparent = stored.expect("el evento debe guardar el contexto de traza");
     let recovered = telemetry::deserialize_context(&traceparent);
@@ -114,17 +118,21 @@ async fn sin_traza_activa_el_evento_se_asienta_igual(pool: PgPool) {
     // Sin contexto: un proceso por lotes, una migración, una prueba.
     let result = ctx
         .posting
-        .post(&deposit(cash, customer, 50_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            50_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .expect("la ausencia de traza no puede impedir mover dinero");
 
-    let stored: Option<String> = sqlx::query_scalar(
-        "SELECT trace_context FROM outbox WHERE aggregate_id = $1",
-    )
-    .bind(result.transaction.id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT trace_context FROM outbox WHERE aggregate_id = $1")
+            .bind(result.transaction.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(stored, None, "sin traza no se inventa un contexto");
 }
@@ -151,7 +159,12 @@ async fn el_relay_recupera_la_traza_al_publicar(pool: PgPool) {
     let origin = context_with_trace(SAMPLE);
     let _guard = origin.attach();
     ctx.posting
-        .post(&deposit(cash, customer, 70_000000, &format!("dep-{}", Uuid::new_v4())))
+        .post(&deposit(
+            cash,
+            customer,
+            70_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
         .await
         .unwrap();
     drop(_guard);
@@ -238,9 +251,10 @@ fn una_traza_valida_tiene_identificador_utilizable() {
     let context = context_with_trace(SAMPLE);
     let trace_id = telemetry::trace_id_of(&context).unwrap();
 
-    assert_eq!(trace_id.len(), 32, "el id debe poder pegarse en un buscador");
-    assert_ne!(
-        context.span().span_context().trace_id(),
-        TraceId::INVALID
+    assert_eq!(
+        trace_id.len(),
+        32,
+        "el id debe poder pegarse en un buscador"
     );
+    assert_ne!(context.span().span_context().trace_id(), TraceId::INVALID);
 }

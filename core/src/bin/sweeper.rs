@@ -20,7 +20,7 @@
 //! línea y no se repite.
 
 use aibank_core::authorizations::AuthorizationService;
-use aibank_core::{db, CreditRepository};
+use aibank_core::{CreditRepository, db};
 use std::error::Error;
 use std::time::Duration;
 
@@ -43,7 +43,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let authorizations = AuthorizationService::new(pool.clone());
     let credit = CreditRepository::new(pool);
 
-    tracing::info!(interval_s = interval, batch, "barrendero de retenciones en marcha");
+    tracing::info!(
+        interval_s = interval,
+        batch,
+        "barrendero de retenciones en marcha"
+    );
 
     let mut ticker = tokio::time::interval(Duration::from_secs(interval));
     let mut credit_ticker = tokio::time::interval(Duration::from_secs(credit_interval));

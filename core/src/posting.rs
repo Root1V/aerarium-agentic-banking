@@ -68,7 +68,10 @@ pub async fn post_in_tx(
                 .await
                 .map_err(PostingError::from_db)?;
 
-            Ok(PostingResult { transaction, replayed: false })
+            Ok(PostingResult {
+                transaction,
+                replayed: false,
+            })
         }
         None => {
             // La clave ya existe. `ON CONFLICT DO NOTHING` espera a que la transacción
@@ -82,9 +85,14 @@ pub async fn post_in_tx(
                     ))
                 })?;
             if existing_hash != hash {
-                return Err(PostingError::IdempotencyConflict(request.idempotency_key.clone()));
+                return Err(PostingError::IdempotencyConflict(
+                    request.idempotency_key.clone(),
+                ));
             }
-            Ok(PostingResult { transaction, replayed: true })
+            Ok(PostingResult {
+                transaction,
+                replayed: true,
+            })
         }
     }
 }
@@ -93,13 +101,17 @@ pub async fn post_in_tx(
 
 fn validate(request: &PostingRequest) -> Result<(), PostingError> {
     if request.idempotency_key.trim().is_empty() {
-        return Err(PostingError::Invalid("idempotency_key must not be blank".into()));
+        return Err(PostingError::Invalid(
+            "idempotency_key must not be blank".into(),
+        ));
     }
     if request.kind.trim().is_empty() {
         return Err(PostingError::Invalid("kind must not be blank".into()));
     }
     if request.entries.len() < 2 {
-        return Err(PostingError::Invalid("a transaction requires at least 2 entries".into()));
+        return Err(PostingError::Invalid(
+            "a transaction requires at least 2 entries".into(),
+        ));
     }
 
     for entry in &request.entries {

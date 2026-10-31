@@ -103,7 +103,11 @@ pub struct Relay {
 
 impl Relay {
     pub fn new(pool: PgPool, publisher: Box<dyn Publisher>) -> Self {
-        Self { pool, publisher, batch_size: 100 }
+        Self {
+            pool,
+            publisher,
+            batch_size: 100,
+        }
     }
 
     pub fn with_batch_size(mut self, batch_size: i64) -> Self {

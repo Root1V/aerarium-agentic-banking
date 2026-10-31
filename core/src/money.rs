@@ -79,7 +79,11 @@ mod tests {
     fn representa_el_precio_que_los_centavos_no_pueden() {
         // El caso que motiva toda la escala: $0,001 por llamada.
         let precio = 1_000;
-        assert_eq!(to_cents(precio), (0, 1_000), "en centavos sería 0: se perdería el pago");
+        assert_eq!(
+            to_cents(precio),
+            (0, 1_000),
+            "en centavos sería 0: se perdería el pago"
+        );
         assert!(!is_whole_cents(precio));
     }
 
@@ -87,7 +91,10 @@ mod tests {
     fn convertir_a_centavos_expone_el_resto_en_vez_de_esconderlo() {
         let (cents, remainder) = to_cents(1_234_567);
         assert_eq!(cents, 123);
-        assert_eq!(remainder, 4_567, "el adaptador tiene que decidir qué hace con esto");
+        assert_eq!(
+            remainder, 4_567,
+            "el adaptador tiene que decidir qué hace con esto"
+        );
     }
 
     #[test]

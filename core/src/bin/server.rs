@@ -5,21 +5,19 @@
 //!   BIND_ADDR     dirección de escucha (por defecto 127.0.0.1:50051)
 
 use aibank_core::authorizations::AuthorizationService;
-use aibank_core::mandates::MandateService;
 use aibank_core::grpc::pb::{
     account_service_server::AccountServiceServer,
     authorization_service_server::AuthorizationServiceServer,
-    credit_service_server::CreditServiceServer,
-    ledger_service_server::LedgerServiceServer,
-    mandate_service_server::MandateServiceServer,
-    product_service_server::ProductServiceServer,
+    credit_service_server::CreditServiceServer, ledger_service_server::LedgerServiceServer,
+    mandate_service_server::MandateServiceServer, product_service_server::ProductServiceServer,
     reconciliation_service_server::ReconciliationServiceServer,
 };
 use aibank_core::grpc::{
     AccountApi, AuthorizationApi, CreditApi, LedgerApi, MandateApi, ProductApi, ReconciliationApi,
 };
+use aibank_core::mandates::MandateService;
 use aibank_core::reconciliation::Reconciler;
-use aibank_core::{db, AccountRepository, CreditRepository, PostingService, ProductRepository};
+use aibank_core::{AccountRepository, CreditRepository, PostingService, ProductRepository, db};
 use std::error::Error;
 use tonic::transport::Server;
 
@@ -27,8 +25,7 @@ use tonic::transport::Server;
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -40,8 +37,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     db::migrate(&pool).await?;
     tracing::info!("migraciones aplicadas");
 
-    let ledger = LedgerApi::new(PostingService::new(pool.clone()), AccountRepository::new(pool.clone()));
-    let accounts = AccountApi::new(AccountRepository::new(pool.clone()), ProductRepository::new(pool.clone()));
+    let ledger = LedgerApi::new(
+        PostingService::new(pool.clone()),
+        AccountRepository::new(pool.clone()),
+    );
+    let accounts = AccountApi::new(
+        AccountRepository::new(pool.clone()),
+        ProductRepository::new(pool.clone()),
+    );
     let products = ProductApi::new(ProductRepository::new(pool.clone()));
     let reconciliation = ReconciliationApi::new(Reconciler::new(pool.clone()));
     let authorizations = AuthorizationApi::new(AuthorizationService::new(pool.clone()));
