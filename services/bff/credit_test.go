@@ -79,3 +79,41 @@ func TestLaTarjetaSoloSeMueveConCuentasPropias(t *testing.T) {
 		t.Errorf("pedir la tarjeta evaluando una cuenta ajena: %d", status)
 	}
 }
+
+// El ciclo por HTTP, con los atajos del sandbox: cortar, vencer y ponerse al día.
+func TestElEstadoDeCuentaYLaMoraPorHTTP(t *testing.T) {
+	e := newPasskeyEnv(t)
+	_, token, account, _ := e.linkedWithFunds(t)
+	e.call(t, http.MethodPost, "/v1/credit/applications", token, map[string]any{"account_id": account})
+	e.creditMove(t, "/v1/credit/card/draws", token, account, 200_000_000)
+
+	status, st := e.call(t, http.MethodPost, "/v1/sandbox/credit/close-cycle", token, nil)
+	if status != http.StatusOK || st["status"] != "pending" {
+		t.Fatalf("corte: %d %v", status, st)
+	}
+	if st["minimum_payment"].(map[string]any)["amount_micros"] != float64(10_000_000) {
+		t.Errorf("mínimo = %v", st["minimum_payment"])
+	}
+	_, card := e.call(t, http.MethodGet, "/v1/credit/card", token, nil)
+	if card["statement"].(map[string]any)["closing"].(map[string]any)["amount_micros"] != float64(200_000_000) {
+		t.Errorf("la tarjeta no trae su estado de cuenta: %v", card["statement"])
+	}
+
+	status, line := e.call(t, http.MethodPost, "/v1/sandbox/credit/pass-due-date", token, nil)
+	if status != http.StatusOK || line["status"] != "blocked" {
+		t.Fatalf("tras el vencimiento sin pagar: %d %v", status, line)
+	}
+	if status, out := e.creditMove(t, "/v1/credit/card/draws", token, account, 1_000_000); status != http.StatusUnprocessableEntity || out["code"] != "credit_line_inactive" {
+		t.Errorf("usar bloqueada: %d %v", status, out)
+	}
+
+	e.creditMove(t, "/v1/credit/card/payments", token, account, 10_000_000)
+	_, card = e.call(t, http.MethodGet, "/v1/credit/card", token, nil)
+	if card["status"] != "active" || card["statement"].(map[string]any)["status"] != "minimum_paid" {
+		t.Errorf("tras pagar el mínimo: %v / %v", card["status"], card["statement"])
+	}
+	_, list := e.call(t, http.MethodGet, "/v1/credit/card/statements", token, nil)
+	if len(list["statements"].([]any)) != 1 {
+		t.Errorf("estados de cuenta = %v", list)
+	}
+}

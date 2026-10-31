@@ -31,6 +31,8 @@ var (
 	ErrAlreadyHasLine = errors.New("el cliente ya tiene una línea de crédito")
 	// ErrNoLine: el cliente no tiene tarjeta.
 	ErrNoLine = errors.New("el cliente no tiene línea de crédito")
+	// ErrNoStatement: la tarjeta todavía no tiene estado de cuenta.
+	ErrNoStatement = errors.New("la tarjeta todavía no tiene estado de cuenta")
 	// ErrRiskUnavailable: el motor de riesgo no respondió. Sin él no se decide.
 	ErrRiskUnavailable = errors.New("motor de riesgo no disponible")
 )
@@ -271,16 +273,68 @@ func (s *Service) Draw(ctx context.Context, customerID, toAccountID string, amou
 }
 
 // Pay paga la tarjeta desde una cuenta del cliente: la deuda baja.
+//
+// Tras el pago se revisa la mora en el momento: quien estaba bloqueado y se puso
+// al día tiene que poder usar la tarjeta ya, no cuando pase el barrendero.
 func (s *Service) Pay(ctx context.Context, customerID, fromAccountID string, amountMicros int64, key string) (*coreclient.PostResult, error) {
 	line, err := s.Line(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
 	currency := line.Limit.Currency
-	return s.core.Post(ctx, "credit-pay:"+customerID+":"+key, "credit_payment", []coreclient.Entry{
+	result, err := s.core.Post(ctx, "credit-pay:"+customerID+":"+key, "credit_payment", []coreclient.Entry{
 		coreclient.Debit(fromAccountID, amountMicros, currency),
 		coreclient.Credit(line.AccountId, amountMicros, currency),
 	}, "pago de la tarjeta de crédito")
+	if err != nil {
+		return nil, err
+	}
+	// Si la revisión falla, el pago ya está hecho: lo desbloqueará el barrendero.
+	_, _ = s.core.ReviewCreditLine(ctx, line.Id, nil)
+	return result, nil
+}
+
+// Statements devuelve los estados de cuenta de la tarjeta, del más reciente al
+// más antiguo.
+func (s *Service) Statements(ctx context.Context, customerID string, limit int32) ([]*corev1.CreditStatement, error) {
+	line, err := s.Line(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.core.ListStatements(ctx, line.Id, limit)
+}
+
+// CloseCycleNow corta el estado de cuenta ahora. SOLO para el sandbox: en
+// producción el corte lo hace el barrendero en el día de corte.
+func (s *Service) CloseCycleNow(ctx context.Context, customerID string) (*corev1.CreditStatement, error) {
+	line, err := s.Line(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.core.CloseCycle(ctx, line.Id, nil)
+}
+
+// PassDueDate revisa la mora como si ya hubiera pasado el vencimiento del último
+// estado de cuenta. SOLO para el sandbox: nadie puede esperar veinte días para
+// ver qué pasa si no paga.
+func (s *Service) PassDueDate(ctx context.Context, customerID string) (*corev1.CreditLine, error) {
+	line, err := s.Line(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	statements, err := s.core.ListStatements(ctx, line.Id, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(statements) == 0 {
+		return nil, ErrNoStatement
+	}
+	due, err := time.Parse(time.DateOnly, statements[0].DueDate)
+	if err != nil {
+		return nil, err
+	}
+	asOf := due.AddDate(0, 0, 1).Add(12 * time.Hour)
+	return s.core.ReviewCreditLine(ctx, line.Id, &asOf)
 }
 
 func nonNil(s []string) []string {

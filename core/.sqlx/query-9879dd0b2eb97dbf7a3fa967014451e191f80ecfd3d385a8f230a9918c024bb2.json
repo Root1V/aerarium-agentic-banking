@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE credit_lines SET status = $2\n             WHERE id = $1 AND status <> 'CLOSED' AND status <> $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9879dd0b2eb97dbf7a3fa967014451e191f80ecfd3d385a8f230a9918c024bb2"
+}

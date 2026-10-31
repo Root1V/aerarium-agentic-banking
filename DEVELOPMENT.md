@@ -228,6 +228,12 @@ transferencia entre dos clientes (nunca una cuenta interna del banco).
   hace cumplir el mismo trigger diferido que el sobregiro (AB010–AB012), así que ningún
   camino se los salta.
 - **Disponer y pagar** son asientos normales.
+- **El ciclo** (`core/src/credit_cycle.rs`): el barrendero corta cada línea en su día
+  de corte, una vez. El estado de cuenta (inmutable, cuadra por restricción) cobra
+  intereses solo si no se pagó el total del anterior a su vencimiento, con la TEA a
+  360 días. El pago mínimo son los intereses más el 5 % con un piso de 10. Si pasa el
+  vencimiento sin el mínimo, la línea se bloquea; pagar la desbloquea en el momento.
+  Los intereses se cobran aunque la línea esté bloqueada o pasen el límite.
 - **Si no se aprueba**, la app dice qué falta, nunca el puntaje.
 
 ```bash

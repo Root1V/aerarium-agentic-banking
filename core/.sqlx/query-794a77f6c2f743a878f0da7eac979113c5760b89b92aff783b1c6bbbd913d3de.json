@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n              COALESCE(SUM(e.amount_micros) FILTER (WHERE e.direction = 'DEBIT' AND t.kind <> 'credit_interest'), 0)::BIGINT as \"charges!\",\n              COALESCE(SUM(e.amount_micros) FILTER (WHERE e.direction = 'CREDIT'), 0)::BIGINT as \"payments!\"\n            FROM ledger_entries e JOIN ledger_transactions t ON t.id = e.transaction_id\n            WHERE e.account_id = $1 AND t.posted_at > $2 AND t.posted_at <= $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "charges!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "payments!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "794a77f6c2f743a878f0da7eac979113c5760b89b92aff783b1c6bbbd913d3de"
+}

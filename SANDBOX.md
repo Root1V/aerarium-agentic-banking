@@ -256,6 +256,11 @@ cuenta; como en el sandbox es nueva, se le suman seis meses de un sueldo simulad
 decisión lo dice). Con la tarjeta aprobada puedes **pasar dinero a tu cuenta** y
 **pagarla**. El límite lo hace cumplir el core: no se puede usar más ni pagar de más.
 
+El ciclo dura un mes; en la tarjeta hay dos atajos de prueba: **Cortar el estado de
+cuenta ahora** (total, pago mínimo y vencimiento) y **Simular que pasó el
+vencimiento**: sin el mínimo pagado, la tarjeta se bloquea; con «Pagar el mínimo» se
+desbloquea al instante.
+
 ## 6. Reiniciar de cero
 
 ```bash

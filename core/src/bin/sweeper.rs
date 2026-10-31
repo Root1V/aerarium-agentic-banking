@@ -1,4 +1,4 @@
-//! Barrendero de retenciones vencidas.
+//! Barrendero: retenciones vencidas y ciclo de las tarjetas de crédito.
 //!
 //! Sin este proceso, una autorización que nadie captura deja el dinero del
 //! pagador retenido para siempre: el saldo disponible baja y no vuelve nunca. El
@@ -13,9 +13,14 @@
 //!   DATABASE_URL      conexión a PostgreSQL
 //!   SWEEP_INTERVAL_S  segundos entre pasadas (por defecto 30)
 //!   SWEEP_BATCH       máximo de retenciones por pasada (por defecto 200)
+//!   CREDIT_INTERVAL_S segundos entre pasadas del ciclo de tarjetas (por defecto 3600)
+//!
+//! El ciclo de tarjetas corta el estado de cuenta de las líneas cuyo día de corte
+//! es hoy y revisa la mora. Una vez por hora basta: el corte es una vez al día por
+//! línea y no se repite.
 
 use aibank_core::authorizations::AuthorizationService;
-use aibank_core::db;
+use aibank_core::{db, CreditRepository};
 use std::error::Error;
 use std::time::Duration;
 
@@ -32,14 +37,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let interval = env_number("SWEEP_INTERVAL_S", 30);
     let batch = env_number("SWEEP_BATCH", 200);
 
+    let credit_interval = env_number("CREDIT_INTERVAL_S", 3600);
+
     let pool = db::connect(&database_url, 4).await?;
-    let authorizations = AuthorizationService::new(pool);
+    let authorizations = AuthorizationService::new(pool.clone());
+    let credit = CreditRepository::new(pool);
 
     tracing::info!(interval_s = interval, batch, "barrendero de retenciones en marcha");
 
     let mut ticker = tokio::time::interval(Duration::from_secs(interval));
+    let mut credit_ticker = tokio::time::interval(Duration::from_secs(credit_interval));
     loop {
         tokio::select! {
+            _ = credit_ticker.tick() => {
+                match credit.run_due(chrono::Utc::now()).await {
+                    Ok(cut) if cut > 0 => tracing::info!(cut, "estados de cuenta cortados"),
+                    Ok(_) => {}
+                    Err(err) => tracing::error!(error = %err, "fallo en el ciclo de tarjetas"),
+                }
+            }
             _ = ticker.tick() => {
                 match authorizations.release_expired(batch as i64).await {
                     Ok(ids) if !ids.is_empty() => {

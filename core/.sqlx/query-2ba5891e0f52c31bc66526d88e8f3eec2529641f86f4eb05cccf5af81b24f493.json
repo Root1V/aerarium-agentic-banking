@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.account_id, a.currency, l.annual_rate_bps, l.payment_days,\n                   l.min_payment_bps, l.min_payment_floor_micros, l.opened_at\n            FROM credit_lines l JOIN accounts a ON a.id = l.account_id\n            WHERE l.id = $1 AND l.status <> 'CLOSED'\n            FOR UPDATE OF l\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "annual_rate_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "payment_days",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "min_payment_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "min_payment_floor_micros",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2ba5891e0f52c31bc66526d88e8f3eec2529641f86f4eb05cccf5af81b24f493"
+}

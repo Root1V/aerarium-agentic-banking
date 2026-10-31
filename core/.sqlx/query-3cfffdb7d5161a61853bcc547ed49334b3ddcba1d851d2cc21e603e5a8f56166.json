@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT line_id FROM credit_statements s\n               JOIN credit_lines l ON l.id = s.line_id WHERE l.status <> 'CLOSED'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "line_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3cfffdb7d5161a61853bcc547ed49334b3ddcba1d851d2cc21e603e5a8f56166"
+}

@@ -641,7 +641,11 @@ class CreditCard {
   /// `active`, `blocked` (por un pago pendiente) o `closed`.
   final String status;
 
+  /// El último estado de cuenta, si ya hubo un corte.
+  final CreditStatement? statement;
+
   const CreditCard({
+    this.statement,
     required this.id,
     required this.limit,
     required this.outstanding,
@@ -670,6 +674,58 @@ class CreditCard {
         annualRateBps: (json['annual_rate_bps'] as num).toInt(),
         cycleDay: (json['cycle_day'] as num).toInt(),
         paymentDays: (json['payment_days'] as num).toInt(),
+        status: json['status'] as String,
+        statement: json['statement'] == null
+            ? null
+            : CreditStatement.fromJson(json['statement'] as Map<String, dynamic>),
+      );
+}
+
+/// Un estado de cuenta de la tarjeta.
+class CreditStatement {
+  final DateTime periodEnd;
+  final Money charges;
+  final Money payments;
+  final Money interest;
+
+  /// Lo que se debía al corte.
+  final Money closing;
+  final Money minimumPayment;
+  final DateTime dueDate;
+
+  /// Lo pagado desde el corte.
+  final Money paidSinceCut;
+
+  /// `paid`, `minimum_paid`, `pending` o `past_due`.
+  final String status;
+
+  const CreditStatement({
+    required this.periodEnd,
+    required this.charges,
+    required this.payments,
+    required this.interest,
+    required this.closing,
+    required this.minimumPayment,
+    required this.dueDate,
+    required this.paidSinceCut,
+    required this.status,
+  });
+
+  /// Lo que falta para cubrir el mínimo; cero si ya se cubrió.
+  Money get minimumLeft => Money(
+        (minimumPayment.amountMicros - paidSinceCut.amountMicros).clamp(0, minimumPayment.amountMicros),
+        minimumPayment.currency,
+      );
+
+  factory CreditStatement.fromJson(Map<String, dynamic> json) => CreditStatement(
+        periodEnd: DateTime.parse(json['period_end'] as String),
+        charges: Money.fromJson(json['charges'] as Map<String, dynamic>),
+        payments: Money.fromJson(json['payments'] as Map<String, dynamic>),
+        interest: Money.fromJson(json['interest'] as Map<String, dynamic>),
+        closing: Money.fromJson(json['closing'] as Map<String, dynamic>),
+        minimumPayment: Money.fromJson(json['minimum_payment'] as Map<String, dynamic>),
+        dueDate: DateTime.parse(json['due_date'] as String),
+        paidSinceCut: Money.fromJson(json['paid_since_cut'] as Map<String, dynamic>),
         status: json['status'] as String,
       );
 }

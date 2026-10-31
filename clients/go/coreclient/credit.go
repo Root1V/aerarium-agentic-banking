@@ -2,10 +2,12 @@ package coreclient
 
 import (
 	"context"
+	"time"
 
 	corev1 "github.com/aibank/aibank/clients/go/corev1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // NewCreditLine son las condiciones con que se abre una línea de crédito.
@@ -41,6 +43,44 @@ func (c *Client) GetCustomerCreditLine(ctx context.Context, customerID string) (
 	var trailer metadata.MD
 	resp, err := c.credit.GetCustomerCreditLine(ctx, &corev1.GetCustomerCreditLineRequest{CustomerId: customerID},
 		grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return resp, nil
+}
+
+// CloseCycle corta el estado de cuenta de la línea. cutAt nil: ahora.
+func (c *Client) CloseCycle(ctx context.Context, lineID string, cutAt *time.Time) (*corev1.CreditStatement, error) {
+	req := &corev1.CloseCycleRequest{LineId: lineID}
+	if cutAt != nil {
+		req.CutAt = timestamppb.New(*cutAt)
+	}
+	var trailer metadata.MD
+	resp, err := c.credit.CloseCycle(ctx, req, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return resp, nil
+}
+
+// ListStatements devuelve los estados de cuenta, del más reciente al más antiguo.
+func (c *Client) ListStatements(ctx context.Context, lineID string, limit int32) ([]*corev1.CreditStatement, error) {
+	var trailer metadata.MD
+	resp, err := c.credit.ListStatements(ctx, &corev1.ListStatementsRequest{LineId: lineID, Limit: limit}, grpc.Trailer(&trailer))
+	if err != nil {
+		return nil, translate(err, trailer)
+	}
+	return resp.Statements, nil
+}
+
+// ReviewCreditLine revisa la mora de la línea a una fecha. asOf nil: ahora.
+func (c *Client) ReviewCreditLine(ctx context.Context, lineID string, asOf *time.Time) (*corev1.CreditLine, error) {
+	req := &corev1.ReviewCreditLineRequest{LineId: lineID}
+	if asOf != nil {
+		req.AsOf = timestamppb.New(*asOf)
+	}
+	var trailer metadata.MD
+	resp, err := c.credit.ReviewCreditLine(ctx, req, grpc.Trailer(&trailer))
 	if err != nil {
 		return nil, translate(err, trailer)
 	}

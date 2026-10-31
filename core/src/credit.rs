@@ -71,6 +71,10 @@ impl CreditRepository {
         Self { pool }
     }
 
+    pub(crate) fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     /// Abre la línea: la cuenta y el contrato en una sola transacción. Si el
     /// cliente ya tiene una línea viva, es un conflicto.
     pub async fn open(&self, new: &NewCreditLine) -> Result<CreditLine, PostingError> {

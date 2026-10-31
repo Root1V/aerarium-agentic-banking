@@ -1499,6 +1499,9 @@ var MandateService_ServiceDesc = grpc.ServiceDesc{
 const (
 	CreditService_OpenCreditLine_FullMethodName        = "/aibank.core.v1.CreditService/OpenCreditLine"
 	CreditService_GetCustomerCreditLine_FullMethodName = "/aibank.core.v1.CreditService/GetCustomerCreditLine"
+	CreditService_CloseCycle_FullMethodName            = "/aibank.core.v1.CreditService/CloseCycle"
+	CreditService_ListStatements_FullMethodName        = "/aibank.core.v1.CreditService/ListStatements"
+	CreditService_ReviewCreditLine_FullMethodName      = "/aibank.core.v1.CreditService/ReviewCreditLine"
 )
 
 // CreditServiceClient is the client API for CreditService service.
@@ -1510,6 +1513,13 @@ type CreditServiceClient interface {
 	OpenCreditLine(ctx context.Context, in *OpenCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error)
 	// La línea viva del cliente. NOT_FOUND si no tiene.
 	GetCustomerCreditLine(ctx context.Context, in *GetCustomerCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error)
+	// Corta el estado de cuenta: cobra intereses si corresponden y lo emite. Lo
+	// hace el barrendero cada día; expuesto para el sandbox y la operación.
+	CloseCycle(ctx context.Context, in *CloseCycleRequest, opts ...grpc.CallOption) (*CreditStatement, error)
+	ListStatements(ctx context.Context, in *ListStatementsRequest, opts ...grpc.CallOption) (*ListStatementsResponse, error)
+	// Revisa la mora: bloquea si no se pagó el mínimo vencido, desbloquea al
+	// ponerse al día. Se llama tras cada pago para desbloquear en el momento.
+	ReviewCreditLine(ctx context.Context, in *ReviewCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error)
 }
 
 type creditServiceClient struct {
@@ -1540,6 +1550,36 @@ func (c *creditServiceClient) GetCustomerCreditLine(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *creditServiceClient) CloseCycle(ctx context.Context, in *CloseCycleRequest, opts ...grpc.CallOption) (*CreditStatement, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreditStatement)
+	err := c.cc.Invoke(ctx, CreditService_CloseCycle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *creditServiceClient) ListStatements(ctx context.Context, in *ListStatementsRequest, opts ...grpc.CallOption) (*ListStatementsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStatementsResponse)
+	err := c.cc.Invoke(ctx, CreditService_ListStatements_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *creditServiceClient) ReviewCreditLine(ctx context.Context, in *ReviewCreditLineRequest, opts ...grpc.CallOption) (*CreditLine, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreditLine)
+	err := c.cc.Invoke(ctx, CreditService_ReviewCreditLine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CreditServiceServer is the server API for CreditService service.
 // All implementations must embed UnimplementedCreditServiceServer
 // for forward compatibility.
@@ -1549,6 +1589,13 @@ type CreditServiceServer interface {
 	OpenCreditLine(context.Context, *OpenCreditLineRequest) (*CreditLine, error)
 	// La línea viva del cliente. NOT_FOUND si no tiene.
 	GetCustomerCreditLine(context.Context, *GetCustomerCreditLineRequest) (*CreditLine, error)
+	// Corta el estado de cuenta: cobra intereses si corresponden y lo emite. Lo
+	// hace el barrendero cada día; expuesto para el sandbox y la operación.
+	CloseCycle(context.Context, *CloseCycleRequest) (*CreditStatement, error)
+	ListStatements(context.Context, *ListStatementsRequest) (*ListStatementsResponse, error)
+	// Revisa la mora: bloquea si no se pagó el mínimo vencido, desbloquea al
+	// ponerse al día. Se llama tras cada pago para desbloquear en el momento.
+	ReviewCreditLine(context.Context, *ReviewCreditLineRequest) (*CreditLine, error)
 	mustEmbedUnimplementedCreditServiceServer()
 }
 
@@ -1564,6 +1611,15 @@ func (UnimplementedCreditServiceServer) OpenCreditLine(context.Context, *OpenCre
 }
 func (UnimplementedCreditServiceServer) GetCustomerCreditLine(context.Context, *GetCustomerCreditLineRequest) (*CreditLine, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetCustomerCreditLine not implemented")
+}
+func (UnimplementedCreditServiceServer) CloseCycle(context.Context, *CloseCycleRequest) (*CreditStatement, error) {
+	return nil, status.Error(codes.Unimplemented, "method CloseCycle not implemented")
+}
+func (UnimplementedCreditServiceServer) ListStatements(context.Context, *ListStatementsRequest) (*ListStatementsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStatements not implemented")
+}
+func (UnimplementedCreditServiceServer) ReviewCreditLine(context.Context, *ReviewCreditLineRequest) (*CreditLine, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReviewCreditLine not implemented")
 }
 func (UnimplementedCreditServiceServer) mustEmbedUnimplementedCreditServiceServer() {}
 func (UnimplementedCreditServiceServer) testEmbeddedByValue()                       {}
@@ -1622,6 +1678,60 @@ func _CreditService_GetCustomerCreditLine_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CreditService_CloseCycle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CloseCycleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CreditServiceServer).CloseCycle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CreditService_CloseCycle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CreditServiceServer).CloseCycle(ctx, req.(*CloseCycleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CreditService_ListStatements_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStatementsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CreditServiceServer).ListStatements(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CreditService_ListStatements_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CreditServiceServer).ListStatements(ctx, req.(*ListStatementsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CreditService_ReviewCreditLine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviewCreditLineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CreditServiceServer).ReviewCreditLine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CreditService_ReviewCreditLine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CreditServiceServer).ReviewCreditLine(ctx, req.(*ReviewCreditLineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CreditService_ServiceDesc is the grpc.ServiceDesc for CreditService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1636,6 +1746,18 @@ var CreditService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCustomerCreditLine",
 			Handler:    _CreditService_GetCustomerCreditLine_Handler,
+		},
+		{
+			MethodName: "CloseCycle",
+			Handler:    _CreditService_CloseCycle_Handler,
+		},
+		{
+			MethodName: "ListStatements",
+			Handler:    _CreditService_ListStatements_Handler,
+		},
+		{
+			MethodName: "ReviewCreditLine",
+			Handler:    _CreditService_ReviewCreditLine_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
