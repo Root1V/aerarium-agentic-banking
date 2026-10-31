@@ -155,6 +155,13 @@ sobre una autorización ya capturada devuelve **`200` con el mismo `settled_at`*
 El `409 already_captured` queda reservado para una captura sobre una autorización anulada o
 reembolsada. Nos parece mejor contrato y nos gustaría confirmarlo.
 
+> **Nota del 25/10.** La primera mitad se implementó tal cual: capturar dos veces devuelve
+> `200` con el mismo `settled_at`. La segunda no: `already_captured` nunca llegó a emitirse,
+> y ese caso devolvía `409 already_refunded`, que además decía "reembolsada" de una
+> autorización que había vencido. Hoy es **`409 authorization_not_capturable`**; si la
+> autorización venció y el barrendero no pasó todavía, es `409 authorization_expired`.
+> Detalle en el doc 11 §7.
+
 **Q10 · `recipient_mismatch` / `amount_mismatch`: ¿quién compara?**
 `GET /v1/authorizations/{id}` no recibe lo que el vendedor esperaba, así que AIBank no
 tiene contra qué comparar. O el endpoint acepta parámetros de verificación, o esos códigos

@@ -689,6 +689,101 @@ func TestUnaCuentaInexistenteYUnaMalFormadaRespondenIgual(t *testing.T) {
 	}
 }
 
+// Una autorización que venció y el barrendero ya liberó no se puede capturar, y
+// el código lo dice así. Antes respondía `already_refunded`: un cliente que lo
+// mostrara habría dicho "ya reembolsado" de un pago que en realidad venció.
+func TestCapturarLoYaLiberadoDiceQueNoAdmiteCaptura(t *testing.T) {
+	f := setup(t)
+	_, auth, _ := f.authorize(t, 2_000000)
+	id := auth["authorization_id"].(string)
+
+	db, _ := sql.Open("postgres", databaseURL())
+	defer db.Close()
+	raw := strings.TrimPrefix(id, "auth_")
+	if _, err := db.Exec(`
+		UPDATE authorizations SET expires_at = now() - interval '1 minute'
+		 WHERE replace(id::text, '-', '') = $1`, raw); err != nil {
+		t.Fatalf("vencer: %v", err)
+	}
+	// Lo que hace el barrendero en producción.
+	if _, err := f.core.ReleaseExpired(f.ctx, 1000); err != nil {
+		t.Fatalf("liberar vencidas: %v", err)
+	}
+
+	status, out, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if status != http.StatusConflict || out["error"] != CodeNotCapturable {
+		t.Fatalf("status = %d, error = %v; se esperaba 409 %s", status, out["error"], CodeNotCapturable)
+	}
+
+	// Y el GET dice qué pasó de verdad, que es a donde el error manda mirar.
+	_, got, _ := f.do(t, http.MethodGet, "/v1/authorizations/"+id, f.token, nil, nil)
+	if got["status"] != "released" {
+		t.Errorf("status consultado = %v, se esperaba released", got["status"])
+	}
+}
+
+// Reembolsar dos veces lo ya devuelto entero no es un error y no mueve dinero:
+// un reintento tras un timeout no puede devolver el cobro dos veces ni obligar a
+// adivinar si el primero llegó.
+func TestReembolsarLoYaDevueltoNoMueveDinero(t *testing.T) {
+	f := setup(t)
+	_, auth, _ := f.authorize(t, 2_000000)
+	id := auth["authorization_id"].(string)
+
+	if s, _, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil); s != http.StatusOK {
+		t.Fatalf("capturar: %d", s)
+	}
+	if s, _, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil); s != http.StatusOK {
+		t.Fatalf("primer reembolso: %d", s)
+	}
+	// El core trabaja con el identificador interno; `f.payer` es el público acc_….
+	payerID, err := decodeID(accountPrefix, f.payer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := f.core.GetBalance(f.ctx, payerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	status, out, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("segundo reembolso: status = %d, error = %v", status, out["error"])
+	}
+	if out["refunded"] != float64(0) || out["refundable"] != float64(0) {
+		t.Errorf("refunded = %v, refundable = %v; se esperaba 0 y 0", out["refunded"], out["refundable"])
+	}
+
+	after, err := f.core.GetBalance(f.ctx, payerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.AmountMicros != before.AmountMicros {
+		t.Errorf("el segundo reembolso movió dinero: %d → %d", before.AmountMicros, after.AmountMicros)
+	}
+}
+
+// Capturar algo ya cobrado y devuelto no es un error: la captura se hizo, y un
+// reintento lo confirma con el mismo settled_at y el estado de hoy (M-09).
+func TestCapturarLoYaDevueltoConfirmaLaCapturaOriginal(t *testing.T) {
+	f := setup(t)
+	_, auth, _ := f.authorize(t, 2_000000)
+	id := auth["authorization_id"].(string)
+
+	status, first, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("capturar: %d", status)
+	}
+	if s, _, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil); s != http.StatusOK {
+		t.Fatalf("reembolsar: %d", s)
+	}
+
+	status, again, _ := f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if status != http.StatusOK || again["status"] != "refunded" || again["settled_at"] != first["settled_at"] {
+		t.Errorf("recapturar: %d %v; se esperaba 200, refunded y settled_at %v", status, again, first["settled_at"])
+	}
+}
+
 func TestUnaAutorizacionAjenaNoSePuedeCapturar(t *testing.T) {
 	f := setup(t)
 	_, auth, _ := f.authorize(t, 1_000000)
