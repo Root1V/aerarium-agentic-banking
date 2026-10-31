@@ -48,6 +48,8 @@ const (
 	CodeAgentLastKey          = "agent_last_key"
 	CodeAgentSignatureInvalid = "agent_signature_invalid"
 	CodeMandateAgentScope     = "mandate_agent_scope"
+	CodeAccountAgentScope     = "account_agent_scope"
+	CodeAccountAgentConflict  = "account_agent_conflict"
 )
 
 type errorBody struct {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/oauth"
 )
 
@@ -25,6 +26,9 @@ type consentRequestBody struct {
 	// de consentimiento, así que un texto vago se convierte en una decisión que
 	// el titular no puede tomar bien.
 	Purpose string `json:"purpose"`
+	// AgentID es el agente al que se le pide el permiso: el mandato que nazca
+	// solo lo podrá usar él, y el titular ve su nombre al decidir (AE-10).
+	AgentID string `json:"agent_id"`
 }
 
 type consentRequestResponse struct {
@@ -33,6 +37,7 @@ type consentRequestResponse struct {
 	HandoffCode string    `json:"handoff_code"`
 	Status      string    `json:"status"`
 	ExpiresAt   time.Time `json:"expires_at"`
+	AgentID     string    `json:"agent_id,omitempty"`
 	// Presentes solo cuando el titular ya aprobó.
 	MandateID string `json:"mandate_id,omitempty"`
 	AccountID string `json:"account_id,omitempty"`
@@ -54,6 +59,23 @@ func (s *Server) handleCreateConsentRequest(w http.ResponseWriter, r *http.Reque
 			"purpose es obligatorio: es lo que el titular lee antes de decidir")
 		return
 	}
+	var agent *agents.Agent
+	if s.agents != nil {
+		agentID, err := decodeID(agentPrefix, req.AgentID)
+		if req.AgentID == "" || err != nil {
+			writeError(w, http.StatusBadRequest, CodeMalformedRequest,
+				"agent_id es obligatorio: el permiso se le da a un agente, no a la plataforma")
+			return
+		}
+		agent, err = s.agents.Get(r.Context(), claims.Subject, agentID)
+		if err == nil && agent.RevokedAt != nil {
+			err = agents.ErrRevoked
+		}
+		if err != nil {
+			s.agentError(w, r, err)
+			return
+		}
+	}
 	for name, value := range map[string]*int64{
 		"max_per_operation": req.MaxPerOperation,
 		"max_total":         req.MaxTotal,
@@ -64,13 +86,17 @@ func (s *Server) handleCreateConsentRequest(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	created, err := s.store.NewConsentRequest(r.Context(), oauth.ConsentRequest{
+	consent := oauth.ConsentRequest{
 		ClientID:                 claims.Subject,
 		RequestedMaxPerOperation: req.MaxPerOperation,
 		RequestedMaxTotal:        req.MaxTotal,
 		Currency:                 req.Currency,
 		Purpose:                  req.Purpose,
-	})
+	}
+	if agent != nil {
+		consent.AgentID, consent.AgentName = agent.ID, agent.Name
+	}
+	created, err := s.store.NewConsentRequest(r.Context(), consent)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "crear solicitud de consentimiento", "error", err)
 		writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
@@ -82,6 +108,7 @@ func (s *Server) handleCreateConsentRequest(w http.ResponseWriter, r *http.Reque
 		HandoffCode:      created.HandoffCode,
 		Status:           statusLabel(created.ObservedStatus()),
 		ExpiresAt:        created.ExpiresAt,
+		AgentID:          encodeID(agentPrefix, created.AgentID),
 	})
 }
 
@@ -115,6 +142,7 @@ func (s *Server) handleGetConsentRequest(w http.ResponseWriter, r *http.Request,
 		HandoffCode:      request.HandoffCode,
 		Status:           statusLabel(request.ObservedStatus()),
 		ExpiresAt:        request.ExpiresAt,
+		AgentID:          encodeID(agentPrefix, request.AgentID),
 	}
 	if request.ObservedStatus() == oauth.ConsentApproved {
 		response.MandateID = request.MandateID

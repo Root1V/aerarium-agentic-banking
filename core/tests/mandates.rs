@@ -9,11 +9,11 @@
 
 mod common;
 
+use aibank_core::AccountType;
 use aibank_core::authorizations::{AuthorizationService, AuthorizeCommand};
 use aibank_core::mandates::{
     GrantCommand, MandateError, MandateService, MandateStatus, ObservedMandateStatus,
 };
-use aibank_core::AccountType;
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -46,7 +46,12 @@ async fn scene(pool: PgPool, funded: i64) -> Scene {
     let holder = Uuid::new_v4();
     let agent_account = ctx
         .accounts
-        .open_customer_account(&format!("agent-{suffix}"), "Bolsillo del agente", holder, &product)
+        .open_customer_account(
+            &format!("agent-{suffix}"),
+            "Bolsillo del agente",
+            holder,
+            &product,
+        )
         .await
         .expect("cuenta de agente")
         .id;
@@ -55,7 +60,12 @@ async fn scene(pool: PgPool, funded: i64) -> Scene {
 
     if funded > 0 {
         ctx.posting
-            .post(&common::deposit(cash.id, agent_account, funded, &format!("f-{suffix}")))
+            .post(&common::deposit(
+                cash.id,
+                agent_account,
+                funded,
+                &format!("f-{suffix}"),
+            ))
             .await
             .expect("fondear");
     }
@@ -102,7 +112,12 @@ async fn el_titular_otorga_un_permiso_acotado(pool: PgPool) {
 
     let mandate = s
         .mandates
-        .grant(&grant(s.agent_account, s.holder, Some(10_000000), Some(50_000000)))
+        .grant(&grant(
+            s.agent_account,
+            s.holder,
+            Some(10_000000),
+            Some(50_000000),
+        ))
         .await
         .unwrap();
 
@@ -159,7 +174,12 @@ async fn con_mandato_vivo_el_pago_procede(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
     let mandate = s
         .mandates
-        .grant(&grant(s.agent_account, s.holder, Some(10_000000), Some(50_000000)))
+        .grant(&grant(
+            s.agent_account,
+            s.holder,
+            Some(10_000000),
+            Some(50_000000),
+        ))
         .await
         .unwrap();
 
@@ -173,8 +193,18 @@ async fn con_mandato_vivo_el_pago_procede(pool: PgPool) {
     assert_eq!(usage.consumed_micros, 8_000000);
     assert_eq!(usage.remaining_micros(), Some(42_000000));
     // El dinero salió de la cuenta del agente, no de la principal del titular.
-    assert_eq!(s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(), 92_000000);
-    assert_eq!(s.ctx.accounts.balance_micros(s.holds).await.unwrap(), 8_000000);
+    assert_eq!(
+        s.ctx
+            .accounts
+            .balance_micros(s.agent_account)
+            .await
+            .unwrap(),
+        92_000000
+    );
+    assert_eq!(
+        s.ctx.accounts.balance_micros(s.holds).await.unwrap(),
+        8_000000
+    );
 }
 
 #[sqlx::test]
@@ -194,8 +224,18 @@ async fn un_pago_mayor_al_tope_por_operacion_se_rechaza(pool: PgPool) {
 
     // Hay saldo de sobra: lo que falta es permiso. Son cosas distintas y el
     // cliente tiene que poder distinguirlas.
-    assert!(matches!(err, MandateError::LimitExceeded(_)), "fue: {err:?}");
-    assert_eq!(s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(), 100_000000);
+    assert!(
+        matches!(err, MandateError::LimitExceeded(_)),
+        "fue: {err:?}"
+    );
+    assert_eq!(
+        s.ctx
+            .accounts
+            .balance_micros(s.agent_account)
+            .await
+            .unwrap(),
+        100_000000
+    );
 }
 
 #[sqlx::test]
@@ -217,7 +257,10 @@ async fn el_tope_total_se_agota_con_el_uso(pool: PgPool) {
         .authorize(mandate.id, &payment(s.agent_account, s.payee, 15_000000))
         .await
         .unwrap_err();
-    assert!(matches!(err, MandateError::LimitExceeded(_)), "fue: {err:?}");
+    assert!(
+        matches!(err, MandateError::LimitExceeded(_)),
+        "fue: {err:?}"
+    );
 
     // Lo que sí cabe, pasa.
     let (_, usage) = s
@@ -250,7 +293,10 @@ async fn una_retencion_viva_ya_consume_el_tope(pool: PgPool) {
         .authorize(mandate.id, &payment(s.agent_account, s.payee, 10_000000))
         .await
         .unwrap_err();
-    assert!(matches!(err, MandateError::LimitExceeded(_)), "fue: {err:?}");
+    assert!(
+        matches!(err, MandateError::LimitExceeded(_)),
+        "fue: {err:?}"
+    );
 }
 
 #[sqlx::test]
@@ -300,7 +346,10 @@ async fn reembolsar_devuelve_el_tope(pool: PgPool) {
     s.auth.refund(result.authorization.id, None).await.unwrap();
 
     let usage = s.mandates.find(mandate.id).await.unwrap().unwrap();
-    assert_eq!(usage.consumed_micros, 0, "un cobro devuelto no puede seguir contra el tope");
+    assert_eq!(
+        usage.consumed_micros, 0,
+        "un cobro devuelto no puede seguir contra el tope"
+    );
 }
 
 #[sqlx::test]
@@ -323,7 +372,10 @@ async fn el_mandato_no_cubre_otra_cuenta(pool: PgPool) {
 
     // Un mandato autoriza UNA cuenta. Si cubriera cualquiera del titular, el
     // aislamiento de la cuenta de propósito no serviría de nada.
-    assert!(matches!(err, MandateError::AccountNotCovered(_, _)), "fue: {err:?}");
+    assert!(
+        matches!(err, MandateError::AccountNotCovered(_, _)),
+        "fue: {err:?}"
+    );
 }
 
 // ---------------------------------------------------------------- revocar
@@ -373,25 +425,39 @@ async fn revocar_no_cancela_una_retencion_viva(pool: PgPool) {
         .capture(result.authorization.id)
         .await
         .expect("una retención anterior a la revocación tiene que poder cobrarse");
-    assert_eq!(s.ctx.accounts.balance_micros(s.payee).await.unwrap(), 5_000000);
+    assert_eq!(
+        s.ctx.accounts.balance_micros(s.payee).await.unwrap(),
+        5_000000
+    );
 }
 
 #[sqlx::test]
 async fn revocar_dos_veces_es_inofensivo(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let first = s.mandates.revoke(mandate.id, "titular").await.unwrap();
     let second = s.mandates.revoke(mandate.id, "operaciones").await.unwrap();
 
-    assert_eq!(first.revoked_at, second.revoked_at, "la segunda no puede pisar la primera");
+    assert_eq!(
+        first.revoked_at, second.revoked_at,
+        "la segunda no puede pisar la primera"
+    );
     assert_eq!(second.revoked_by.as_deref(), Some("titular"));
 }
 
 #[sqlx::test]
 async fn un_mandato_revocado_no_se_puede_reactivar(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
     s.mandates.revoke(mandate.id, "titular").await.unwrap();
 
     // La barrera está en la base: resucitar un permiso que una persona retiró no
@@ -415,11 +481,13 @@ async fn los_topes_de_un_mandato_son_inmutables(pool: PgPool) {
 
     // Es el registro que se presenta en una disputa: tiene que decir lo mismo
     // que la persona aprobó en pantalla.
-    let err = sqlx::query("UPDATE payment_mandates SET max_per_operation_micros = 999_000000 WHERE id = $1")
-        .bind(mandate.id)
-        .execute(&s.ctx.pool)
-        .await
-        .unwrap_err();
+    let err = sqlx::query(
+        "UPDATE payment_mandates SET max_per_operation_micros = 999_000000 WHERE id = $1",
+    )
+    .bind(mandate.id)
+    .execute(&s.ctx.pool)
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("immutable"), "fue: {err}");
 }
 
@@ -459,7 +527,10 @@ async fn un_mandato_vencido_no_habilita_pagos(pool: PgPool) {
         .find_active_for(s.agent_account, "mercatus_sandbox")
         .await
         .unwrap();
-    assert!(found.is_none(), "un mandato vencido no puede figurar como vivo");
+    assert!(
+        found.is_none(),
+        "un mandato vencido no puede figurar como vivo"
+    );
 }
 
 // ---------------------------------------------------------------- consulta
@@ -467,14 +538,18 @@ async fn un_mandato_vencido_no_habilita_pagos(pool: PgPool) {
 #[sqlx::test]
 async fn la_integracion_encuentra_su_permiso_y_no_el_de_otra(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
-
-    assert!(s
-        .mandates
-        .find_active_for(s.agent_account, "mercatus_sandbox")
+    s.mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
         .await
-        .unwrap()
-        .is_some());
+        .unwrap();
+
+    assert!(
+        s.mandates
+            .find_active_for(s.agent_account, "mercatus_sandbox")
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(
         s.mandates
             .find_active_for(s.agent_account, "otra_plataforma")
@@ -488,8 +563,14 @@ async fn la_integracion_encuentra_su_permiso_y_no_el_de_otra(pool: PgPool) {
 #[sqlx::test]
 async fn el_titular_ve_sus_mandatos(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
-    s.mandates.grant(&grant(s.agent_account, s.holder, Some(5_000000), None)).await.unwrap();
+    s.mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+    s.mandates
+        .grant(&grant(s.agent_account, s.holder, Some(5_000000), None))
+        .await
+        .unwrap();
 
     let mine = s.mandates.list_for_holder(s.holder).await.unwrap();
     assert_eq!(mine.len(), 2);
@@ -516,10 +597,8 @@ async fn dos_pagos_simultaneos_no_se_cuelan_juntos_por_el_tope(pool: PgPool) {
     let b = MandateService::new(pool.clone());
     let uno = payment(s.agent_account, s.payee, 20_000000);
     let dos = payment(s.agent_account, s.payee, 20_000000);
-    let (first, second) = tokio::join!(
-        a.authorize(mandate.id, &uno),
-        b.authorize(mandate.id, &dos),
-    );
+    let (first, second) =
+        tokio::join!(a.authorize(mandate.id, &uno), b.authorize(mandate.id, &dos),);
 
     assert!(
         first.is_ok() ^ second.is_ok(),
@@ -529,13 +608,20 @@ async fn dos_pagos_simultaneos_no_se_cuelan_juntos_por_el_tope(pool: PgPool) {
     // Solo se comprometió un pago.
     let usage = s.mandates.find(mandate.id).await.unwrap().unwrap();
     assert_eq!(usage.consumed_micros, 20_000000);
-    assert_eq!(s.ctx.accounts.balance_micros(s.holds).await.unwrap(), 20_000000);
+    assert_eq!(
+        s.ctx.accounts.balance_micros(s.holds).await.unwrap(),
+        20_000000
+    );
 }
 
 #[sqlx::test]
 async fn pagar_y_revocar_a_la_vez_no_deja_un_pago_sin_permiso(pool: PgPool) {
     let s = scene(pool.clone(), 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let a = MandateService::new(pool.clone());
     let b = MandateService::new(pool.clone());
@@ -551,7 +637,10 @@ async fn pagar_y_revocar_a_la_vez_no_deja_un_pago_sin_permiso(pool: PgPool) {
     if pago.is_ok() {
         assert_eq!(comprometido, 5_000000);
         let usage = s.mandates.find(mandate.id).await.unwrap().unwrap();
-        assert_eq!(usage.consumed_micros, 5_000000, "el pago quedó sin registrar en el mandato");
+        assert_eq!(
+            usage.consumed_micros, 5_000000,
+            "el pago quedó sin registrar en el mandato"
+        );
     } else {
         assert_eq!(comprometido, 0, "se retuvo dinero de un pago que falló");
     }
@@ -595,7 +684,11 @@ async fn lo_retenido_se_suma_en_el_servidor_aunque_sean_cientos(pool: PgPool) {
 
     // Y cuadra con el ledger: lo retenido es exactamente lo que falta del saldo.
     assert_eq!(
-        s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(),
+        s.ctx
+            .accounts
+            .balance_micros(s.agent_account)
+            .await
+            .unwrap(),
         100_000000 - 150_000
     );
 }
@@ -690,7 +783,10 @@ async fn se_agrupa_por_quien_cobra_y_lo_mayor_va_primero(pool: PgPool) {
         .collect();
     assert_eq!(
         resumen,
-        vec![(Some("otra_plataforma"), 5_000000), (Some("mercatus_sandbox"), 1_000000)]
+        vec![
+            (Some("otra_plataforma"), 5_000000),
+            (Some("mercatus_sandbox"), 1_000000)
+        ]
     );
 }
 
@@ -725,13 +821,19 @@ async fn backdate(s: &Scene, authorization: Uuid, at: chrono::DateTime<Utc>) {
 }
 
 fn at(rfc3339: &str) -> chrono::DateTime<Utc> {
-    chrono::DateTime::parse_from_rfc3339(rfc3339).unwrap().with_timezone(&Utc)
+    chrono::DateTime::parse_from_rfc3339(rfc3339)
+        .unwrap()
+        .with_timezone(&Utc)
 }
 
 #[sqlx::test]
 async fn el_gasto_se_separa_en_hoy_y_en_el_mes(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let pay = async |amount: i64, when: &str| {
         let (r, _) = s
@@ -749,7 +851,11 @@ async fn el_gasto_se_separa_en_hoy_y_en_el_mes(pool: PgPool) {
     pay(2_000000, "2026-10-19T15:00:00Z").await; // ayer, mismo mes
     pay(4_000000, "2026-09-30T15:00:00Z").await; // mes anterior
 
-    let spend = s.mandates.summarize_spend(s.holder, now, "America/Lima").await.unwrap();
+    let spend = s
+        .mandates
+        .summarize_spend(s.holder, now, "America/Lima")
+        .await
+        .unwrap();
     let m = &spend[0];
     assert_eq!((m.today_micros, m.today_count), (1_000000, 1));
     assert_eq!((m.month_micros, m.month_count), (3_000000, 2));
@@ -758,7 +864,11 @@ async fn el_gasto_se_separa_en_hoy_y_en_el_mes(pool: PgPool) {
 #[sqlx::test]
 async fn hoy_es_el_hoy_de_quien_mira_no_el_de_utc(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
     let (r, _) = s
         .mandates
         .authorize(mandate.id, &payment(s.agent_account, s.payee, 1_000000))
@@ -770,8 +880,16 @@ async fn hoy_es_el_hoy_de_quien_mira_no_el_de_utc(pool: PgPool) {
     backdate(&s, r.authorization.id, at("2026-10-20T20:00:00Z")).await;
     let now = at("2026-10-21T03:30:00Z");
 
-    let lima = s.mandates.summarize_spend(s.holder, now, "America/Lima").await.unwrap();
-    let utc = s.mandates.summarize_spend(s.holder, now, "UTC").await.unwrap();
+    let lima = s
+        .mandates
+        .summarize_spend(s.holder, now, "America/Lima")
+        .await
+        .unwrap();
+    let utc = s
+        .mandates
+        .summarize_spend(s.holder, now, "UTC")
+        .await
+        .unwrap();
 
     // Para quien vive en Lima, ese pago es de hoy. Calculado en UTC, a esta hora
     // la persona vería su gasto del día en cero.
@@ -782,7 +900,11 @@ async fn hoy_es_el_hoy_de_quien_mira_no_el_de_utc(pool: PgPool) {
 #[sqlx::test]
 async fn lo_reembolsado_se_descuenta_y_lo_liberado_no_cuenta(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let mut ids = Vec::new();
     for amount in [5_000000, 3_000000, 2_000000] {
@@ -798,7 +920,11 @@ async fn lo_reembolsado_se_descuenta_y_lo_liberado_no_cuenta(pool: PgPool) {
     s.auth.refund(ids[0], Some(1_000000)).await.unwrap();
     s.auth.release(ids[1]).await.unwrap();
 
-    let spend = s.mandates.summarize_spend(s.holder, Utc::now(), "America/Lima").await.unwrap();
+    let spend = s
+        .mandates
+        .summarize_spend(s.holder, Utc::now(), "America/Lima")
+        .await
+        .unwrap();
     let m = &spend[0];
     // La misma regla que el consumo del mandato: la cifra que ve la persona es
     // la que va agotando su tope.
@@ -813,9 +939,17 @@ async fn lo_reembolsado_se_descuenta_y_lo_liberado_no_cuenta(pool: PgPool) {
 #[sqlx::test]
 async fn un_permiso_sin_pagos_aparece_en_cero(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
-    let spend = s.mandates.summarize_spend(s.holder, Utc::now(), "America/Lima").await.unwrap();
+    let spend = s
+        .mandates
+        .summarize_spend(s.holder, Utc::now(), "America/Lima")
+        .await
+        .unwrap();
     // Que no aparezca haría creer que el permiso no existe.
     assert_eq!(spend.len(), 1);
     assert_eq!(spend[0].mandate_id, mandate.id);
@@ -825,7 +959,10 @@ async fn un_permiso_sin_pagos_aparece_en_cero(pool: PgPool) {
 #[sqlx::test]
 async fn una_zona_horaria_desconocida_es_un_error_del_llamador(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    s.mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let err = s
         .mandates
@@ -838,7 +975,11 @@ async fn una_zona_horaria_desconocida_es_un_error_del_llamador(pool: PgPool) {
 #[sqlx::test]
 async fn cada_retencion_bajo_mandato_dice_de_que_plataforma_es(pool: PgPool) {
     let s = scene(pool, 100_000000).await;
-    let mandate = s.mandates.grant(&grant(s.agent_account, s.holder, None, None)).await.unwrap();
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
 
     let (con_mandato, _) = s
         .mandates
@@ -865,6 +1006,10 @@ async fn cada_retencion_bajo_mandato_dice_de_que_plataforma_es(pool: PgPool) {
     // aparecen: inventarles una sería peor que no decir nada.
     assert_eq!(
         found,
-        vec![(con_mandato.authorization.hold_transaction_id, "mercatus_sandbox".to_string())]
+        vec![(
+            con_mandato.authorization.hold_transaction_id,
+            "mercatus_sandbox".to_string(),
+            con_mandato.authorization.id,
+        )]
     );
 }

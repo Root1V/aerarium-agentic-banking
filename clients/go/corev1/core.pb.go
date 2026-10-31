@@ -3017,9 +3017,12 @@ type HoldGrantee struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TransactionId string                 `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	// client_id de la integración titular del mandato.
-	Grantee       string `protobuf:"bytes,2,opt,name=grantee,proto3" json:"grantee,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Grantee string `protobuf:"bytes,2,opt,name=grantee,proto3" json:"grantee,omitempty"`
+	// La autorización de la que es la retención: con ella el canal del titular
+	// encuentra la intención del pago (qué compró el agente).
+	AuthorizationId string `protobuf:"bytes,3,opt,name=authorization_id,json=authorizationId,proto3" json:"authorization_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *HoldGrantee) Reset() {
@@ -3062,6 +3065,13 @@ func (x *HoldGrantee) GetTransactionId() string {
 func (x *HoldGrantee) GetGrantee() string {
 	if x != nil {
 		return x.Grantee
+	}
+	return ""
+}
+
+func (x *HoldGrantee) GetAuthorizationId() string {
+	if x != nil {
+		return x.AuthorizationId
 	}
 	return ""
 }
@@ -4732,10 +4742,11 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x10first_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0efirstExpiresAt\x12B\n" +
 	"\x0flast_expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\rlastExpiresAt\"D\n" +
 	"\x19LookupHoldGranteesRequest\x12'\n" +
-	"\x0ftransaction_ids\x18\x01 \x03(\tR\x0etransactionIds\"N\n" +
+	"\x0ftransaction_ids\x18\x01 \x03(\tR\x0etransactionIds\"y\n" +
 	"\vHoldGrantee\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12\x18\n" +
-	"\agrantee\x18\x02 \x01(\tR\agrantee\"O\n" +
+	"\agrantee\x18\x02 \x01(\tR\agrantee\x12)\n" +
+	"\x10authorization_id\x18\x03 \x01(\tR\x0fauthorizationId\"O\n" +
 	"\x1aLookupHoldGranteesResponse\x121\n" +
 	"\x05holds\x18\x01 \x03(\v2\x1b.aibank.core.v1.HoldGranteeR\x05holds\"O\n" +
 	"\x1aSummarizeLiveHoldsResponse\x121\n" +

@@ -29,8 +29,11 @@ type consentPromptJSON struct {
 	ConsentRequestID string `json:"consent_request_id"`
 	// Quién pide. Se muestra tal cual en la pantalla.
 	RequestedBy string `json:"requested_by"`
-	Purpose     string `json:"purpose"`
-	Currency    string `json:"currency"`
+	// AgentName es el agente de la plataforma al que se le da el permiso: solo él
+	// lo podrá usar (AE-10). Ausente en solicitudes de antes.
+	AgentName string `json:"agent_name,omitempty"`
+	Purpose   string `json:"purpose"`
+	Currency  string `json:"currency"`
 	// Lo que se pide. El titular puede conceder menos.
 	MaxPerOperation *int64    `json:"max_per_operation,omitempty"`
 	MaxTotal        *int64    `json:"max_total,omitempty"`
@@ -64,6 +67,7 @@ func (s *Server) handleConsentPrompt(w http.ResponseWriter, r *http.Request, _ *
 		// petición: si la plataforma pudiera elegir cómo se presenta en la
 		// pantalla del banco, podría hacerse pasar por otra.
 		RequestedBy:     client.Name,
+		AgentName:       request.AgentName,
 		Purpose:         request.Purpose,
 		Currency:        request.Currency,
 		MaxPerOperation: request.RequestedMaxPerOperation,
@@ -87,9 +91,12 @@ type approveConsentBody struct {
 }
 
 type mandateJSON struct {
-	MandateID       string     `json:"mandate_id"`
-	AccountID       string     `json:"account_id"`
-	GrantedTo       string     `json:"granted_to"`
+	MandateID string `json:"mandate_id"`
+	AccountID string `json:"account_id"`
+	GrantedTo string `json:"granted_to"`
+	// AgentName: el agente de esa plataforma que puede usarlo. Ausente en los
+	// permisos de antes de AE-10, que valen para toda la plataforma.
+	AgentName       string     `json:"agent_name,omitempty"`
 	Currency        string     `json:"currency"`
 	Status          string     `json:"status"`
 	MaxPerOperation *int64     `json:"max_per_operation,omitempty"`
@@ -299,10 +306,18 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 // persona concedió el permiso a "Mercatus", no a "mercatus_sandbox", y es por
 // ese nombre por el que lo va a buscar para retirarlo.
 func (s *Server) toMandateJSON(ctx context.Context, m *coreclient.Mandate) mandateJSON {
+	agentName := ""
+	if s.consents != nil {
+		// Sin la solicitud de origen, el permiso se muestra igual, sin agente.
+		if consent, err := s.consents.ConsentForMandate(ctx, m.ID); err == nil {
+			agentName = consent.AgentName
+		}
+	}
 	return mandateJSON{
 		MandateID:       m.ID,
 		AccountID:       m.AccountID,
 		GrantedTo:       s.merchantName(ctx, m.Grantee),
+		AgentName:       agentName,
 		Currency:        m.Currency,
 		Status:          mandateStatusName(m.Status),
 		MaxPerOperation: m.MaxPerOperation,

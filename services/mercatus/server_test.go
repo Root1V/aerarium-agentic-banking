@@ -3,6 +3,7 @@ package mercatus
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -39,11 +40,16 @@ func coreAddr() string {
 }
 
 type fixture struct {
-	srv      *httptest.Server
-	core     *coreclient.Client
-	store    *oauth.Store
-	server   *Server
-	agents   *agents.Store
+	srv    *httptest.Server
+	core   *coreclient.Client
+	store  *oauth.Store
+	server *Server
+	agents *agents.Store
+	// El agente con el que pagan las pruebas, salvo que digan otra cosa: sus
+	// cuentas están atadas a él y sus pagos van firmados con su clave.
+	agentID  string
+	agentKey string
+	agentPK  ed25519.PrivateKey
 	ctx      context.Context
 	clientID string
 	token    string
@@ -145,6 +151,15 @@ func setup(t *testing.T) *fixture {
 		ctx: ctx, clientID: clientID,
 		productCode: products["USD"], cashID: cash.Id,
 	}
+	agentJWK, agentPK := newAgentKey(t)
+	agent, err := agentStore.Register(ctx, clientID, "Agente de pruebas", agentJWK)
+	if err != nil {
+		t.Fatalf("registrar agente: %v", err)
+	}
+	f.agentID = encodeID(agentPrefix, agent.ID)
+	f.agentKey = encodeID(agentKeyPrefix, agent.Keys[0].ID)
+	f.agentPK = agentPK
+
 	f.token = f.fetchToken(t, srv, clientID, secret, "")
 	f.readOnly = f.fetchToken(t, srv, clientID, secret, oauth.ScopePaymentsRead)
 
@@ -181,14 +196,33 @@ func (f *fixture) fetchToken(t *testing.T, srv *httptest.Server, clientID, secre
 func (f *fixture) do(t *testing.T, method, path, token string, body any, headers map[string]string) (int, map[string]any, http.Header) {
 	t.Helper()
 
+	// Los pagos van firmados por el agente de la prueba, con su agent_id y una
+	// intención, salvo que la prueba ya los traiga. Con `Unsigned: true` en las
+	// cabeceras, sale sin firmar.
+	isPayment := method == http.MethodPost && path == "/v1/authorizations"
+	unsigned := headers["Unsigned"] == "true"
+	delete(headers, "Unsigned")
+	if m, ok := body.(map[string]any); ok && isPayment {
+		if _, has := m["agent_id"]; !has {
+			m["agent_id"] = f.agentID
+		}
+		if _, has := m["intent"]; !has {
+			m["intent"] = map[string]any{"reference": "tarea-de-prueba", "description": "Prueba: un pago del agente"}
+		}
+	}
+
+	var raw []byte
 	var reader io.Reader
 	if body != nil {
-		raw, _ := json.Marshal(body)
+		raw, _ = json.Marshal(body)
 		reader = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequest(method, f.srv.URL+path, reader)
 	if err != nil {
 		t.Fatalf("construir petición: %v", err)
+	}
+	if isPayment && !unsigned {
+		agents.Sign(req, raw, f.agentKey, f.agentPK, time.Now())
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -207,16 +241,15 @@ func (f *fixture) do(t *testing.T, method, path, token string, body any, headers
 	defer resp.Body.Close()
 
 	var out map[string]any
-	raw, _ := io.ReadAll(resp.Body)
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out)
+	if respBody, _ := io.ReadAll(resp.Body); len(respBody) > 0 {
+		_ = json.Unmarshal(respBody, &out)
 	}
 	return resp.StatusCode, out, resp.Header
 }
 
 func (f *fixture) openAccount(t *testing.T, ownerRef string, initial int64) string {
 	t.Helper()
-	body := map[string]any{"owner_reference": ownerRef, "currency": "USD"}
+	body := map[string]any{"owner_reference": ownerRef, "currency": "USD", "agent_id": f.agentID}
 	if initial > 0 {
 		body["initial_balance"] = initial
 	}

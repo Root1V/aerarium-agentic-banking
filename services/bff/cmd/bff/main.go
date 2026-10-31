@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/aliases"
 	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/bff/sim"
@@ -105,6 +106,12 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithConsents(store) })
+
+		agentStore := agents.NewStore(db)
+		if err := agentStore.Migrate(ctx); err != nil {
+			return err
+		}
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithAgents(agentStore) })
 
 		onboardingStore := onboarding.NewStore(db)
 		if err := onboardingStore.Migrate(ctx); err != nil {

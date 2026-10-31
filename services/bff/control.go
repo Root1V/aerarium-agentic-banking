@@ -61,8 +61,10 @@ type confirmationSummary struct {
 	Kind         string `json:"kind"`
 	AmountMicros int64  `json:"amount_micros"`
 	Currency     string `json:"currency"`
-	// ToName: a quién se le envía, o a quién se le da el permiso.
+	// ToName: a quién se le envía, o a qué plataforma se le da el permiso.
 	ToName string `json:"to_name"`
+	// AgentName: el agente de esa plataforma que podrá usar el permiso.
+	AgentName string `json:"agent_name,omitempty"`
 	// Los topes del permiso que se da. Ausentes: sin tope.
 	MaxPerOperation *int64 `json:"max_per_operation,omitempty"`
 	MaxTotal        *int64 `json:"max_total,omitempty"`
@@ -205,12 +207,13 @@ func grantOperation(request *oauth.ConsentRequest, body approveConsentBody, gran
 			"\nconsent=" + request.ID +
 			"\naccount=" + body.AccountID +
 			"\ngrantee=" + request.ClientID +
+			"\nagent=" + request.AgentID +
 			"\nmax_per_operation=" + limit(body.MaxPerOperation) +
 			"\nmax_total=" + limit(body.MaxTotal) +
 			"\ncurrency=" + request.Currency +
 			"\nexpires_in_days=" + strconv.Itoa(body.ExpiresInDays)),
 		summary: confirmationSummary{Kind: string(control.ActionGrantPermission),
-			Currency: request.Currency, ToName: grantedTo,
+			Currency: request.Currency, ToName: grantedTo, AgentName: request.AgentName,
 			MaxPerOperation: body.MaxPerOperation, MaxTotal: body.MaxTotal, ExpiresInDays: body.ExpiresInDays},
 	}
 }

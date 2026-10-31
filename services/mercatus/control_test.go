@@ -58,7 +58,8 @@ func TestLosPagosDelAgenteQuedanEnElRegistroDelTitular(t *testing.T) {
 		t.Fatalf("registro: %+v", decisions)
 	}
 	allowed, denied := decisions[0], decisions[1]
-	if allowed.Outcome != "allow" || allowed.Actor != (control.Actor{Kind: control.ActorAgent, ID: f.clientID}) ||
+	// El actor es el agente que firmó el pago, no la plataforma.
+	if allowed.Outcome != "allow" || allowed.Actor != (control.Actor{Kind: control.ActorAgent, ID: mustDecode(t, agentPrefix, f.agentID)}) ||
 		allowed.Level != control.LevelMandate || allowed.Evidence != "grant:mandate:"+mandateID {
 		t.Errorf("pago permitido: %+v", allowed)
 	}

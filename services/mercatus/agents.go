@@ -1,10 +1,12 @@
 package mercatus
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
 
+	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/oauth"
 )
@@ -159,4 +161,73 @@ func (s *Server) agentError(w http.ResponseWriter, r *http.Request, err error) {
 		s.log.ErrorContext(r.Context(), "agentes", "error", err)
 		writeError(w, http.StatusInternalServerError, CodeServerError, "error interno")
 	}
+}
+
+// ---------------------------------------------------------------- en cada pago
+
+// verifyAgentSignature comprueba que el pago venga firmado por un agente de esta
+// integración y devuelve quién firmó. Sin registro de agentes no se exige nada y
+// devuelve nil. Devuelve `false` cuando ya respondió.
+func (s *Server) verifyAgentSignature(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, body []byte) (*agents.Signer, bool) {
+	if s.agents == nil {
+		return nil, true
+	}
+	lookup := func(ctx context.Context, keyID string) (*agents.Signer, error) {
+		id, err := decodeID(agentKeyPrefix, keyID)
+		if err != nil {
+			return nil, agents.ErrNotFound
+		}
+		return s.agents.KeyForSignature(ctx, id)
+	}
+	signer, err := agents.Verify(r.Context(), r, body, lookup, time.Now())
+	if err == nil && signer.ClientID != claims.Subject {
+		// La clave es de un agente de otra plataforma.
+		err = agents.ErrSignatureInvalid
+	}
+	if err != nil {
+		// Para afuera, todos los motivos son el mismo; el concreto, al log.
+		s.log.WarnContext(r.Context(), "firma de agente rechazada", "cliente", claims.Subject, "motivo", err)
+		writeError(w, http.StatusUnauthorized, CodeAgentSignatureInvalid,
+			"el pago tiene que venir firmado por un agente registrado de esta integración")
+		return nil, false
+	}
+	return signer, true
+}
+
+// checkAgentScope comprueba que el agente que firmó pueda pagar desde esa
+// cuenta: en el modelo B, que el mandato sea suyo; en el A, que la sub-cuenta lo
+// sea.
+func (s *Server) checkAgentScope(w http.ResponseWriter, r *http.Request, signer *agents.Signer, mandate *coreclient.Mandate, payer string) bool {
+	if mandate != nil {
+		consent, err := s.store.ConsentForMandate(r.Context(), mandate.ID)
+		switch {
+		case errors.Is(err, oauth.ErrConsentNotFound):
+			// Un mandato que no nació de una solicitud no tiene agente.
+		case err != nil:
+			s.log.ErrorContext(r.Context(), "agente del mandato", "error", err)
+			writeError(w, http.StatusServiceUnavailable, CodeServiceUnavailable,
+				"el servicio no está disponible; reintenta con la misma Idempotency-Key")
+			return false
+		case consent.AgentID != "" && consent.AgentID != signer.AgentID:
+			writeError(w, http.StatusForbidden, CodeMandateAgentScope,
+				"el permiso es de otro agente")
+			return false
+		}
+		// Un mandato de antes de AE-10 no tiene agente: sirve a cualquiera de la
+		// plataforma hasta que venza. No se conceden nuevos así.
+		return true
+	}
+	owner, err := s.agents.AccountAgent(r.Context(), payer)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "agente de la cuenta", "error", err)
+		writeError(w, http.StatusServiceUnavailable, CodeServiceUnavailable,
+			"el servicio no está disponible; reintenta con la misma Idempotency-Key")
+		return false
+	}
+	if owner != signer.AgentID {
+		writeError(w, http.StatusForbidden, CodeAccountAgentScope,
+			"la cuenta pagadora no es de este agente; átala con agent_id al abrirla")
+		return false
+	}
+	return true
 }

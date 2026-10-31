@@ -23,6 +23,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
+	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/sessions"
@@ -38,6 +39,9 @@ type Server struct {
 	// plataformas. Así el canal móvil no queda acoplado a que exista una
 	// integración de socio.
 	consents *oauth.Store
+	// agents dice qué agente hizo cada pago con un permiso y qué compró. Sin él
+	// el historial agrupa por plataforma, sin el detalle.
+	agents *agents.Store
 	// onboarding habilita el alta de clientes. Opcional, por la misma razón.
 	onboarding *onboardingConfig
 	// passkeys habilita el login real y sus ceremonias.
@@ -74,6 +78,13 @@ func NewServer(core *coreclient.Client, auth Authenticator, logger *slog.Logger)
 // WithConsents habilita la gestión de permisos delegados en la app.
 func (s *Server) WithConsents(store *oauth.Store) *Server {
 	s.consents = store
+	return s
+}
+
+// WithAgents habilita mostrar, en cada pago de un agente, quién lo hizo y qué
+// compró.
+func (s *Server) WithAgents(store *agents.Store) *Server {
+	s.agents = store
 	return s
 }
 
@@ -182,6 +193,10 @@ type movementJSON struct {
 	// con un permiso. Es lo que deja al historial agrupar "120 pagos a
 	// Mercatus" en vez de mostrar 120 filas anónimas.
 	Merchant string `json:"merchant,omitempty"`
+	// AgentName y Purchase: qué agente de esa plataforma pagó y qué compró, tal
+	// como lo declaró al pagar (AE-10). Ausentes en los pagos de antes.
+	AgentName string `json:"agent_name,omitempty"`
+	Purchase  string `json:"purchase,omitempty"`
 	// Counterparty es la otra persona de una transferencia: a quién se le envió
 	// o de quién se recibió. Es lo que deja al historial decir "A Juan Pérez" en
 	// vez de "Transferencia".

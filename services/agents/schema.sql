@@ -35,3 +35,23 @@ CREATE TABLE IF NOT EXISTS agents.keys (
 CREATE INDEX IF NOT EXISTS idx_agent_keys_agent ON agents.keys (agent_id);
 -- Una misma clave no puede ser de dos agentes: la firma no diría de quién es.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_public ON agents.keys (public_key);
+
+-- Modelo A: la sub-cuenta con la que paga un agente es suya. Solo él la puede
+-- usar como pagadora. Una sub-cuenta sin agente (la de un vendedor) cobra, pero
+-- no paga.
+CREATE TABLE IF NOT EXISTS agents.accounts (
+    account_id  UUID PRIMARY KEY,
+    agent_id    UUID NOT NULL REFERENCES agents.agents (id),
+    bound_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Por qué se hizo cada pago: la tarea que el cliente le dio al agente y qué se
+-- compró. Lo lee el titular tal cual en su historial.
+CREATE TABLE IF NOT EXISTS agents.payment_intents (
+    authorization_id UUID PRIMARY KEY,
+    agent_id         UUID NOT NULL REFERENCES agents.agents (id),
+    client_id        TEXT NOT NULL,
+    reference        TEXT NOT NULL CHECK (length(reference) BETWEEN 1 AND 128),
+    description      TEXT NOT NULL CHECK (length(description) BETWEEN 1 AND 140),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
