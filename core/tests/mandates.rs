@@ -9,7 +9,7 @@
 
 mod common;
 
-use aibank_core::authorizations::{AuthorizationService, AuthorizeCommand};
+use aibank_core::authorizations::{AuthorizationError, AuthorizationService, AuthorizeCommand};
 use aibank_core::mandates::{
     GrantCommand, MandateError, MandateService, MandateStatus, ObservedMandateStatus,
 };
@@ -196,6 +196,31 @@ async fn un_pago_mayor_al_tope_por_operacion_se_rechaza(pool: PgPool) {
     // cliente tiene que poder distinguirlas.
     assert!(matches!(err, MandateError::LimitExceeded(_)), "fue: {err:?}");
     assert_eq!(s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(), 100_000000);
+}
+
+// Al revés que el anterior: hay permiso de sobra y lo que falta es saldo. Llega en
+// el COMMIT, por los triggers diferidos del ledger, y tiene que salir como fondos
+// insuficientes, no como un error de base de datos (M-07).
+#[sqlx::test]
+async fn sin_saldo_el_pago_falla_por_fondos_insuficientes(pool: PgPool) {
+    let s = scene(pool, 5_000000).await;
+    let mandate = s
+        .mandates
+        .grant(&grant(s.agent_account, s.holder, None, None))
+        .await
+        .unwrap();
+
+    let err = s
+        .mandates
+        .authorize(mandate.id, &payment(s.agent_account, s.payee, 8_000000))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, MandateError::Authorization(AuthorizationError::InsufficientFunds(_))),
+        "fue: {err:?}"
+    );
+    assert_eq!(s.ctx.accounts.balance_micros(s.agent_account).await.unwrap(), 5_000000);
 }
 
 #[sqlx::test]

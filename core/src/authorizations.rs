@@ -831,7 +831,7 @@ async fn find_by_id(
 ///
 /// Los triggers diferidos del ledger corren en el COMMIT, así que "fondos
 /// insuficientes" llega como error de `commit()` y no de la consulta que retuvo.
-fn map_db_error(err: sqlx::Error) -> AuthorizationError {
+pub(crate) fn map_db_error(err: sqlx::Error) -> AuthorizationError {
     if let Some(db_err) = err.as_database_error() {
         let message = db_err.message().to_owned();
         match db_err.code().as_deref() {
