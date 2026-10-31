@@ -15,14 +15,14 @@ pub mod model;
 pub mod money;
 pub mod outbox;
 pub mod posting;
+pub mod products;
 pub mod reconciliation;
 pub mod telemetry;
-pub mod products;
 
 pub use accounts::AccountRepository;
 pub use credit::{CreditLine, CreditLineStatus, CreditRepository, NewCreditLine};
 pub use credit_cycle::Statement;
 pub use model::*;
 pub use posting::PostingService;
-pub use reconciliation::{Finding, FindingKind, Reconciler};
 pub use products::ProductRepository;
+pub use reconciliation::{Finding, FindingKind, Reconciler};

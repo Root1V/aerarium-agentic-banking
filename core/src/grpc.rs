@@ -22,8 +22,7 @@ pub mod pb {
 use crate::reconciliation::{FindingKind, Reconciler};
 use pb::{
     account_service_server::AccountService, ledger_service_server::LedgerService,
-    product_service_server::ProductService,
-    reconciliation_service_server::ReconciliationService,
+    product_service_server::ProductService, reconciliation_service_server::ReconciliationService,
 };
 
 /// Clave de metadata donde viaja el motivo del rechazo.
@@ -41,13 +40,21 @@ fn to_status(err: PostingError) -> Status {
     let (code, reason) = match &err {
         PostingError::Invalid(_) => (tonic::Code::InvalidArgument, R::Invalid),
         PostingError::IdempotencyConflict(_) => (tonic::Code::Aborted, R::IdempotencyConflict),
-        PostingError::InsufficientFunds(_) => (tonic::Code::FailedPrecondition, R::InsufficientFunds),
-        PostingError::BalanceCapExceeded(_) => (tonic::Code::FailedPrecondition, R::BalanceCapExceeded),
+        PostingError::InsufficientFunds(_) => {
+            (tonic::Code::FailedPrecondition, R::InsufficientFunds)
+        }
+        PostingError::BalanceCapExceeded(_) => {
+            (tonic::Code::FailedPrecondition, R::BalanceCapExceeded)
+        }
         PostingError::TransactionCapExceeded(_) => {
             (tonic::Code::FailedPrecondition, R::TransactionCapExceeded)
         }
-        PostingError::CreditLimitExceeded(_) => (tonic::Code::FailedPrecondition, R::CreditLimitExceeded),
-        PostingError::CreditLineInactive(_) => (tonic::Code::FailedPrecondition, R::CreditLineInactive),
+        PostingError::CreditLimitExceeded(_) => {
+            (tonic::Code::FailedPrecondition, R::CreditLimitExceeded)
+        }
+        PostingError::CreditLineInactive(_) => {
+            (tonic::Code::FailedPrecondition, R::CreditLineInactive)
+        }
         PostingError::Overpayment(_) => (tonic::Code::FailedPrecondition, R::Overpayment),
         PostingError::Conflict(_) => (tonic::Code::AlreadyExists, R::AlreadyExists),
         // Fallo de infraestructura: el llamador SÍ puede reintentar.
@@ -62,11 +69,15 @@ fn to_status(err: PostingError) -> Status {
 }
 
 fn parse_uuid(value: &str, field: &str) -> Result<Uuid, Status> {
-    Uuid::parse_str(value).map_err(|_| Status::invalid_argument(format!("{field} is not a valid UUID")))
+    Uuid::parse_str(value)
+        .map_err(|_| Status::invalid_argument(format!("{field} is not a valid UUID")))
 }
 
 fn to_timestamp(value: chrono::DateTime<chrono::Utc>) -> prost_types::Timestamp {
-    prost_types::Timestamp { seconds: value.timestamp(), nanos: value.timestamp_subsec_nanos() as i32 }
+    prost_types::Timestamp {
+        seconds: value.timestamp(),
+        nanos: value.timestamp_subsec_nanos() as i32,
+    }
 }
 
 // ---------------------------------------------------------------- conversiones
@@ -93,7 +104,9 @@ impl TryFrom<pb::AccountType> for AccountType {
             pb::AccountType::Equity => Ok(AccountType::Equity),
             pb::AccountType::Income => Ok(AccountType::Income),
             pb::AccountType::Expense => Ok(AccountType::Expense),
-            pb::AccountType::Unspecified => Err(Status::invalid_argument("account type is required")),
+            pb::AccountType::Unspecified => {
+                Err(Status::invalid_argument("account type is required"))
+            }
         }
     }
 }
@@ -108,8 +121,14 @@ fn account_to_pb(account: Account) -> pb::Account {
             AccountOwner::Customer => pb::AccountOwner::Customer,
             AccountOwner::Internal => pb::AccountOwner::Internal,
         } as i32,
-        owner_id: account.owner_id.map(|id| id.to_string()).unwrap_or_default(),
-        product_id: account.product_id.map(|id| id.to_string()).unwrap_or_default(),
+        owner_id: account
+            .owner_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
+        product_id: account
+            .product_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
         currency: account.currency,
         status: match account.status {
             AccountStatus::Active => pb::AccountStatus::Active,
@@ -155,15 +174,16 @@ impl LedgerApi {
     ) -> Result<Response<pb::PostResponse>, Status> {
         let mut entries = Vec::with_capacity(req.entries.len());
         for (i, entry) in req.entries.iter().enumerate() {
-            let amount = entry
-                .amount
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument(format!("entry {i}: amount is required")))?;
+            let amount = entry.amount.as_ref().ok_or_else(|| {
+                Status::invalid_argument(format!("entry {i}: amount is required"))
+            })?;
             let direction = match entry.direction() {
                 pb::Direction::Debit => Direction::Debit,
                 pb::Direction::Credit => Direction::Credit,
                 pb::Direction::Unspecified => {
-                    return Err(Status::invalid_argument(format!("entry {i}: direction is required")))
+                    return Err(Status::invalid_argument(format!(
+                        "entry {i}: direction is required"
+                    )));
                 }
             };
             entries.push(EntryCommand {
@@ -181,7 +201,11 @@ impl LedgerApi {
             description: (!req.description.is_empty()).then_some(req.description),
         };
 
-        let result = self.posting.post(&posting_request).await.map_err(to_status)?;
+        let result = self
+            .posting
+            .post(&posting_request)
+            .await
+            .map_err(to_status)?;
 
         Ok(Response::new(pb::PostResponse {
             transaction_id: result.transaction.id.to_string(),
@@ -193,7 +217,10 @@ impl LedgerApi {
 
 #[tonic::async_trait]
 impl LedgerService for LedgerApi {
-    async fn post(&self, request: Request<pb::PostRequest>) -> Result<Response<pb::PostResponse>, Status> {
+    async fn post(
+        &self,
+        request: Request<pb::PostRequest>,
+    ) -> Result<Response<pb::PostResponse>, Status> {
         // El contexto de traza llega del llamador (BFF, adaptador) en la metadata.
         // Se adopta como contexto vigente para que todo lo que ocurra debajo —
         // incluido el evento que se encola— quede bajo la misma traza del pago.
@@ -341,7 +368,9 @@ impl AccountService for AccountApi {
             .find_by_code(&req.product_code)
             .await
             .map_err(|e| to_status(PostingError::Database(e)))?
-            .ok_or_else(|| Status::not_found(format!("product '{}' not found", req.product_code)))?;
+            .ok_or_else(|| {
+                Status::not_found(format!("product '{}' not found", req.product_code))
+            })?;
 
         let account = self
             .accounts
@@ -761,7 +790,9 @@ impl AuthorizationService for AuthorizationApi {
         // Una página del extracto, no un volcado: el límite evita que una sola
         // llamada se convierta en una consulta sin fondo.
         if ids.len() > 200 {
-            return Err(Status::invalid_argument("como máximo 200 transaction_ids por llamada"));
+            return Err(Status::invalid_argument(
+                "como máximo 200 transaction_ids por llamada",
+            ));
         }
         let ids = ids
             .iter()
@@ -966,7 +997,11 @@ impl MandateService for MandateApi {
             expires_at: from_timestamp(expires_at)?,
         };
 
-        let mandate = self.mandates.grant(&command).await.map_err(mandate_status)?;
+        let mandate = self
+            .mandates
+            .grant(&command)
+            .await
+            .map_err(mandate_status)?;
         Ok(Response::new(mandate_to_pb(&mandate, 0)))
     }
 
@@ -988,7 +1023,10 @@ impl MandateService for MandateApi {
             .await
             .map_err(mandate_status)?;
         let usage = self.with_usage(mandate).await?;
-        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+        Ok(Response::new(mandate_to_pb(
+            &usage.mandate,
+            usage.consumed_micros,
+        )))
     }
 
     async fn get_mandate(
@@ -1002,7 +1040,10 @@ impl MandateService for MandateApi {
             .await
             .map_err(mandate_status)?
             .ok_or_else(|| mandate_status(MandateError::NotFound(id)))?;
-        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+        Ok(Response::new(mandate_to_pb(
+            &usage.mandate,
+            usage.consumed_micros,
+        )))
     }
 
     async fn find_active_mandate(
@@ -1020,7 +1061,10 @@ impl MandateService for MandateApi {
             .ok_or_else(|| Status::not_found("no active mandate for that account and grantee"))?;
 
         let usage = self.with_usage(mandate).await?;
-        Ok(Response::new(mandate_to_pb(&usage.mandate, usage.consumed_micros)))
+        Ok(Response::new(mandate_to_pb(
+            &usage.mandate,
+            usage.consumed_micros,
+        )))
     }
 
     async fn summarize_spend(
@@ -1140,7 +1184,12 @@ impl CreditApi {
 
 fn credit_line_to_pb(line: crate::credit::CreditLine) -> pb::CreditLine {
     use crate::credit::CreditLineStatus as S;
-    let money = |amount_micros: i64| Some(pb::Money { amount_micros, currency: line.currency.clone() });
+    let money = |amount_micros: i64| {
+        Some(pb::Money {
+            amount_micros,
+            currency: line.currency.clone(),
+        })
+    };
     pb::CreditLine {
         id: line.id.to_string(),
         account_id: line.account_id.to_string(),
@@ -1162,7 +1211,12 @@ fn credit_line_to_pb(line: crate::credit::CreditLine) -> pb::CreditLine {
 }
 
 fn statement_to_pb(s: crate::credit_cycle::Statement) -> pb::CreditStatement {
-    let money = |amount_micros: i64| Some(pb::Money { amount_micros, currency: s.currency.clone() });
+    let money = |amount_micros: i64| {
+        Some(pb::Money {
+            amount_micros,
+            currency: s.currency.clone(),
+        })
+    };
     pb::CreditStatement {
         id: s.id.to_string(),
         line_id: s.line_id.to_string(),
@@ -1179,7 +1233,9 @@ fn statement_to_pb(s: crate::credit_cycle::Statement) -> pb::CreditStatement {
     }
 }
 
-fn instant_or_now(t: Option<prost_types::Timestamp>) -> Result<chrono::DateTime<chrono::Utc>, Status> {
+fn instant_or_now(
+    t: Option<prost_types::Timestamp>,
+) -> Result<chrono::DateTime<chrono::Utc>, Status> {
     match t {
         None => Ok(chrono::Utc::now()),
         Some(t) => chrono::DateTime::from_timestamp(t.seconds, t.nanos.max(0) as u32)
@@ -1209,7 +1265,11 @@ impl pb::credit_service_server::CreditService for CreditApi {
     ) -> Result<Response<pb::ListStatementsResponse>, Status> {
         let req = request.into_inner();
         let line_id = parse_uuid(&req.line_id, "line_id")?;
-        let limit = if req.limit <= 0 { 12 } else { req.limit.min(60) } as i64;
+        let limit = if req.limit <= 0 {
+            12
+        } else {
+            req.limit.min(60)
+        } as i64;
         let statements = self
             .credit
             .statements(line_id, limit)
@@ -1226,7 +1286,11 @@ impl pb::credit_service_server::CreditService for CreditApi {
     ) -> Result<Response<pb::CreditLine>, Status> {
         let req = request.into_inner();
         let line_id = parse_uuid(&req.line_id, "line_id")?;
-        let line = self.credit.review(line_id, instant_or_now(req.as_of)?).await.map_err(to_status)?;
+        let line = self
+            .credit
+            .review(line_id, instant_or_now(req.as_of)?)
+            .await
+            .map_err(to_status)?;
         Ok(Response::new(credit_line_to_pb(line)))
     }
 

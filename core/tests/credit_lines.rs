@@ -33,7 +33,10 @@ fn new_line(customer: Uuid, limit: i64) -> NewCreditLine {
 /// así un pago de más falla por la deuda y no por falta de fondos.
 async fn line_and_deposit(ctx: &Ctx) -> (CreditRepository, aibank_core::CreditLine, Uuid) {
     let credit = CreditRepository::new(ctx.pool.clone());
-    let line = credit.open(&new_line(Uuid::new_v4(), 500_000000)).await.expect("abrir línea");
+    let line = credit
+        .open(&new_line(Uuid::new_v4(), 500_000000))
+        .await
+        .expect("abrir línea");
     let product = ctx.simple_product(None, None).await;
     let (cash, deposit) = ctx.cash_and_customer(&product).await;
     ctx.posting
@@ -66,8 +69,17 @@ async fn abrir_una_linea_crea_una_cuenta_de_activo_sin_deuda() {
     let ctx = setup().await;
     let (_, line, _) = line_and_deposit(&ctx).await;
 
-    let account = ctx.accounts.find_by_id(line.account_id).await.unwrap().unwrap();
-    assert_eq!(account.account_type, AccountType::Asset, "lo que el cliente debe es activo del banco");
+    let account = ctx
+        .accounts
+        .find_by_id(line.account_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        account.account_type,
+        AccountType::Asset,
+        "lo que el cliente debe es activo del banco"
+    );
     assert_eq!(account.owner_id, Some(line.customer_id));
     assert_eq!(line.status, CreditLineStatus::Active);
     assert_eq!(line.outstanding_micros, 0);
@@ -79,16 +91,33 @@ async fn usar_la_linea_sube_la_deuda_hasta_el_limite_y_no_mas() {
     let ctx = setup().await;
     let (credit, line, deposit) = line_and_deposit(&ctx).await;
 
-    ctx.posting.post(&draw(line.account_id, deposit, 300_000000)).await.expect("disposición");
+    ctx.posting
+        .post(&draw(line.account_id, deposit, 300_000000))
+        .await
+        .expect("disposición");
     let after = credit.find(line.id).await.unwrap().unwrap();
     assert_eq!(after.outstanding_micros, 300_000000);
     assert_eq!(after.available_micros(), 200_000000);
-    assert_eq!(ctx.accounts.balance_micros(deposit).await.unwrap(), 1_300_000000, "el dinero llegó a la cuenta");
+    assert_eq!(
+        ctx.accounts.balance_micros(deposit).await.unwrap(),
+        1_300_000000,
+        "el dinero llegó a la cuenta"
+    );
 
-    let err = ctx.posting.post(&draw(line.account_id, deposit, 200_000001)).await.unwrap_err();
-    assert!(matches!(err, PostingError::CreditLimitExceeded(_)), "un micro por encima: {err:?}");
+    let err = ctx
+        .posting
+        .post(&draw(line.account_id, deposit, 200_000001))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PostingError::CreditLimitExceeded(_)),
+        "un micro por encima: {err:?}"
+    );
 
-    ctx.posting.post(&draw(line.account_id, deposit, 200_000000)).await.expect("justo el límite sí");
+    ctx.posting
+        .post(&draw(line.account_id, deposit, 200_000000))
+        .await
+        .expect("justo el límite sí");
 }
 
 #[tokio::test]
@@ -117,30 +146,73 @@ async fn disposiciones_simultaneas_no_superan_el_limite() {
         }
     }
     assert_eq!(ok, 5);
-    assert_eq!(credit.find(line.id).await.unwrap().unwrap().outstanding_micros, 500_000000);
+    assert_eq!(
+        credit
+            .find(line.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .outstanding_micros,
+        500_000000
+    );
 }
 
 #[tokio::test]
 async fn pagar_baja_la_deuda_y_no_se_puede_pagar_de_mas() {
     let ctx = setup().await;
     let (credit, line, deposit) = line_and_deposit(&ctx).await;
-    ctx.posting.post(&draw(line.account_id, deposit, 120_000000)).await.unwrap();
+    ctx.posting
+        .post(&draw(line.account_id, deposit, 120_000000))
+        .await
+        .unwrap();
 
-    ctx.posting.post(&pay(deposit, line.account_id, 20_000000)).await.expect("pago parcial");
-    assert_eq!(credit.find(line.id).await.unwrap().unwrap().outstanding_micros, 100_000000);
+    ctx.posting
+        .post(&pay(deposit, line.account_id, 20_000000))
+        .await
+        .expect("pago parcial");
+    assert_eq!(
+        credit
+            .find(line.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .outstanding_micros,
+        100_000000
+    );
 
-    let err = ctx.posting.post(&pay(deposit, line.account_id, 100_000001)).await.unwrap_err();
-    assert!(matches!(err, PostingError::Overpayment(_)), "pagar de más: {err:?}");
+    let err = ctx
+        .posting
+        .post(&pay(deposit, line.account_id, 100_000001))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PostingError::Overpayment(_)),
+        "pagar de más: {err:?}"
+    );
 
-    ctx.posting.post(&pay(deposit, line.account_id, 100_000000)).await.expect("pago total");
-    assert_eq!(credit.find(line.id).await.unwrap().unwrap().outstanding_micros, 0);
+    ctx.posting
+        .post(&pay(deposit, line.account_id, 100_000000))
+        .await
+        .expect("pago total");
+    assert_eq!(
+        credit
+            .find(line.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .outstanding_micros,
+        0
+    );
 }
 
 #[tokio::test]
 async fn una_linea_bloqueada_no_se_usa_pero_se_paga() {
     let ctx = setup().await;
     let (credit, line, deposit) = line_and_deposit(&ctx).await;
-    ctx.posting.post(&draw(line.account_id, deposit, 100_000000)).await.unwrap();
+    ctx.posting
+        .post(&draw(line.account_id, deposit, 100_000000))
+        .await
+        .unwrap();
 
     sqlx::query("UPDATE credit_lines SET status = 'BLOCKED' WHERE id = $1")
         .bind(line.id)
@@ -148,11 +220,29 @@ async fn una_linea_bloqueada_no_se_usa_pero_se_paga() {
         .await
         .unwrap();
 
-    let err = ctx.posting.post(&draw(line.account_id, deposit, 10_000000)).await.unwrap_err();
-    assert!(matches!(err, PostingError::CreditLineInactive(_)), "usar bloqueada: {err:?}");
+    let err = ctx
+        .posting
+        .post(&draw(line.account_id, deposit, 10_000000))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PostingError::CreditLineInactive(_)),
+        "usar bloqueada: {err:?}"
+    );
 
-    ctx.posting.post(&pay(deposit, line.account_id, 40_000000)).await.expect("pagar bloqueada sí");
-    assert_eq!(credit.find(line.id).await.unwrap().unwrap().outstanding_micros, 60_000000);
+    ctx.posting
+        .post(&pay(deposit, line.account_id, 40_000000))
+        .await
+        .expect("pagar bloqueada sí");
+    assert_eq!(
+        credit
+            .find(line.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .outstanding_micros,
+        60_000000
+    );
 }
 
 #[tokio::test]
@@ -162,9 +252,23 @@ async fn una_linea_viva_por_cliente_con_condiciones_inmutables() {
     let customer = Uuid::new_v4();
     let line = credit.open(&new_line(customer, 500_000000)).await.unwrap();
 
-    let err = credit.open(&new_line(customer, 900_000000)).await.unwrap_err();
-    assert!(matches!(err, PostingError::Conflict(_)), "segunda línea: {err:?}");
-    assert_eq!(credit.find_open_for_customer(customer).await.unwrap().unwrap().id, line.id);
+    let err = credit
+        .open(&new_line(customer, 900_000000))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PostingError::Conflict(_)),
+        "segunda línea: {err:?}"
+    );
+    assert_eq!(
+        credit
+            .find_open_for_customer(customer)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        line.id
+    );
 
     // El límite se puede ajustar; la tasa del contrato, no.
     sqlx::query("UPDATE credit_lines SET limit_micros = 800000000 WHERE id = $1")
@@ -185,11 +289,26 @@ async fn una_linea_sin_decision_o_con_condiciones_absurdas_no_se_abre() {
     let credit = CreditRepository::new(ctx.pool.clone());
     let base = new_line(Uuid::new_v4(), 500_000000);
     for bad in [
-        NewCreditLine { limit_micros: 0, ..base.clone() },
-        NewCreditLine { annual_rate_bps: -1, ..base.clone() },
-        NewCreditLine { cycle_day: 31, ..base.clone() },
-        NewCreditLine { decision_ref: " ".into(), ..base.clone() },
+        NewCreditLine {
+            limit_micros: 0,
+            ..base.clone()
+        },
+        NewCreditLine {
+            annual_rate_bps: -1,
+            ..base.clone()
+        },
+        NewCreditLine {
+            cycle_day: 31,
+            ..base.clone()
+        },
+        NewCreditLine {
+            decision_ref: " ".into(),
+            ..base.clone()
+        },
     ] {
-        assert!(matches!(credit.open(&bad).await, Err(PostingError::Invalid(_))), "{bad:?}");
+        assert!(
+            matches!(credit.open(&bad).await, Err(PostingError::Invalid(_))),
+            "{bad:?}"
+        );
     }
 }

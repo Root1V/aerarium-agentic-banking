@@ -63,13 +63,20 @@ pub fn interest_for(unpaid_micros: i64, annual_rate_bps: i32, days: i64) -> i64 
 
 /// Pago mínimo: intereses más un porcentaje de lo que se debe, con piso, sin pasar
 /// del total.
-pub fn minimum_payment(closing_micros: i64, interest_micros: i64, bps: i32, floor_micros: i64) -> i64 {
+pub fn minimum_payment(
+    closing_micros: i64,
+    interest_micros: i64,
+    bps: i32,
+    floor_micros: i64,
+) -> i64 {
     if closing_micros <= 0 {
         return 0;
     }
     // Redondeo hacia arriba: el mínimo nunca puede quedarse una micra corto.
     let share = ((closing_micros as i128 * bps as i128 + 9_999) / 10_000) as i64;
-    (interest_micros + share).max(floor_micros).min(closing_micros)
+    (interest_micros + share)
+        .max(floor_micros)
+        .min(closing_micros)
 }
 
 struct LineTerms {
@@ -85,7 +92,11 @@ struct LineTerms {
 impl CreditRepository {
     /// Corta el estado de cuenta de la línea en `cut_at`: cobra los intereses que
     /// correspondan y emite el estado de cuenta, todo en una transacción.
-    pub async fn close_cycle(&self, line_id: Uuid, cut_at: DateTime<Utc>) -> Result<Statement, PostingError> {
+    pub async fn close_cycle(
+        &self,
+        line_id: Uuid,
+        cut_at: DateTime<Utc>,
+    ) -> Result<Statement, PostingError> {
         let mut tx = self.pool().begin().await.map_err(PostingError::from_db)?;
 
         // El bloqueo de la línea serializa dos cortes simultáneos de la misma.
@@ -103,7 +114,9 @@ impl CreditRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(PostingError::from_db)?
-        .ok_or_else(|| PostingError::Invalid(format!("credit line {line_id} not found or closed")))?;
+        .ok_or_else(|| {
+            PostingError::Invalid(format!("credit line {line_id} not found or closed"))
+        })?;
 
         let previous = sqlx::query!(
             r#"
@@ -117,7 +130,10 @@ impl CreditRepository {
         .await
         .map_err(PostingError::from_db)?;
 
-        let period_start = previous.as_ref().map(|p| p.period_end).unwrap_or(terms.opened_at);
+        let period_start = previous
+            .as_ref()
+            .map(|p| p.period_end)
+            .unwrap_or(terms.opened_at);
         if cut_at <= period_start {
             return Err(PostingError::Invalid(format!(
                 "cut {cut_at} must be after the period start {period_start}"
@@ -184,7 +200,12 @@ impl CreditRepository {
         }
 
         let closing = opening + moved.charges + interest - moved.payments;
-        let minimum = minimum_payment(closing, interest, terms.min_payment_bps, terms.min_payment_floor_micros);
+        let minimum = minimum_payment(
+            closing,
+            interest,
+            terms.min_payment_bps,
+            terms.min_payment_floor_micros,
+        );
         let due_date = cut_at.date_naive() + Days::new(terms.payment_days as u64);
 
         let id = sqlx::query_scalar!(
@@ -216,7 +237,11 @@ impl CreditRepository {
     }
 
     /// Los estados de cuenta de la línea, del más reciente al más antiguo.
-    pub async fn statements(&self, line_id: Uuid, limit: i64) -> Result<Vec<Statement>, sqlx::Error> {
+    pub async fn statements(
+        &self,
+        line_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<Statement>, sqlx::Error> {
         let rows = sqlx::query_as!(
             StatementRow,
             r#"
@@ -243,9 +268,10 @@ impl CreditRepository {
     }
 
     async fn statement(&self, id: Uuid) -> Result<Statement, sqlx::Error> {
-        let line_id = sqlx::query_scalar!("SELECT line_id FROM credit_statements WHERE id = $1", id)
-            .fetch_one(self.pool())
-            .await?;
+        let line_id =
+            sqlx::query_scalar!("SELECT line_id FROM credit_statements WHERE id = $1", id)
+                .fetch_one(self.pool())
+                .await?;
         self.statements(line_id, 50)
             .await?
             .into_iter()
@@ -258,7 +284,11 @@ impl CreditRepository {
     /// Manda el último estado de cuenta ya vencido: si desde su corte se pagó al
     /// menos su mínimo, la línea está al día; si no, se bloquea. Bloquear o
     /// desbloquear es lo único que cambia.
-    pub async fn review(&self, line_id: Uuid, as_of: DateTime<Utc>) -> Result<CreditLine, PostingError> {
+    pub async fn review(
+        &self,
+        line_id: Uuid,
+        as_of: DateTime<Utc>,
+    ) -> Result<CreditLine, PostingError> {
         let due = self
             .statements(line_id, 50)
             .await
@@ -266,7 +296,11 @@ impl CreditRepository {
             .into_iter()
             .find(|s| end_of_day(s.due_date) < as_of);
         let behind = due.as_ref().is_some_and(|s| !s.minimum_covered());
-        let status = if behind { CreditLineStatus::Blocked } else { CreditLineStatus::Active };
+        let status = if behind {
+            CreditLineStatus::Blocked
+        } else {
+            CreditLineStatus::Active
+        };
 
         sqlx::query!(
             r#"
@@ -317,7 +351,9 @@ impl CreditRepository {
             match self.close_cycle(*line_id, now).await {
                 Ok(_) => cut += 1,
                 // Una línea que falla no frena las demás; se reintenta mañana.
-                Err(err) => tracing::error!(%line_id, error = %err, "no se pudo cortar el estado de cuenta"),
+                Err(err) => {
+                    tracing::error!(%line_id, error = %err, "no se pudo cortar el estado de cuenta")
+                }
             }
         }
         Ok(cut)
@@ -343,7 +379,10 @@ impl CreditRepository {
 
 /// El final del día del vencimiento: se puede pagar hasta las 23:59:59.
 fn end_of_day(date: NaiveDate) -> DateTime<Utc> {
-    (date + Days::new(1)).and_hms_opt(0, 0, 0).expect("medianoche válida").and_utc()
+    (date + Days::new(1))
+        .and_hms_opt(0, 0, 0)
+        .expect("medianoche válida")
+        .and_utc()
 }
 
 /// La cuenta de ingresos por intereses, una por moneda; se crea la primera vez.
@@ -434,7 +473,10 @@ mod tests {
     #[test]
     fn el_minimo_cubre_intereses_mas_una_parte_con_piso_y_sin_pasar_del_total() {
         // 5 % de 400 = 20, más 3 de intereses.
-        assert_eq!(minimum_payment(400_000000, 3_000000, 500, 10_000000), 23_000000);
+        assert_eq!(
+            minimum_payment(400_000000, 3_000000, 500, 10_000000),
+            23_000000
+        );
         // 5 % de 50 = 2,5: manda el piso de 10.
         assert_eq!(minimum_payment(50_000000, 0, 500, 10_000000), 10_000000);
         // Se deben 6: el mínimo no puede ser más que el total.

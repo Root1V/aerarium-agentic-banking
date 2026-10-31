@@ -25,13 +25,35 @@ async fn posting_balanceado_actualiza_saldos_como_proyeccion_del_ledger() {
     let product = ctx.simple_product(None, None).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
 
-    ctx.posting.post(&deposit(cash, customer, 150_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.expect("first deposit");
-    ctx.posting.post(&deposit(cash, customer, 50_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.expect("second deposit");
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            150_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .expect("first deposit");
+    ctx.posting
+        .post(&deposit(
+            cash,
+            customer,
+            50_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .expect("second deposit");
 
-    assert_eq!(ctx.accounts.balance_micros(cash).await.unwrap(), 200_000000, "activo crece al debe");
-    assert_eq!(ctx.accounts.balance_micros(customer).await.unwrap(), 200_000000, "pasivo crece al haber");
+    assert_eq!(
+        ctx.accounts.balance_micros(cash).await.unwrap(),
+        200_000000,
+        "activo crece al debe"
+    );
+    assert_eq!(
+        ctx.accounts.balance_micros(customer).await.unwrap(),
+        200_000000,
+        "pasivo crece al haber"
+    );
 }
 
 #[tokio::test]
@@ -101,7 +123,10 @@ async fn un_monto_negativo_o_cero_es_rechazado() {
         ],
     );
 
-    assert!(matches!(ctx.posting.post(&request).await, Err(PostingError::Invalid(_))));
+    assert!(matches!(
+        ctx.posting.post(&request).await,
+        Err(PostingError::Invalid(_))
+    ));
 }
 
 // ------------------------------------------------------------- 2. append-only
@@ -111,8 +136,14 @@ async fn los_asientos_y_transacciones_no_admiten_update_ni_delete() {
     let ctx = setup().await;
     let product = ctx.simple_product(None, None).await;
     let (cash, customer) = ctx.cash_and_customer(&product).await;
-    let result = ctx.posting
-        .post(&deposit(cash, customer, 10_000000, &format!("imm-{}", Uuid::new_v4())))
+    let result = ctx
+        .posting
+        .post(&deposit(
+            cash,
+            customer,
+            10_000000,
+            &format!("imm-{}", Uuid::new_v4()),
+        ))
         .await
         .expect("deposit");
 
@@ -129,7 +160,10 @@ async fn los_asientos_y_transacciones_no_admiten_update_ni_delete() {
             .execute(&ctx.pool)
             .await
             .expect_err(&format!("debería fallar: {sql}"));
-        assert!(err.to_string().contains("append-only"), "mensaje inesperado: {err}");
+        assert!(
+            err.to_string().contains("append-only"),
+            "mensaje inesperado: {err}"
+        );
     }
 }
 
@@ -142,8 +176,16 @@ async fn replay_con_la_misma_clave_devuelve_la_transaccion_original() {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
     let key = format!("rep-{}", Uuid::new_v4());
 
-    let first = ctx.posting.post(&deposit(cash, customer, 30_000000, &key)).await.unwrap();
-    let second = ctx.posting.post(&deposit(cash, customer, 30_000000, &key)).await.unwrap();
+    let first = ctx
+        .posting
+        .post(&deposit(cash, customer, 30_000000, &key))
+        .await
+        .unwrap();
+    let second = ctx
+        .posting
+        .post(&deposit(cash, customer, 30_000000, &key))
+        .await
+        .unwrap();
 
     assert_eq!(first.transaction.id, second.transaction.id);
     assert!(second.replayed);
@@ -161,10 +203,15 @@ async fn la_misma_clave_con_payload_distinto_es_un_conflicto_explicito() {
     let (cash, customer) = ctx.cash_and_customer(&product).await;
     let key = format!("conf-{}", Uuid::new_v4());
 
-    ctx.posting.post(&deposit(cash, customer, 30_000000, &key)).await.unwrap();
+    ctx.posting
+        .post(&deposit(cash, customer, 30_000000, &key))
+        .await
+        .unwrap();
 
     assert!(matches!(
-        ctx.posting.post(&deposit(cash, customer, 99_990000, &key)).await,
+        ctx.posting
+            .post(&deposit(cash, customer, 99_990000, &key))
+            .await,
         Err(PostingError::IdempotencyConflict(_))
     ));
 }
@@ -186,14 +233,19 @@ async fn bajo_concurrencia_n_intentos_con_la_misma_clave_producen_una_transaccio
         let key = key.clone();
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
-            ctx.posting.post(&deposit(cash, customer, 77_000000, &key)).await
+            ctx.posting
+                .post(&deposit(cash, customer, 77_000000, &key))
+                .await
         }));
     }
 
     let mut ids = Vec::new();
     let mut replayed = 0;
     for handle in handles {
-        let result = handle.await.unwrap().expect("cada intento debe resolver, no fallar");
+        let result = handle
+            .await
+            .unwrap()
+            .expect("cada intento debe resolver, no fallar");
         if result.replayed {
             replayed += 1;
         }
@@ -201,7 +253,11 @@ async fn bajo_concurrencia_n_intentos_con_la_misma_clave_producen_una_transaccio
     }
 
     let unique: std::collections::HashSet<_> = ids.iter().collect();
-    assert_eq!(unique.len(), 1, "todas las respuestas apuntan a la misma transacción");
+    assert_eq!(
+        unique.len(),
+        1,
+        "todas las respuestas apuntan a la misma transacción"
+    );
     assert_eq!(replayed, 9, "solo una fue un insert real");
     assert_eq!(
         ctx.accounts.balance_micros(customer).await.unwrap(),
@@ -253,8 +309,15 @@ async fn una_transferencia_entre_clientes_mueve_saldos_y_la_caja_queda_intacta()
     let (cash, alice) = ctx.cash_and_customer(&product).await;
     let bob_id = ctx.customer_account(&product).await;
 
-    ctx.posting.post(&deposit(cash, alice, 100_000000, &format!("dep-{}", Uuid::new_v4())))
-        .await.unwrap();
+    ctx.posting
+        .post(&deposit(
+            cash,
+            alice,
+            100_000000,
+            &format!("dep-{}", Uuid::new_v4()),
+        ))
+        .await
+        .unwrap();
 
     ctx.posting
         .post(&PostingRequest::new(
@@ -269,7 +332,10 @@ async fn una_transferencia_entre_clientes_mueve_saldos_y_la_caja_queda_intacta()
         .unwrap();
 
     assert_eq!(ctx.accounts.balance_micros(alice).await.unwrap(), 60_000000);
-    assert_eq!(ctx.accounts.balance_micros(bob_id).await.unwrap(), 40_000000);
+    assert_eq!(
+        ctx.accounts.balance_micros(bob_id).await.unwrap(),
+        40_000000
+    );
     assert_eq!(
         ctx.accounts.balance_micros(cash).await.unwrap(),
         100_000000,

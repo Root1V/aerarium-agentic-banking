@@ -96,7 +96,11 @@ impl Reconciler {
         let findings = self.detect_balance_drift().await?;
         self.finish_run(run_id, &findings).await?;
 
-        Ok(ReconciliationRun { id: run_id, scope: "internal".into(), findings })
+        Ok(ReconciliationRun {
+            id: run_id,
+            scope: "internal".into(),
+            findings,
+        })
     }
 
     /// Concilia una cuenta contra el extracto de un proveedor.
@@ -155,18 +159,20 @@ impl Reconciler {
                     ),
                     created_at: None,
                 }),
-                Some(row) if row.amount_micros != movement.amount_micros => findings.push(Finding {
-                    id: 0,
-                    run_id: None,
-                    kind: FindingKind::AmountMismatch,
-                    account_id: Some(account_id),
-                    reference: Some(movement.reference.clone()),
-                    expected_micros: Some(movement.amount_micros),
-                    actual_micros: Some(row.amount_micros),
-                    currency: Some(movement.currency.clone()),
-                    detail: format!("importes distintos para {}", movement.reference),
-                    created_at: None,
-                }),
+                Some(row) if row.amount_micros != movement.amount_micros => {
+                    findings.push(Finding {
+                        id: 0,
+                        run_id: None,
+                        kind: FindingKind::AmountMismatch,
+                        account_id: Some(account_id),
+                        reference: Some(movement.reference.clone()),
+                        expected_micros: Some(movement.amount_micros),
+                        actual_micros: Some(row.amount_micros),
+                        currency: Some(movement.currency.clone()),
+                        detail: format!("importes distintos para {}", movement.reference),
+                        created_at: None,
+                    })
+                }
                 Some(_) => {}
             }
         }
@@ -192,7 +198,11 @@ impl Reconciler {
         }
 
         self.finish_run(run_id, &findings).await?;
-        Ok(ReconciliationRun { id: run_id, scope: scope.into(), findings })
+        Ok(ReconciliationRun {
+            id: run_id,
+            scope: scope.into(),
+            findings,
+        })
     }
 
     /// Detecta dinero detenido en una cuenta de tránsito o retención.
@@ -255,7 +265,11 @@ impl Reconciler {
         }
 
         self.finish_run(run_id, &findings).await?;
-        Ok(ReconciliationRun { id: run_id, scope: scope.into(), findings })
+        Ok(ReconciliationRun {
+            id: run_id,
+            scope: scope.into(),
+            findings,
+        })
     }
 
     /// Diferencias abiertas, para la cola de operaciones.
@@ -292,7 +306,11 @@ impl Reconciler {
     }
 
     /// Cierra un hallazgo concreto dejando constancia de cómo se resolvió.
-    pub async fn resolve_finding(&self, finding_id: i64, resolution: &str) -> Result<bool, sqlx::Error> {
+    pub async fn resolve_finding(
+        &self,
+        finding_id: i64,
+        resolution: &str,
+    ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query!(
             r#"
             UPDATE reconciliation_findings

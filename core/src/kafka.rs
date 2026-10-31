@@ -30,7 +30,11 @@ impl KafkaPublisher {
             .create()
             .map_err(|e| PublishError(format!("crear productor: {e}")))?;
 
-        Ok(Self { producer, topic: topic.into(), timeout: Duration::from_secs(10) })
+        Ok(Self {
+            producer,
+            topic: topic.into(),
+            timeout: Duration::from_secs(10),
+        })
     }
 }
 
