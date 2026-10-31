@@ -28,6 +28,7 @@ import (
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/clients/go/telemetry"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/oauth"
 )
 
@@ -79,6 +80,9 @@ type Server struct {
 	log       *slog.Logger
 	byClient  *ratelimit.Limiter
 	byAccount *ratelimit.Limiter
+	// control decide y registra cada pago bajo mandato. Sin él, los decide solo
+	// el core.
+	control *control.Service
 }
 
 func NewServer(core *coreclient.Client, oauthSrv *oauth.Server, store *oauth.Store, cfg Config, log *slog.Logger) *Server {
@@ -95,6 +99,14 @@ func NewServer(core *coreclient.Client, oauthSrv *oauth.Server, store *oauth.Sto
 		byClient:  ratelimit.NewLimiter(cfg.ClientRate, cfg.ClientBurst),
 		byAccount: ratelimit.NewLimiter(cfg.AccountRate, cfg.AccountBurst),
 	}
+}
+
+// WithControl hace pasar los pagos bajo mandato por la capa de control: quedan
+// en el registro de decisiones del titular, con el agente como actor y el
+// mandato como permiso.
+func (s *Server) WithControl(ctrl *control.Service) *Server {
+	s.control = ctrl
+	return s
 }
 
 // Handler arma el enrutador completo.

@@ -10,6 +10,7 @@ import (
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/services/bff"
 	bffsim "github.com/aibank/aibank/services/bff/sim"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/google/uuid"
 )
@@ -31,6 +32,8 @@ type modelBFixture struct {
 	holderID    string
 	holderToken string
 	agentAcct   string
+	// El registro de decisiones por el que pasa cada pago bajo mandato.
+	control *control.Service
 }
 
 func setupModelB(t *testing.T) *modelBFixture {
@@ -43,6 +46,11 @@ func setupModelB(t *testing.T) *modelBFixture {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	store := oauth.NewStore(db)
+	ctrl := control.NewService(db, nil)
+	if err := ctrl.Migrate(f.ctx); err != nil {
+		t.Fatalf("migrar control: %v", err)
+	}
+	f.server.WithControl(ctrl)
 
 	// El servicio ya tiene un store; se le enchufa al BFF el mismo, que es lo que
 	// une los dos lados del flujo.
@@ -75,6 +83,7 @@ func setupModelB(t *testing.T) *modelBFixture {
 		holderID:    holderID,
 		holderToken: bffAuth.Issue(holderID, "device-"+holderID),
 		agentAcct:   account.Id,
+		control:     ctrl,
 	}
 }
 

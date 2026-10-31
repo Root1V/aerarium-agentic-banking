@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/mercatus"
 	"github.com/aibank/aibank/services/oauth"
 	_ "github.com/lib/pq"
@@ -83,11 +84,18 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	// Los pagos bajo mandato quedan en el mismo registro de decisiones que lo que
+	// hace el titular desde su app.
+	ctrl := control.NewService(db, nil)
+	if err := ctrl.Migrate(ctx); err != nil {
+		return err
+	}
+
 	server := mercatus.NewServer(core, oauth.NewServer(store, issuer, log), store, mercatus.Config{
 		Sandbox:              sandbox,
 		ProductByCurrency:    productsFromEnv(),
 		SandboxCashAccountID: cashAccount,
-	}, log)
+	}, log).WithControl(ctrl)
 
 	addr := env("BIND_ADDR", "127.0.0.1:8081")
 	httpServer := &http.Server{

@@ -144,9 +144,11 @@ retención vence. Propuesto en el canal (AE-09).
 - **La confirmación cubre transferencias y dar permisos de pago.** Todavía no la piden
   pedir la tarjeta de crédito ni cambiar datos de seguridad: son nivel 4 y entran al
   catálogo de la capa de control cuando se pase su flujo por ella.
-- **Los pagos de los agentes no pasan todavía por la capa de control.** Los topes los
-  hace cumplir el mandato en el core, que es lo que importa, pero esos pagos no quedan
-  en el registro de decisiones. Entra con F3-05, que ata el mandato al agente.
+- **En el registro, el actor de un pago de agente es la plataforma, no el agente.** Los
+  pagos bajo mandato ya pasan por la capa de control, pero el banco no sabe qué agente
+  de Mercatus pagó ni para qué: Mercatus tiene que mandarlo y firmarlo, con cambios
+  obligatorios en el contrato (petición AE-10 en el canal con Mercatus). Los pagos del modelo A no pasan por
+  control: el dinero es de la plataforma, no de un titular.
 - **El registro de decisiones no se ve todavía**: ni el titular ni el backoffice lo
   consultan. Lo muestran F3-06 (centro de permisos) y F3-07 (revisión humana).
 - **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
@@ -214,8 +216,13 @@ resultados financieros, con agentes que actúan dentro de límites que el client
 - [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*
 - [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
 - [ ] **F3-05 Identidad del agente**: mandato atado al agente y a la intención,
-  compatible con Mastercard Agent Pay y Visa Trusted Agent Protocol. Acordar con
-  Mercatus. *Media.*
+  compatible con Mastercard Agent Pay y Visa Trusted Agent Protocol. *Media.*
+  **Hecha la parte del banco:** cada pago bajo mandato pasa por la capa de control
+  —actor la plataforma, permiso el mandato, con su tope por pago y lo que queda del
+  total— y queda en el registro del titular, permitido o negado. Se niega con los
+  mismos códigos que daría el core: el contrato no cambia. **Falta lo de Mercatus**
+  (AE-10): registrar a cada agente con su clave, permisos por agente, `agent_id` e
+  intención obligatorios en cada pago, y pagos firmados por el agente (RFC 9421).
 - [ ] **F3-07 Registro de decisiones automáticas** con evidencia y cola de revisión
   humana en el backoffice. *Media.*
 - [ ] **F3-08 Asistente financiero** nivel 1 (solo lectura), luego nivel 2. Falta

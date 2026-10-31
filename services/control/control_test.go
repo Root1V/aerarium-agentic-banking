@@ -114,6 +114,12 @@ func TestQuienNoEsLaPersonaNecesitaUnPermisoQueLoCubra(t *testing.T) {
 			return &g
 		}, control.ReasonLevelTooLow},
 		{"sobre el tope", control.ActionMandatePayment, ten + 1, func() *control.Grant { g := valid; return &g }, control.ReasonOverLimit},
+		{"sobre lo que queda del total", control.ActionMandatePayment, 2, func() *control.Grant {
+			g := valid
+			one := int64(1)
+			g.Remaining = &one
+			return &g
+		}, control.ReasonOverLimit},
 		// Ni con un permiso que diga cubrirlo: el nivel 4 no se delega.
 		{"alto impacto", control.ActionGrantPermission, 0, func() *control.Grant {
 			g := valid
