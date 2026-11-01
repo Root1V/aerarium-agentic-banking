@@ -40,7 +40,10 @@ class ForecastScreen extends StatelessWidget {
             _Line(
               label: card.overdue ? 'Tarjeta, vencida' : 'Tarjeta, vence ${onDay(card.dueOn)}',
               value: card.total.format(),
-              note: 'Pago mínimo: ${card.minimum.format()}',
+              note: [
+                'Pago mínimo: ${card.minimum.format()}',
+                if (card.reserved case final reserved?) 'Apartado para pagarla: ${reserved.format()}',
+              ].join(' · '),
             ),
           if (f.income case final income?)
             _Line(

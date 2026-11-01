@@ -170,3 +170,15 @@ func TestUnaTarjetaVencidaSeCuentaHoy(t *testing.T) {
 		t.Errorf("tarjeta vencida: %+v", f.AfterCard)
 	}
 }
+
+// Lo apartado en el bolsillo de la tarjeta ya está reservado para pagarla: no
+// sale de la cuenta ese día.
+func TestLoApartadoParaLaTarjetaNoSaleDeLaCuenta(t *testing.T) {
+	in := base()
+	in.Card = &forecast.CardDue{DueOn: day(16), MinimumMicros: 20 * usd, TotalMicros: 190 * usd, ReservedMicros: 150 * usd}
+	f := forecast.Project(in)
+	// 300 − 150 de gasto − (190 − 150) = 110 el 16.
+	if f.AfterCard == nil || f.AfterCard.AmountMicros != 110*usd {
+		t.Errorf("al pagar la tarjeta: %+v", f.AfterCard)
+	}
+}

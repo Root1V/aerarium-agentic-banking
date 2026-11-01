@@ -27,6 +27,7 @@ import (
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/oauth"
+	"github.com/aibank/aibank/services/pockets"
 	"github.com/aibank/aibank/services/sessions"
 )
 
@@ -43,6 +44,8 @@ type Server struct {
 	// forecast proyecta el saldo hasta el próximo ingreso. Opcional: necesita el
 	// motor de riesgo, igual que la tarjeta.
 	forecast *forecast.Service
+	// pockets habilita los bolsillos: dinero apartado dentro de la cuenta.
+	pockets *pockets.Service
 	// agents dice qué agente hizo cada pago con un permiso y qué compró. Sin él
 	// el historial agrupa por plataforma, sin el detalle.
 	agents *agents.Store
@@ -106,6 +109,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
 	if s.forecast != nil {
 		mux.Handle("GET /v1/accounts/{accountID}/forecast", s.requireAuth(s.handleForecast))
+	}
+	if s.pockets != nil {
+		s.pocketRoutes(mux)
 	}
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
 	mux.Handle("GET /v1/payees/recent", s.requireAuth(s.handleRecentPayees))

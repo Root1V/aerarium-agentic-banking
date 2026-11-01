@@ -85,8 +85,13 @@ class Movement {
   bool get _withOwnCard => kind == 'credit_drawdown' || kind == 'credit_payment';
 
   /// Etiqueta legible: a quién o de quién, si se sabe; si no, el tipo.
+  /// Un movimiento entre la cuenta y uno de sus bolsillos. La descripción es el
+  /// nombre del bolsillo.
+  bool get isPocketMove => kind == 'pocket_transfer';
+
   String get label => switch (counterparty) {
         _ when isPlatformPayment => 'Pago a $merchant',
+        _ when isPocketMove => sign < 0 ? 'Apartado en «$description»' : 'Devuelto de «$description»',
         _ when _withOwnCard => _kindLabel,
         final Account who? => sign < 0 ? 'A ${who.name}' : 'De ${who.name}',
         null => _kindLabel,
@@ -896,18 +901,23 @@ class ForecastIncome {
 }
 
 class ForecastCard {
-  const ForecastCard({required this.dueOn, required this.minimum, required this.total, required this.overdue});
+  const ForecastCard(
+      {required this.dueOn, required this.minimum, required this.total, required this.overdue, this.reserved});
 
   final DateTime dueOn;
   final Money minimum;
   final Money total;
   final bool overdue;
 
+  /// Lo apartado en el bolsillo para la tarjeta: ya está reservado para pagarla.
+  final Money? reserved;
+
   factory ForecastCard.fromJson(Map<String, dynamic> json) => ForecastCard(
         dueOn: _day(json['due_on'] as String),
         minimum: Money.fromJson(json['minimum'] as Map<String, dynamic>),
         total: Money.fromJson(json['total'] as Map<String, dynamic>),
         overdue: json['overdue'] as bool? ?? false,
+        reserved: json['reserved'] == null ? null : Money.fromJson(json['reserved'] as Map<String, dynamic>),
       );
 }
 
@@ -944,4 +954,25 @@ class ForecastOption {
 DateTime _day(String value) {
   final parts = value.split('-').map(int.parse).toList();
   return DateTime(parts[0], parts[1], parts[2]);
+}
+
+/// Un bolsillo: dinero apartado dentro de la cuenta (F3-02).
+class Pocket {
+  const Pocket({required this.id, required this.name, required this.purpose, required this.balance});
+
+  final String id;
+  final String name;
+
+  /// `card` (apartado para pagar la tarjeta) o `general`.
+  final String purpose;
+  final Money balance;
+
+  bool get isForCard => purpose == 'card';
+
+  factory Pocket.fromJson(Map<String, dynamic> json) => Pocket(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? '',
+        purpose: json['purpose'] as String? ?? 'general',
+        balance: Money.fromJson(json['balance'] as Map<String, dynamic>),
+      );
 }

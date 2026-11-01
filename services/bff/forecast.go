@@ -34,6 +34,8 @@ type forecastCardJSON struct {
 	Minimum moneyJSON `json:"minimum"`
 	Total   moneyJSON `json:"total"`
 	Overdue bool      `json:"overdue,omitempty"`
+	// Reserved: lo apartado en el bolsillo para la tarjeta.
+	Reserved *moneyJSON `json:"reserved,omitempty"`
 }
 
 type forecastOptionJSON struct {
@@ -89,6 +91,10 @@ func toForecastJSON(f *forecast.Forecast) forecastJSON {
 	if f.Card != nil {
 		out.Card = &forecastCardJSON{DueOn: date(f.Card.DueOn), Minimum: money(f.Card.MinimumMicros),
 			Total: money(f.Card.TotalMicros), Overdue: f.Card.Overdue}
+		if f.Card.ReservedMicros > 0 {
+			reserved := money(f.Card.ReservedMicros)
+			out.Card.Reserved = &reserved
+		}
 	}
 	if f.AfterCard != nil {
 		out.AfterCard = &pointJSON{On: date(f.AfterCard.On), Amount: money(f.AfterCard.AmountMicros)}

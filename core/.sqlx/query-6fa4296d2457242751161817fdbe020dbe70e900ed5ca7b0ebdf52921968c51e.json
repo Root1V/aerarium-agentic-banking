@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, code, name,\n                   type   as \"account_type: AccountType\",\n                   owner  as \"owner: AccountOwner\",\n                   owner_id, product_id, currency,\n                   status as \"status: AccountStatus\",\n                   allows_overdraft, created_at\n            FROM accounts WHERE code = $1\n            ",
+  "query": "\n            INSERT INTO accounts (code, name, type, owner, owner_id, product_id,\n                                  currency, allows_overdraft, parent_account_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)\n            RETURNING id, code, name,\n                      type   as \"account_type: AccountType\",\n                      owner  as \"owner: AccountOwner\",\n                      owner_id, product_id, currency,\n                      status as \"status: AccountStatus\",\n                      allows_overdraft, created_at, parent_account_id\n            ",
   "describe": {
     "columns": [
       {
@@ -91,11 +91,46 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "parent_account_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "account_type",
+            "kind": {
+              "Enum": [
+                "ASSET",
+                "LIABILITY",
+                "EQUITY",
+                "INCOME",
+                "EXPENSE"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "account_owner",
+            "kind": {
+              "Enum": [
+                "CUSTOMER",
+                "INTERNAL"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Uuid",
+        "Bpchar",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -109,8 +144,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "76680661cb0d922f943995dec047dd654fa90934d7a66db83a7afb63dda3491d"
+  "hash": "6fa4296d2457242751161817fdbe020dbe70e900ed5ca7b0ebdf52921968c51e"
 }

@@ -59,3 +59,28 @@ String optionText(Forecast f, ForecastOption o) {
       return '';
   }
 }
+
+/// El aviso corto del inicio: un título que se lee de un vistazo…
+String forecastTitle(Forecast f) {
+  final income = f.income == null ? null : 'tu ingreso del ${f.income!.expectedOn.day}';
+  return switch (f.status) {
+    'deficit' => income == null ? 'Te faltaría dinero este mes' : 'No llegas a $income',
+    'tight' => income == null ? 'Vas justo este mes' : 'Llegas justo a $income',
+    _ => income == null ? 'Vas bien este mes' : 'Llegas bien a $income',
+  };
+}
+
+/// …y una línea con el porqué.
+String forecastDetail(Forecast f) {
+  final card = f.card;
+  final after = f.afterCard;
+  return switch (f.status) {
+    'deficit' when f.cause == 'card' && card != null && after != null =>
+      'Al pagar la tarjeta ${card.overdue ? 'vencida' : onDay(card.dueOn)} quedarías en ${after.amount.format()}',
+    'deficit' => 'A este ritmo, ${onDay(f.lowest.on)} quedarías en ${f.lowest.amount.format()}',
+    'tight' => '${_cap(onDay(f.lowest.on))} te quedarían ${f.lowest.amount.format()}',
+    _ => 'Lo más bajo: ${f.lowest.amount.format()}, ${onDay(f.lowest.on)}',
+  };
+}
+
+String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);

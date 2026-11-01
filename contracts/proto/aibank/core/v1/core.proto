@@ -180,6 +180,8 @@ message Account {
   AccountStatus status = 9;
   bool allows_overdraft = 10;
   google.protobuf.Timestamp created_at = 11;
+  // La cuenta madre, si esta es un bolsillo. Vacío en las demás.
+  string parent_account_id = 12;
 }
 
 message OpenCustomerAccountRequest {
@@ -205,6 +207,19 @@ message GetAccountByIdRequest {
   string id = 1;
 }
 
+// Un bolsillo: dinero apartado dentro de una cuenta. Hereda cliente, moneda y
+// producto de su cuenta, y el tope de saldo es de la cuenta con sus bolsillos.
+message OpenPocketRequest {
+  string parent_account_id = 1;
+  string code = 2;
+  string name = 3;
+}
+
+// Solo se cierra vacío: el dinero vuelve antes a la cuenta.
+message ClosePocketRequest {
+  string pocket_id = 1;
+}
+
 message ListCustomerAccountsRequest {
   string customer_id = 1;
 }
@@ -222,6 +237,10 @@ service AccountService {
   // Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
   // es, no qué cuenta quiere ver.
   rpc ListCustomerAccounts(ListCustomerAccountsRequest) returns (ListCustomerAccountsResponse);
+  // Los bolsillos se mueven con Post, `kind` = "pocket_transfer", dentro de una
+  // misma cuenta y sus bolsillos.
+  rpc OpenPocket(OpenPocketRequest) returns (Account);
+  rpc ClosePocket(ClosePocketRequest) returns (Account);
 }
 
 // ---------------------------------------------------------------- productos

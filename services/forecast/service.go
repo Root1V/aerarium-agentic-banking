@@ -12,11 +12,23 @@ import (
 
 // Service reúne lo que se sabe de la cuenta y proyecta.
 type Service struct {
-	core   *coreclient.Client
-	cards  *credit.Service
-	income credit.IncomeReader
-	zone   *time.Location
-	now    func() time.Time
+	core    *coreclient.Client
+	cards   *credit.Service
+	income  credit.IncomeReader
+	reserve CardReserve
+	zone    *time.Location
+	now     func() time.Time
+}
+
+// CardReserve dice cuánto tiene apartado la cuenta para pagar la tarjeta.
+type CardReserve interface {
+	CardReserveMicros(ctx context.Context, customerID, accountID string) (int64, error)
+}
+
+// WithCardReserve hace que la previsión cuente lo apartado para la tarjeta.
+func (s *Service) WithCardReserve(r CardReserve) *Service {
+	s.reserve = r
+	return s
 }
 
 // NewService arma la previsión. `cards` da los movimientos observados y el
@@ -63,6 +75,11 @@ func (s *Service) Forecast(ctx context.Context, customerID, accountID string) (*
 	}
 	if in.Card, err = s.cardDue(ctx, customerID, today); err != nil {
 		return nil, err
+	}
+	if in.Card != nil && s.reserve != nil {
+		if in.Card.ReservedMicros, err = s.reserve.CardReserveMicros(ctx, customerID, accountID); err != nil {
+			return nil, fmt.Errorf("bolsillo de la tarjeta: %w", err)
+		}
 	}
 	f := Project(in)
 	return &f, nil

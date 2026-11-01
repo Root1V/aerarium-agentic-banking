@@ -220,6 +220,8 @@ const (
 	AccountService_GetAccount_FullMethodName            = "/aibank.core.v1.AccountService/GetAccount"
 	AccountService_GetAccountById_FullMethodName        = "/aibank.core.v1.AccountService/GetAccountById"
 	AccountService_ListCustomerAccounts_FullMethodName  = "/aibank.core.v1.AccountService/ListCustomerAccounts"
+	AccountService_OpenPocket_FullMethodName            = "/aibank.core.v1.AccountService/OpenPocket"
+	AccountService_ClosePocket_FullMethodName           = "/aibank.core.v1.AccountService/ClosePocket"
 )
 
 // AccountServiceClient is the client API for AccountService service.
@@ -233,6 +235,10 @@ type AccountServiceClient interface {
 	// Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
 	// es, no qué cuenta quiere ver.
 	ListCustomerAccounts(ctx context.Context, in *ListCustomerAccountsRequest, opts ...grpc.CallOption) (*ListCustomerAccountsResponse, error)
+	// Los bolsillos se mueven con Post, `kind` = "pocket_transfer", dentro de una
+	// misma cuenta y sus bolsillos.
+	OpenPocket(ctx context.Context, in *OpenPocketRequest, opts ...grpc.CallOption) (*Account, error)
+	ClosePocket(ctx context.Context, in *ClosePocketRequest, opts ...grpc.CallOption) (*Account, error)
 }
 
 type accountServiceClient struct {
@@ -293,6 +299,26 @@ func (c *accountServiceClient) ListCustomerAccounts(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *accountServiceClient) OpenPocket(ctx context.Context, in *OpenPocketRequest, opts ...grpc.CallOption) (*Account, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Account)
+	err := c.cc.Invoke(ctx, AccountService_OpenPocket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accountServiceClient) ClosePocket(ctx context.Context, in *ClosePocketRequest, opts ...grpc.CallOption) (*Account, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Account)
+	err := c.cc.Invoke(ctx, AccountService_ClosePocket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AccountServiceServer is the server API for AccountService service.
 // All implementations must embed UnimplementedAccountServiceServer
 // for forward compatibility.
@@ -304,6 +330,10 @@ type AccountServiceServer interface {
 	// Las cuentas de un cliente. Lo necesita un login real: la persona dice quién
 	// es, no qué cuenta quiere ver.
 	ListCustomerAccounts(context.Context, *ListCustomerAccountsRequest) (*ListCustomerAccountsResponse, error)
+	// Los bolsillos se mueven con Post, `kind` = "pocket_transfer", dentro de una
+	// misma cuenta y sus bolsillos.
+	OpenPocket(context.Context, *OpenPocketRequest) (*Account, error)
+	ClosePocket(context.Context, *ClosePocketRequest) (*Account, error)
 	mustEmbedUnimplementedAccountServiceServer()
 }
 
@@ -328,6 +358,12 @@ func (UnimplementedAccountServiceServer) GetAccountById(context.Context, *GetAcc
 }
 func (UnimplementedAccountServiceServer) ListCustomerAccounts(context.Context, *ListCustomerAccountsRequest) (*ListCustomerAccountsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListCustomerAccounts not implemented")
+}
+func (UnimplementedAccountServiceServer) OpenPocket(context.Context, *OpenPocketRequest) (*Account, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenPocket not implemented")
+}
+func (UnimplementedAccountServiceServer) ClosePocket(context.Context, *ClosePocketRequest) (*Account, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClosePocket not implemented")
 }
 func (UnimplementedAccountServiceServer) mustEmbedUnimplementedAccountServiceServer() {}
 func (UnimplementedAccountServiceServer) testEmbeddedByValue()                        {}
@@ -440,6 +476,42 @@ func _AccountService_ListCustomerAccounts_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccountService_OpenPocket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenPocketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountServiceServer).OpenPocket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccountService_OpenPocket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountServiceServer).OpenPocket(ctx, req.(*OpenPocketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccountService_ClosePocket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClosePocketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountServiceServer).ClosePocket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccountService_ClosePocket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountServiceServer).ClosePocket(ctx, req.(*ClosePocketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AccountService_ServiceDesc is the grpc.ServiceDesc for AccountService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -466,6 +538,14 @@ var AccountService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListCustomerAccounts",
 			Handler:    _AccountService_ListCustomerAccounts_Handler,
+		},
+		{
+			MethodName: "OpenPocket",
+			Handler:    _AccountService_OpenPocket_Handler,
+		},
+		{
+			MethodName: "ClosePocket",
+			Handler:    _AccountService_ClosePocket_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

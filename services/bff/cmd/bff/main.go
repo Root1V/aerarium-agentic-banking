@@ -48,6 +48,7 @@ import (
 	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
+	"github.com/aibank/aibank/services/pockets"
 	"github.com/aibank/aibank/services/stepup"
 	_ "github.com/lib/pq"
 )
@@ -154,6 +155,13 @@ func run(log *slog.Logger) error {
 			log.Warn("directorio de celulares deshabilitado: no hay proveedor de SMS")
 		}
 
+		// Bolsillos: dinero apartado dentro de la cuenta.
+		pocketSvc := pockets.NewService(db, core)
+		if err := pocketSvc.Migrate(ctx); err != nil {
+			return err
+		}
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithPockets(pocketSvc) })
+
 		// Tarjeta de crédito: necesita el motor de riesgo, que decide. Sin él no se
 		// origina nada.
 		if riskURL := os.Getenv("RISK_URL"); riskURL != "" {
@@ -175,7 +183,7 @@ func run(log *slog.Logger) error {
 			if err != nil {
 				return err
 			}
-			forecasts := forecast.NewService(core, cards, risk, zone)
+			forecasts := forecast.NewService(core, cards, risk, zone).WithCardReserve(pocketSvc)
 			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithForecast(forecasts) })
 		} else {
 			log.Warn("tarjeta de crédito deshabilitada: falta RISK_URL")

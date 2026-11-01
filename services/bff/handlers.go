@@ -253,6 +253,12 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		s.writeCoreError(w, r, err)
 		return
 	}
+	if origin.GetParentAccountId() != "" {
+		// Lo apartado no se manda a otros por descuido: primero vuelve a la cuenta.
+		writeError(w, http.StatusUnprocessableEntity, "pocket_not_transferable",
+			"pasa primero el dinero del bolsillo a tu cuenta")
+		return
+	}
 
 	destination, err := s.core.GetAccountByID(r.Context(), req.ToAccountID)
 	if err != nil {

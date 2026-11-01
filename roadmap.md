@@ -149,6 +149,10 @@ retención vence. Propuesto en el canal (AE-09).
   el dinero es de la plataforma, no de un titular.
 - **La lista de compras de un grupo es la de lo ya cargado**: si la racha sigue más
   atrás, la pantalla lo dice, pero no pide más páginas.
+- **Los bolsillos son manuales**: apartar y devolver lo hace la persona. Las reglas que
+  apartan solas (redondeo, un porcentaje del sueldo) son F3-03. Pagar la tarjeta desde
+  su bolsillo funciona por la API, pero la pantalla de la tarjeta todavía paga desde la
+  cuenta.
 - **La previsión de saldo es simple a propósito**: el gasto diario es un promedio de 60
   días, sin estacionalidad ni gastos fijos detectados (alquiler, servicios), y no avisa
   por notificación, solo en el inicio. Detectar gastos recurrentes y avisar a tiempo
@@ -220,7 +224,11 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   ejecutan: pagar el mínimo y el resto al cobrar, un tope de gasto diario, o cuánto
   falta. El próximo ingreso lo fecha el motor de riesgo (`/v1/income`) con el mismo
   criterio de ingreso recurrente que la tarjeta. Nivel 1–2: observa y recomienda.
-- [ ] **F3-02 Bolsillos**: dinero apartado dentro de la cuenta («para la tarjeta»). *Alta.*
+- [x] **F3-02 Bolsillos** (`services/pockets`, core V012): dinero apartado dentro de la
+  cuenta, como cuentas hijas del core. El tope de saldo es de la cuenta con sus
+  bolsillos, y moverse entre ellos no cuenta contra el tope por operación ni sale de la
+  familia. Uno «para la tarjeta» por cuenta, que la previsión da por reservado. Desde un
+  bolsillo no se transfiere a otros, y sus movimientos no llegan al motor de riesgo.
 - [ ] **F3-06 Centro de permisos y privacidad**: agentes, teléfonos, passkeys y
   consentimientos en una pantalla, revocables. *Alta.*
 - [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -298,5 +299,30 @@ func TestElCicloDeLaTarjeta(t *testing.T) {
 	statements, _ := e.svc.Statements(e.ctx, customer, 5)
 	if len(statements) != 1 || statements[0].PaidSinceCut.AmountMicros != 10_000_000 {
 		t.Errorf("estados de cuenta = %v", statements)
+	}
+}
+
+// Apartar en un bolsillo y devolverlo no llega al motor: si llegara, mover dinero
+// de ida y vuelta parecería ingreso, y subiría el límite de la tarjeta.
+func TestLosMovimientosDeBolsilloNoLleganAlMotor(t *testing.T) {
+	e := setup(t, credit.Config{})
+	customer, account := e.customer(t, 100_000_000)
+	pocket, err := e.core.OpenPocket(e.ctx, account, "PK-"+uuid.NewString(), "Ahorro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, way := range [][2]string{{account, pocket.Id}, {pocket.Id, account}} {
+		if _, err := e.core.MovePocket(e.ctx, fmt.Sprintf("pk-%d-%s", i, customer), way[0], way[1],
+			60_000_000, "USD", "bolsillo"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := e.svc.Apply(e.ctx, customer, account, "Ana Pérez"); err != nil {
+		t.Fatal(err)
+	}
+	sent := e.risk.received[len(e.risk.received)-1].Movements
+	if len(sent) != 1 || sent[0].Kind != "deposit" {
+		t.Errorf("lo que vio el motor: %+v", sent)
 	}
 }
