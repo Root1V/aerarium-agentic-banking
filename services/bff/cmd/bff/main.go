@@ -34,6 +34,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	// La zona de Lima viaja dentro del binario: la imagen del contenedor no trae
+	// la base de zonas horarias, y sin ella la previsión no sabe qué día es hoy.
+	_ "time/tzdata"
 
 	"github.com/aibank/aibank/clients/go/coreclient"
 	"github.com/aibank/aibank/services/agents"
