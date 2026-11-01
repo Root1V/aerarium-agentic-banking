@@ -86,3 +86,49 @@ func (a *HTTPAssessor) Assess(ctx context.Context, req AssessmentRequest) (*Asse
 	out.Record = raw
 	return &out, nil
 }
+
+// IncomeReader lee del motor el próximo ingreso esperado. Lo usa la previsión de
+// saldo, con el mismo criterio de ingreso recurrente que la evaluación.
+type IncomeReader interface {
+	NextIncome(ctx context.Context, asOf time.Time, movements []RiskMovement) (*Income, error)
+}
+
+// Income es el ingreso recurrente que el motor espera, con su fecha.
+type Income struct {
+	Counterparty        string `json:"counterparty"`
+	TypicalAmountMicros int64  `json:"typical_amount_micros"`
+	Occurrences         int    `json:"occurrences"`
+	// Cadence: "monthly", "biweekly" o "weekly".
+	Cadence        string `json:"cadence"`
+	LastReceivedOn string `json:"last_received_on"`
+	NextExpectedOn string `json:"next_expected_on"`
+}
+
+// NextIncome pregunta al motor cuándo y cuánto se espera el próximo ingreso. nil
+// si no hay uno que se pueda fechar.
+func (a *HTTPAssessor) NextIncome(ctx context.Context, asOf time.Time, movements []RiskMovement) (*Income, error) {
+	body, err := json.Marshal(map[string]any{"as_of": asOf.Format(time.DateOnly), "movements": movements})
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, a.BaseURL+"/v1/income", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRiskUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: HTTP %d", ErrRiskUnavailable, resp.StatusCode)
+	}
+	var out struct {
+		RecurringIncome *Income `json:"recurring_income"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("%w: respuesta ilegible: %v", ErrRiskUnavailable, err)
+	}
+	return out.RecurringIncome, nil
+}

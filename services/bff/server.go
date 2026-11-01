@@ -25,6 +25,7 @@ import (
 	"github.com/aibank/aibank/clients/go/telemetry"
 	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/credit"
+	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/sessions"
 )
@@ -39,6 +40,9 @@ type Server struct {
 	// plataformas. Así el canal móvil no queda acoplado a que exista una
 	// integración de socio.
 	consents *oauth.Store
+	// forecast proyecta el saldo hasta el próximo ingreso. Opcional: necesita el
+	// motor de riesgo, igual que la tarjeta.
+	forecast *forecast.Service
 	// agents dice qué agente hizo cada pago con un permiso y qué compró. Sin él
 	// el historial agrupa por plataforma, sin el detalle.
 	agents *agents.Store
@@ -100,6 +104,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/home", s.requireAuth(s.handleHome))
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
+	if s.forecast != nil {
+		mux.Handle("GET /v1/accounts/{accountID}/forecast", s.requireAuth(s.handleForecast))
+	}
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
 	mux.Handle("GET /v1/payees/recent", s.requireAuth(s.handleRecentPayees))
 

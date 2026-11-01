@@ -806,3 +806,142 @@ class CreditDecision {
         card: json['card'] == null ? null : CreditCard.fromJson(json['card'] as Map<String, dynamic>),
       );
 }
+
+/// La previsión de saldo hasta el próximo ingreso (F3-01). Es una estimación
+/// con lo que el banco ve de la cuenta: no mueve nada.
+class Forecast {
+  const Forecast({
+    required this.today,
+    required this.until,
+    required this.balance,
+    required this.dailySpend,
+    required this.lowHistory,
+    required this.income,
+    required this.card,
+    required this.lowest,
+    required this.afterCard,
+    required this.status,
+    required this.cause,
+    required this.options,
+  });
+
+  final DateTime today;
+
+  /// Hasta cuándo se proyecta: el día del próximo ingreso, o 30 días si no hay
+  /// uno que se pueda fechar.
+  final DateTime until;
+  final Money balance;
+
+  /// Lo que la persona suele gastar por día, según los últimos 60 días.
+  final Money dailySpend;
+
+  /// El gasto diario sale de pocos días de historia.
+  final bool lowHistory;
+  final ForecastIncome? income;
+  final ForecastCard? card;
+
+  /// El saldo más bajo antes del ingreso, pagando la tarjeta entera.
+  final ForecastPoint lowest;
+
+  /// El saldo el día que vence la tarjeta, recién pagada entera.
+  final ForecastPoint? afterCard;
+
+  /// `ok`, `tight` (se llega, pero justo) o `deficit`.
+  final String status;
+
+  /// Si no es `ok`: `card` o `spending`.
+  final String cause;
+  final List<ForecastOption> options;
+
+  bool get isDeficit => status == 'deficit';
+  bool get isTight => status == 'tight';
+
+  factory Forecast.fromJson(Map<String, dynamic> json) => Forecast(
+        today: _day(json['today'] as String),
+        until: _day(json['until'] as String),
+        balance: Money.fromJson(json['balance'] as Map<String, dynamic>),
+        dailySpend: Money.fromJson(json['daily_spend'] as Map<String, dynamic>),
+        lowHistory: json['low_history'] as bool? ?? false,
+        income: json['income'] == null
+            ? null
+            : ForecastIncome.fromJson(json['income'] as Map<String, dynamic>),
+        card: json['card'] == null ? null : ForecastCard.fromJson(json['card'] as Map<String, dynamic>),
+        lowest: ForecastPoint.fromJson(json['lowest'] as Map<String, dynamic>),
+        afterCard: json['after_card'] == null
+            ? null
+            : ForecastPoint.fromJson(json['after_card'] as Map<String, dynamic>),
+        status: json['status'] as String? ?? 'ok',
+        cause: json['cause'] as String? ?? '',
+        options: [
+          for (final o in (json['options'] as List<dynamic>? ?? const []))
+            ForecastOption.fromJson(o as Map<String, dynamic>),
+        ],
+      );
+}
+
+class ForecastIncome {
+  const ForecastIncome({required this.amount, required this.expectedOn, required this.synthetic});
+
+  final Money amount;
+  final DateTime expectedOn;
+
+  /// Es el sueldo de prueba del sandbox, no uno de la persona.
+  final bool synthetic;
+
+  factory ForecastIncome.fromJson(Map<String, dynamic> json) => ForecastIncome(
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        expectedOn: _day(json['expected_on'] as String),
+        synthetic: json['synthetic'] as bool? ?? false,
+      );
+}
+
+class ForecastCard {
+  const ForecastCard({required this.dueOn, required this.minimum, required this.total, required this.overdue});
+
+  final DateTime dueOn;
+  final Money minimum;
+  final Money total;
+  final bool overdue;
+
+  factory ForecastCard.fromJson(Map<String, dynamic> json) => ForecastCard(
+        dueOn: _day(json['due_on'] as String),
+        minimum: Money.fromJson(json['minimum'] as Map<String, dynamic>),
+        total: Money.fromJson(json['total'] as Map<String, dynamic>),
+        overdue: json['overdue'] as bool? ?? false,
+      );
+}
+
+class ForecastPoint {
+  const ForecastPoint({required this.on, required this.amount});
+
+  final DateTime on;
+  final Money amount;
+
+  factory ForecastPoint.fromJson(Map<String, dynamic> json) => ForecastPoint(
+        on: _day(json['on'] as String),
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+      );
+}
+
+/// Una recomendación: `pay_minimum`, `spend_cap` o `add_funds`. La persona decide.
+class ForecastOption {
+  const ForecastOption({required this.kind, required this.amount, this.rest});
+
+  final String kind;
+  final Money amount;
+
+  /// En `pay_minimum`, lo que queda por pagar después.
+  final Money? rest;
+
+  factory ForecastOption.fromJson(Map<String, dynamic> json) => ForecastOption(
+        kind: json['kind'] as String,
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        rest: json['rest'] == null ? null : Money.fromJson(json['rest'] as Map<String, dynamic>),
+      );
+}
+
+/// Una fecha AAAA-MM-DD como día, sin hora ni zona.
+DateTime _day(String value) {
+  final parts = value.split('-').map(int.parse).toList();
+  return DateTime(parts[0], parts[1], parts[2]);
+}

@@ -7,7 +7,9 @@ import '../auth/device_keys.dart';
 import '../history.dart';
 import '../money.dart';
 import '../theme.dart';
+import '../forecast_text.dart';
 import 'credit_card_screen.dart';
+import 'forecast_screen.dart';
 import 'mandates_screen.dart';
 import 'payment_group_screen.dart';
 import 'pending_payments_screen.dart';
@@ -63,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _creditOffered = false;
   CreditCard? _card;
 
+  /// La previsión de saldo. Nula si el banco no la ofrece o no respondió.
+  Forecast? _forecast;
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     _loadCredit();
+    _loadForecast();
     try {
       final home = await widget.client.home(widget.accountId);
       if (!mounted) return;
@@ -153,6 +159,30 @@ class _HomeScreenState extends State<HomeScreen> {
       // saldo, que es lo que la persona vino a ver.
       if (mounted) setState(() => _creditOffered = false);
     }
+  }
+
+  /// Como la tarjeta: si la previsión falla, el inicio se muestra igual, sin ella.
+  Future<void> _loadForecast() async {
+    try {
+      final forecast = await widget.client.forecast(widget.accountId);
+      if (mounted) setState(() => _forecast = forecast);
+    } catch (_) {
+      if (mounted) setState(() => _forecast = null);
+    }
+  }
+
+  void _openForecast(Forecast forecast) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ForecastScreen(
+        forecast: forecast,
+        onOpenCard: _card == null
+            ? null
+            : () {
+                Navigator.of(context).pop();
+                _openCredit();
+              },
+      ),
+    ));
   }
 
   Future<void> _openCredit() async {
@@ -279,6 +309,10 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _BalanceCard(home: home, onOpenPending: _openPending),
+        if (_forecast case final forecast?) ...[
+          const SizedBox(height: 12),
+          _ForecastTile(forecast: forecast, onTap: () => _openForecast(forecast)),
+        ],
         if (_creditOffered) ...[
           const SizedBox(height: 12),
           CreditCardTile(card: _card, onTap: _openCredit),
@@ -433,6 +467,35 @@ class _PaymentGroupTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
+      ),
+    );
+  }
+}
+
+/// La previsión en una fila. Si no alcanza, se ve: es un aviso, no un adorno.
+class _ForecastTile extends StatelessWidget {
+  const _ForecastTile({required this.forecast, required this.onTap});
+
+  final Forecast forecast;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final warn = forecast.isDeficit || forecast.isTight;
+    return Card(
+      key: const Key('forecast'),
+      color: forecast.isDeficit ? scheme.errorContainer : null,
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(
+          warn ? Icons.warning_amber_rounded : Icons.trending_flat,
+          color: forecast.isDeficit ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+        ),
+        title: Text(headline(forecast),
+            style: TextStyle(color: forecast.isDeficit ? scheme.onErrorContainer : null)),
+        subtitle: warn ? const Text('Ver qué puedes hacer') : null,
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

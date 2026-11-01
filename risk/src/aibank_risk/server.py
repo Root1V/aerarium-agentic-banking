@@ -21,6 +21,7 @@ from typing import Any
 
 from .assessment import assess
 from .features import Direction, Movement
+from .income import next_income
 
 log = logging.getLogger("aibank_risk.server")
 
@@ -47,22 +48,27 @@ def _instant(value: str) -> datetime:
     return parsed
 
 
+def _movements(body: dict[str, Any]) -> list[Movement]:
+    """Los movimientos de una petición, en el formato del motor."""
+    return [
+        Movement(
+            occurred_at=_instant(m["occurred_at"]),
+            direction=Direction(m["direction"]),
+            amount_micros=int(m["amount_micros"]),
+            counterparty=str(m.get("counterparty", "")),
+            kind=str(m.get("kind", "")),
+        )
+        for m in body.get("movements", [])
+    ]
+
+
 def parse_request(body: dict[str, Any]) -> dict[str, Any]:
     """Valida y convierte el JSON de una petición en los argumentos de `assess`."""
     try:
         customer_id = str(body["customer_id"])
         as_of = date.fromisoformat(body["as_of"])
         evaluated_at = _instant(body["evaluated_at"])
-        movements = [
-            Movement(
-                occurred_at=_instant(m["occurred_at"]),
-                direction=Direction(m["direction"]),
-                amount_micros=int(m["amount_micros"]),
-                counterparty=str(m.get("counterparty", "")),
-                kind=str(m.get("kind", "")),
-            )
-            for m in body.get("movements", [])
-        ]
+        movements = _movements(body)
     except (KeyError, TypeError, ValueError) as e:
         raise InvalidRequest(f"petición inválida: {e}") from e
     if not customer_id:
@@ -87,6 +93,9 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(404, {"code": "not_found", "message": "no encontrado"})
 
     def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/v1/income":
+            self._income()
+            return
         if self.path != "/v1/assessments":
             self._reply(404, {"code": "not_found", "message": "no encontrado"})
             return
@@ -114,6 +123,28 @@ class Handler(BaseHTTPRequestHandler):
             record["customer_id"], record["outcome"], record["score"], record["model_version"],
         )
         self._reply(200, record)
+
+    def _income(self) -> None:
+        """El próximo ingreso esperado, para la previsión de saldo.
+
+        No decide nada ni se archiva: es una lectura de los movimientos, con el
+        mismo criterio de ingreso recurrente que la evaluación.
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            self._reply(400, {"code": "invalid_request", "message": "cuerpo vacío o demasiado grande"})
+            return
+        try:
+            body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise InvalidRequest("el cuerpo debe ser un objeto JSON")
+            as_of = date.fromisoformat(body["as_of"])
+            movements = _movements(body)
+        except (json.JSONDecodeError, InvalidRequest, KeyError, TypeError, ValueError) as e:
+            self._reply(400, {"code": "invalid_request", "message": f"petición inválida: {e}"})
+            return
+        income = next_income(movements, as_of=as_of)
+        self._reply(200, {"recurring_income": income.to_record() if income else None})
 
     def _reply(self, status: int, payload: dict[str, Any]) -> None:
         raw = json.dumps(payload, ensure_ascii=False).encode()
