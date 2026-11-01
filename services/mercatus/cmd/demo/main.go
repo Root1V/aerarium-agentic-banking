@@ -523,8 +523,11 @@ func (d *demo) showMandate(mandateID string) error {
 		say("queda %s", micros(*mandate.Remaining, d.currency))
 	}
 	// Lo consumido baja al reembolsar porque se DERIVA de las autorizaciones; no
-	// es un contador que alguien tenga que acordarse de bajar.
-	say("nótese que el reembolso ya está descontado")
+	// es un contador que alguien tenga que acordarse de bajar. Con una persona en
+	// la app no se reembolsa nada, así que no hay nada que señalar.
+	if !d.inApp {
+		say("nótese que el reembolso ya está descontado")
+	}
 	return nil
 }
 
