@@ -1304,6 +1304,8 @@ type Account struct {
 	Status          AccountStatus          `protobuf:"varint,9,opt,name=status,proto3,enum=aibank.core.v1.AccountStatus" json:"status,omitempty"`
 	AllowsOverdraft bool                   `protobuf:"varint,10,opt,name=allows_overdraft,json=allowsOverdraft,proto3" json:"allows_overdraft,omitempty"`
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// La cuenta madre, si esta es un bolsillo. Vacío en las demás.
+	ParentAccountId string `protobuf:"bytes,12,opt,name=parent_account_id,json=parentAccountId,proto3" json:"parent_account_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1413,6 +1415,13 @@ func (x *Account) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Account) GetParentAccountId() string {
+	if x != nil {
+		return x.ParentAccountId
+	}
+	return ""
 }
 
 type OpenCustomerAccountRequest struct {
@@ -1640,6 +1649,113 @@ func (x *GetAccountByIdRequest) GetId() string {
 	return ""
 }
 
+// Un bolsillo: dinero apartado dentro de una cuenta. Hereda cliente, moneda y
+// producto de su cuenta, y el tope de saldo es de la cuenta con sus bolsillos.
+type OpenPocketRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ParentAccountId string                 `protobuf:"bytes,1,opt,name=parent_account_id,json=parentAccountId,proto3" json:"parent_account_id,omitempty"`
+	Code            string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *OpenPocketRequest) Reset() {
+	*x = OpenPocketRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenPocketRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenPocketRequest) ProtoMessage() {}
+
+func (x *OpenPocketRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenPocketRequest.ProtoReflect.Descriptor instead.
+func (*OpenPocketRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *OpenPocketRequest) GetParentAccountId() string {
+	if x != nil {
+		return x.ParentAccountId
+	}
+	return ""
+}
+
+func (x *OpenPocketRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *OpenPocketRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// Solo se cierra vacío: el dinero vuelve antes a la cuenta.
+type ClosePocketRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PocketId      string                 `protobuf:"bytes,1,opt,name=pocket_id,json=pocketId,proto3" json:"pocket_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClosePocketRequest) Reset() {
+	*x = ClosePocketRequest{}
+	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClosePocketRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClosePocketRequest) ProtoMessage() {}
+
+func (x *ClosePocketRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClosePocketRequest.ProtoReflect.Descriptor instead.
+func (*ClosePocketRequest) Descriptor() ([]byte, []int) {
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ClosePocketRequest) GetPocketId() string {
+	if x != nil {
+		return x.PocketId
+	}
+	return ""
+}
+
 type ListCustomerAccountsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CustomerId    string                 `protobuf:"bytes,1,opt,name=customer_id,json=customerId,proto3" json:"customer_id,omitempty"`
@@ -1649,7 +1765,7 @@ type ListCustomerAccountsRequest struct {
 
 func (x *ListCustomerAccountsRequest) Reset() {
 	*x = ListCustomerAccountsRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1661,7 +1777,7 @@ func (x *ListCustomerAccountsRequest) String() string {
 func (*ListCustomerAccountsRequest) ProtoMessage() {}
 
 func (x *ListCustomerAccountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[14]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1674,7 +1790,7 @@ func (x *ListCustomerAccountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCustomerAccountsRequest.ProtoReflect.Descriptor instead.
 func (*ListCustomerAccountsRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{14}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListCustomerAccountsRequest) GetCustomerId() string {
@@ -1694,7 +1810,7 @@ type ListCustomerAccountsResponse struct {
 
 func (x *ListCustomerAccountsResponse) Reset() {
 	*x = ListCustomerAccountsResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1706,7 +1822,7 @@ func (x *ListCustomerAccountsResponse) String() string {
 func (*ListCustomerAccountsResponse) ProtoMessage() {}
 
 func (x *ListCustomerAccountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[15]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1719,7 +1835,7 @@ func (x *ListCustomerAccountsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCustomerAccountsResponse.ProtoReflect.Descriptor instead.
 func (*ListCustomerAccountsResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{15}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListCustomerAccountsResponse) GetAccounts() []*Account {
@@ -1746,7 +1862,7 @@ type Product struct {
 
 func (x *Product) Reset() {
 	*x = Product{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1758,7 +1874,7 @@ func (x *Product) String() string {
 func (*Product) ProtoMessage() {}
 
 func (x *Product) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[16]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1771,7 +1887,7 @@ func (x *Product) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Product.ProtoReflect.Descriptor instead.
 func (*Product) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{16}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Product) GetId() string {
@@ -1844,7 +1960,7 @@ type CreateProductRequest struct {
 
 func (x *CreateProductRequest) Reset() {
 	*x = CreateProductRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1856,7 +1972,7 @@ func (x *CreateProductRequest) String() string {
 func (*CreateProductRequest) ProtoMessage() {}
 
 func (x *CreateProductRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[17]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1869,7 +1985,7 @@ func (x *CreateProductRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProductRequest.ProtoReflect.Descriptor instead.
 func (*CreateProductRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{17}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateProductRequest) GetCode() string {
@@ -1923,7 +2039,7 @@ type GetProductRequest struct {
 
 func (x *GetProductRequest) Reset() {
 	*x = GetProductRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1935,7 +2051,7 @@ func (x *GetProductRequest) String() string {
 func (*GetProductRequest) ProtoMessage() {}
 
 func (x *GetProductRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[18]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1948,7 +2064,7 @@ func (x *GetProductRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProductRequest.ProtoReflect.Descriptor instead.
 func (*GetProductRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{18}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetProductRequest) GetCode() string {
@@ -1977,7 +2093,7 @@ type Finding struct {
 
 func (x *Finding) Reset() {
 	*x = Finding{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1989,7 +2105,7 @@ func (x *Finding) String() string {
 func (*Finding) ProtoMessage() {}
 
 func (x *Finding) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[19]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2002,7 +2118,7 @@ func (x *Finding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Finding.ProtoReflect.Descriptor instead.
 func (*Finding) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{19}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Finding) GetId() int64 {
@@ -2084,7 +2200,7 @@ type ListOpenFindingsRequest struct {
 
 func (x *ListOpenFindingsRequest) Reset() {
 	*x = ListOpenFindingsRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2096,7 +2212,7 @@ func (x *ListOpenFindingsRequest) String() string {
 func (*ListOpenFindingsRequest) ProtoMessage() {}
 
 func (x *ListOpenFindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[20]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2109,7 +2225,7 @@ func (x *ListOpenFindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOpenFindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListOpenFindingsRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{20}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListOpenFindingsRequest) GetLimit() int32 {
@@ -2128,7 +2244,7 @@ type ListOpenFindingsResponse struct {
 
 func (x *ListOpenFindingsResponse) Reset() {
 	*x = ListOpenFindingsResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2140,7 +2256,7 @@ func (x *ListOpenFindingsResponse) String() string {
 func (*ListOpenFindingsResponse) ProtoMessage() {}
 
 func (x *ListOpenFindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[21]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2153,7 +2269,7 @@ func (x *ListOpenFindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOpenFindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListOpenFindingsResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{21}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListOpenFindingsResponse) GetFindings() []*Finding {
@@ -2175,7 +2291,7 @@ type ResolveFindingRequest struct {
 
 func (x *ResolveFindingRequest) Reset() {
 	*x = ResolveFindingRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2187,7 +2303,7 @@ func (x *ResolveFindingRequest) String() string {
 func (*ResolveFindingRequest) ProtoMessage() {}
 
 func (x *ResolveFindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[22]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2200,7 +2316,7 @@ func (x *ResolveFindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveFindingRequest.ProtoReflect.Descriptor instead.
 func (*ResolveFindingRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{22}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ResolveFindingRequest) GetFindingId() int64 {
@@ -2226,7 +2342,7 @@ type ResolveFindingResponse struct {
 
 func (x *ResolveFindingResponse) Reset() {
 	*x = ResolveFindingResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2238,7 +2354,7 @@ func (x *ResolveFindingResponse) String() string {
 func (*ResolveFindingResponse) ProtoMessage() {}
 
 func (x *ResolveFindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[23]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2251,7 +2367,7 @@ func (x *ResolveFindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveFindingResponse.ProtoReflect.Descriptor instead.
 func (*ResolveFindingResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{23}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ResolveFindingResponse) GetResolved() bool {
@@ -2269,7 +2385,7 @@ type RunInternalCheckRequest struct {
 
 func (x *RunInternalCheckRequest) Reset() {
 	*x = RunInternalCheckRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2281,7 +2397,7 @@ func (x *RunInternalCheckRequest) String() string {
 func (*RunInternalCheckRequest) ProtoMessage() {}
 
 func (x *RunInternalCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[24]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2294,7 +2410,7 @@ func (x *RunInternalCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunInternalCheckRequest.ProtoReflect.Descriptor instead.
 func (*RunInternalCheckRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{24}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{26}
 }
 
 type RunInternalCheckResponse struct {
@@ -2307,7 +2423,7 @@ type RunInternalCheckResponse struct {
 
 func (x *RunInternalCheckResponse) Reset() {
 	*x = RunInternalCheckResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2319,7 +2435,7 @@ func (x *RunInternalCheckResponse) String() string {
 func (*RunInternalCheckResponse) ProtoMessage() {}
 
 func (x *RunInternalCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[25]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2332,7 +2448,7 @@ func (x *RunInternalCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunInternalCheckResponse.ProtoReflect.Descriptor instead.
 func (*RunInternalCheckResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{25}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RunInternalCheckResponse) GetRunId() string {
@@ -2370,7 +2486,7 @@ type Authorization struct {
 
 func (x *Authorization) Reset() {
 	*x = Authorization{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2382,7 +2498,7 @@ func (x *Authorization) String() string {
 func (*Authorization) ProtoMessage() {}
 
 func (x *Authorization) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[26]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2395,7 +2511,7 @@ func (x *Authorization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Authorization.ProtoReflect.Descriptor instead.
 func (*Authorization) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{26}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Authorization) GetId() string {
@@ -2489,7 +2605,7 @@ type AuthorizeRequest struct {
 
 func (x *AuthorizeRequest) Reset() {
 	*x = AuthorizeRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2501,7 +2617,7 @@ func (x *AuthorizeRequest) String() string {
 func (*AuthorizeRequest) ProtoMessage() {}
 
 func (x *AuthorizeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[27]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2514,7 +2630,7 @@ func (x *AuthorizeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{27}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *AuthorizeRequest) GetIdempotencyKey() string {
@@ -2563,7 +2679,7 @@ type AuthorizeResponse struct {
 
 func (x *AuthorizeResponse) Reset() {
 	*x = AuthorizeResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2575,7 +2691,7 @@ func (x *AuthorizeResponse) String() string {
 func (*AuthorizeResponse) ProtoMessage() {}
 
 func (x *AuthorizeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[28]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2588,7 +2704,7 @@ func (x *AuthorizeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizeResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{28}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *AuthorizeResponse) GetAuthorization() *Authorization {
@@ -2614,7 +2730,7 @@ type CaptureRequest struct {
 
 func (x *CaptureRequest) Reset() {
 	*x = CaptureRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2742,7 @@ func (x *CaptureRequest) String() string {
 func (*CaptureRequest) ProtoMessage() {}
 
 func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[29]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2639,7 +2755,7 @@ func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
 func (*CaptureRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{29}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *CaptureRequest) GetAuthorizationId() string {
@@ -2660,7 +2776,7 @@ type RefundRequest struct {
 
 func (x *RefundRequest) Reset() {
 	*x = RefundRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2672,7 +2788,7 @@ func (x *RefundRequest) String() string {
 func (*RefundRequest) ProtoMessage() {}
 
 func (x *RefundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[30]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2685,7 +2801,7 @@ func (x *RefundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundRequest.ProtoReflect.Descriptor instead.
 func (*RefundRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{30}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RefundRequest) GetAuthorizationId() string {
@@ -2711,7 +2827,7 @@ type GetAuthorizationRequest struct {
 
 func (x *GetAuthorizationRequest) Reset() {
 	*x = GetAuthorizationRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2723,7 +2839,7 @@ func (x *GetAuthorizationRequest) String() string {
 func (*GetAuthorizationRequest) ProtoMessage() {}
 
 func (x *GetAuthorizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[31]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2736,7 +2852,7 @@ func (x *GetAuthorizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuthorizationRequest.ProtoReflect.Descriptor instead.
 func (*GetAuthorizationRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{31}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetAuthorizationRequest) GetAuthorizationId() string {
@@ -2756,7 +2872,7 @@ type ReleaseExpiredRequest struct {
 
 func (x *ReleaseExpiredRequest) Reset() {
 	*x = ReleaseExpiredRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[32]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2768,7 +2884,7 @@ func (x *ReleaseExpiredRequest) String() string {
 func (*ReleaseExpiredRequest) ProtoMessage() {}
 
 func (x *ReleaseExpiredRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[32]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2781,7 +2897,7 @@ func (x *ReleaseExpiredRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseExpiredRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseExpiredRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{32}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReleaseExpiredRequest) GetLimit() int32 {
@@ -2800,7 +2916,7 @@ type ReleaseExpiredResponse struct {
 
 func (x *ReleaseExpiredResponse) Reset() {
 	*x = ReleaseExpiredResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[33]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2812,7 +2928,7 @@ func (x *ReleaseExpiredResponse) String() string {
 func (*ReleaseExpiredResponse) ProtoMessage() {}
 
 func (x *ReleaseExpiredResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[33]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2825,7 +2941,7 @@ func (x *ReleaseExpiredResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseExpiredResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseExpiredResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{33}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ReleaseExpiredResponse) GetAuthorizationIds() []string {
@@ -2844,7 +2960,7 @@ type SummarizeLiveHoldsRequest struct {
 
 func (x *SummarizeLiveHoldsRequest) Reset() {
 	*x = SummarizeLiveHoldsRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[34]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2856,7 +2972,7 @@ func (x *SummarizeLiveHoldsRequest) String() string {
 func (*SummarizeLiveHoldsRequest) ProtoMessage() {}
 
 func (x *SummarizeLiveHoldsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[34]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2869,7 +2985,7 @@ func (x *SummarizeLiveHoldsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeLiveHoldsRequest.ProtoReflect.Descriptor instead.
 func (*SummarizeLiveHoldsRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{34}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *SummarizeLiveHoldsRequest) GetPayerAccountId() string {
@@ -2898,7 +3014,7 @@ type HoldGroup struct {
 
 func (x *HoldGroup) Reset() {
 	*x = HoldGroup{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[35]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2910,7 +3026,7 @@ func (x *HoldGroup) String() string {
 func (*HoldGroup) ProtoMessage() {}
 
 func (x *HoldGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[35]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2923,7 +3039,7 @@ func (x *HoldGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HoldGroup.ProtoReflect.Descriptor instead.
 func (*HoldGroup) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{35}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *HoldGroup) GetGrantee() string {
@@ -2978,7 +3094,7 @@ type LookupHoldGranteesRequest struct {
 
 func (x *LookupHoldGranteesRequest) Reset() {
 	*x = LookupHoldGranteesRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[36]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2990,7 +3106,7 @@ func (x *LookupHoldGranteesRequest) String() string {
 func (*LookupHoldGranteesRequest) ProtoMessage() {}
 
 func (x *LookupHoldGranteesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[36]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3003,7 +3119,7 @@ func (x *LookupHoldGranteesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupHoldGranteesRequest.ProtoReflect.Descriptor instead.
 func (*LookupHoldGranteesRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{36}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *LookupHoldGranteesRequest) GetTransactionIds() []string {
@@ -3027,7 +3143,7 @@ type HoldGrantee struct {
 
 func (x *HoldGrantee) Reset() {
 	*x = HoldGrantee{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[37]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3039,7 +3155,7 @@ func (x *HoldGrantee) String() string {
 func (*HoldGrantee) ProtoMessage() {}
 
 func (x *HoldGrantee) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[37]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3052,7 +3168,7 @@ func (x *HoldGrantee) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HoldGrantee.ProtoReflect.Descriptor instead.
 func (*HoldGrantee) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{37}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *HoldGrantee) GetTransactionId() string {
@@ -3086,7 +3202,7 @@ type LookupHoldGranteesResponse struct {
 
 func (x *LookupHoldGranteesResponse) Reset() {
 	*x = LookupHoldGranteesResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[38]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3098,7 +3214,7 @@ func (x *LookupHoldGranteesResponse) String() string {
 func (*LookupHoldGranteesResponse) ProtoMessage() {}
 
 func (x *LookupHoldGranteesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[38]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3111,7 +3227,7 @@ func (x *LookupHoldGranteesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupHoldGranteesResponse.ProtoReflect.Descriptor instead.
 func (*LookupHoldGranteesResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{38}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *LookupHoldGranteesResponse) GetHolds() []*HoldGrantee {
@@ -3131,7 +3247,7 @@ type SummarizeLiveHoldsResponse struct {
 
 func (x *SummarizeLiveHoldsResponse) Reset() {
 	*x = SummarizeLiveHoldsResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[39]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3143,7 +3259,7 @@ func (x *SummarizeLiveHoldsResponse) String() string {
 func (*SummarizeLiveHoldsResponse) ProtoMessage() {}
 
 func (x *SummarizeLiveHoldsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[39]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3156,7 +3272,7 @@ func (x *SummarizeLiveHoldsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeLiveHoldsResponse.ProtoReflect.Descriptor instead.
 func (*SummarizeLiveHoldsResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{39}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SummarizeLiveHoldsResponse) GetGroups() []*HoldGroup {
@@ -3190,7 +3306,7 @@ type Mandate struct {
 
 func (x *Mandate) Reset() {
 	*x = Mandate{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[40]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3202,7 +3318,7 @@ func (x *Mandate) String() string {
 func (*Mandate) ProtoMessage() {}
 
 func (x *Mandate) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[40]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3215,7 +3331,7 @@ func (x *Mandate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Mandate.ProtoReflect.Descriptor instead.
 func (*Mandate) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{40}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *Mandate) GetId() string {
@@ -3320,7 +3436,7 @@ type GrantMandateRequest struct {
 
 func (x *GrantMandateRequest) Reset() {
 	*x = GrantMandateRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[41]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3332,7 +3448,7 @@ func (x *GrantMandateRequest) String() string {
 func (*GrantMandateRequest) ProtoMessage() {}
 
 func (x *GrantMandateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[41]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3345,7 +3461,7 @@ func (x *GrantMandateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantMandateRequest.ProtoReflect.Descriptor instead.
 func (*GrantMandateRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{41}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GrantMandateRequest) GetAccountId() string {
@@ -3408,7 +3524,7 @@ type RevokeMandateRequest struct {
 
 func (x *RevokeMandateRequest) Reset() {
 	*x = RevokeMandateRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[42]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3420,7 +3536,7 @@ func (x *RevokeMandateRequest) String() string {
 func (*RevokeMandateRequest) ProtoMessage() {}
 
 func (x *RevokeMandateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[42]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3433,7 +3549,7 @@ func (x *RevokeMandateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeMandateRequest.ProtoReflect.Descriptor instead.
 func (*RevokeMandateRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{42}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *RevokeMandateRequest) GetMandateId() string {
@@ -3459,7 +3575,7 @@ type GetMandateRequest struct {
 
 func (x *GetMandateRequest) Reset() {
 	*x = GetMandateRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[43]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3471,7 +3587,7 @@ func (x *GetMandateRequest) String() string {
 func (*GetMandateRequest) ProtoMessage() {}
 
 func (x *GetMandateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[43]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3484,7 +3600,7 @@ func (x *GetMandateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMandateRequest.ProtoReflect.Descriptor instead.
 func (*GetMandateRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{43}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetMandateRequest) GetMandateId() string {
@@ -3504,7 +3620,7 @@ type FindActiveMandateRequest struct {
 
 func (x *FindActiveMandateRequest) Reset() {
 	*x = FindActiveMandateRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[44]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3516,7 +3632,7 @@ func (x *FindActiveMandateRequest) String() string {
 func (*FindActiveMandateRequest) ProtoMessage() {}
 
 func (x *FindActiveMandateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[44]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3529,7 +3645,7 @@ func (x *FindActiveMandateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindActiveMandateRequest.ProtoReflect.Descriptor instead.
 func (*FindActiveMandateRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{44}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *FindActiveMandateRequest) GetAccountId() string {
@@ -3558,7 +3674,7 @@ type SummarizeSpendRequest struct {
 
 func (x *SummarizeSpendRequest) Reset() {
 	*x = SummarizeSpendRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[45]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3570,7 +3686,7 @@ func (x *SummarizeSpendRequest) String() string {
 func (*SummarizeSpendRequest) ProtoMessage() {}
 
 func (x *SummarizeSpendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[45]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3583,7 +3699,7 @@ func (x *SummarizeSpendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeSpendRequest.ProtoReflect.Descriptor instead.
 func (*SummarizeSpendRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{45}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *SummarizeSpendRequest) GetGrantedBy() string {
@@ -3617,7 +3733,7 @@ type MandateSpend struct {
 
 func (x *MandateSpend) Reset() {
 	*x = MandateSpend{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[46]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3629,7 +3745,7 @@ func (x *MandateSpend) String() string {
 func (*MandateSpend) ProtoMessage() {}
 
 func (x *MandateSpend) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[46]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3642,7 +3758,7 @@ func (x *MandateSpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MandateSpend.ProtoReflect.Descriptor instead.
 func (*MandateSpend) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{46}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *MandateSpend) GetMandateId() string {
@@ -3696,7 +3812,7 @@ type SummarizeSpendResponse struct {
 
 func (x *SummarizeSpendResponse) Reset() {
 	*x = SummarizeSpendResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[47]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3708,7 +3824,7 @@ func (x *SummarizeSpendResponse) String() string {
 func (*SummarizeSpendResponse) ProtoMessage() {}
 
 func (x *SummarizeSpendResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[47]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3721,7 +3837,7 @@ func (x *SummarizeSpendResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeSpendResponse.ProtoReflect.Descriptor instead.
 func (*SummarizeSpendResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{47}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SummarizeSpendResponse) GetMandates() []*MandateSpend {
@@ -3741,7 +3857,7 @@ type ListMandatesRequest struct {
 
 func (x *ListMandatesRequest) Reset() {
 	*x = ListMandatesRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[48]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3753,7 +3869,7 @@ func (x *ListMandatesRequest) String() string {
 func (*ListMandatesRequest) ProtoMessage() {}
 
 func (x *ListMandatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[48]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3766,7 +3882,7 @@ func (x *ListMandatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMandatesRequest.ProtoReflect.Descriptor instead.
 func (*ListMandatesRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{48}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListMandatesRequest) GetGrantedBy() string {
@@ -3785,7 +3901,7 @@ type ListMandatesResponse struct {
 
 func (x *ListMandatesResponse) Reset() {
 	*x = ListMandatesResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[49]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3797,7 +3913,7 @@ func (x *ListMandatesResponse) String() string {
 func (*ListMandatesResponse) ProtoMessage() {}
 
 func (x *ListMandatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[49]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3810,7 +3926,7 @@ func (x *ListMandatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMandatesResponse.ProtoReflect.Descriptor instead.
 func (*ListMandatesResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{49}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListMandatesResponse) GetMandates() []*Mandate {
@@ -3832,7 +3948,7 @@ type AuthorizeUnderMandateRequest struct {
 
 func (x *AuthorizeUnderMandateRequest) Reset() {
 	*x = AuthorizeUnderMandateRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[50]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3844,7 +3960,7 @@ func (x *AuthorizeUnderMandateRequest) String() string {
 func (*AuthorizeUnderMandateRequest) ProtoMessage() {}
 
 func (x *AuthorizeUnderMandateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[50]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3857,7 +3973,7 @@ func (x *AuthorizeUnderMandateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeUnderMandateRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeUnderMandateRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{50}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *AuthorizeUnderMandateRequest) GetMandateId() string {
@@ -3885,7 +4001,7 @@ type AuthorizeUnderMandateResponse struct {
 
 func (x *AuthorizeUnderMandateResponse) Reset() {
 	*x = AuthorizeUnderMandateResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[51]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3897,7 +4013,7 @@ func (x *AuthorizeUnderMandateResponse) String() string {
 func (*AuthorizeUnderMandateResponse) ProtoMessage() {}
 
 func (x *AuthorizeUnderMandateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[51]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3910,7 +4026,7 @@ func (x *AuthorizeUnderMandateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeUnderMandateResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizeUnderMandateResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{51}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *AuthorizeUnderMandateResponse) GetAuthorization() *Authorization {
@@ -3960,7 +4076,7 @@ type CreditLine struct {
 
 func (x *CreditLine) Reset() {
 	*x = CreditLine{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3972,7 +4088,7 @@ func (x *CreditLine) String() string {
 func (*CreditLine) ProtoMessage() {}
 
 func (x *CreditLine) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[52]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4101,7 @@ func (x *CreditLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreditLine.ProtoReflect.Descriptor instead.
 func (*CreditLine) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{52}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CreditLine) GetId() string {
@@ -4089,7 +4205,7 @@ type OpenCreditLineRequest struct {
 
 func (x *OpenCreditLineRequest) Reset() {
 	*x = OpenCreditLineRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4101,7 +4217,7 @@ func (x *OpenCreditLineRequest) String() string {
 func (*OpenCreditLineRequest) ProtoMessage() {}
 
 func (x *OpenCreditLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[53]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4114,7 +4230,7 @@ func (x *OpenCreditLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenCreditLineRequest.ProtoReflect.Descriptor instead.
 func (*OpenCreditLineRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{53}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *OpenCreditLineRequest) GetCustomerId() string {
@@ -4182,7 +4298,7 @@ type GetCustomerCreditLineRequest struct {
 
 func (x *GetCustomerCreditLineRequest) Reset() {
 	*x = GetCustomerCreditLineRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4194,7 +4310,7 @@ func (x *GetCustomerCreditLineRequest) String() string {
 func (*GetCustomerCreditLineRequest) ProtoMessage() {}
 
 func (x *GetCustomerCreditLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[54]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4207,7 +4323,7 @@ func (x *GetCustomerCreditLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCustomerCreditLineRequest.ProtoReflect.Descriptor instead.
 func (*GetCustomerCreditLineRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{54}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetCustomerCreditLineRequest) GetCustomerId() string {
@@ -4241,7 +4357,7 @@ type CreditStatement struct {
 
 func (x *CreditStatement) Reset() {
 	*x = CreditStatement{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[55]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4253,7 +4369,7 @@ func (x *CreditStatement) String() string {
 func (*CreditStatement) ProtoMessage() {}
 
 func (x *CreditStatement) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[55]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4266,7 +4382,7 @@ func (x *CreditStatement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreditStatement.ProtoReflect.Descriptor instead.
 func (*CreditStatement) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{55}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *CreditStatement) GetId() string {
@@ -4364,7 +4480,7 @@ type CloseCycleRequest struct {
 
 func (x *CloseCycleRequest) Reset() {
 	*x = CloseCycleRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[56]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4376,7 +4492,7 @@ func (x *CloseCycleRequest) String() string {
 func (*CloseCycleRequest) ProtoMessage() {}
 
 func (x *CloseCycleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[56]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4389,7 +4505,7 @@ func (x *CloseCycleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseCycleRequest.ProtoReflect.Descriptor instead.
 func (*CloseCycleRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{56}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *CloseCycleRequest) GetLineId() string {
@@ -4416,7 +4532,7 @@ type ListStatementsRequest struct {
 
 func (x *ListStatementsRequest) Reset() {
 	*x = ListStatementsRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[57]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4428,7 +4544,7 @@ func (x *ListStatementsRequest) String() string {
 func (*ListStatementsRequest) ProtoMessage() {}
 
 func (x *ListStatementsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[57]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4441,7 +4557,7 @@ func (x *ListStatementsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatementsRequest.ProtoReflect.Descriptor instead.
 func (*ListStatementsRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{57}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListStatementsRequest) GetLineId() string {
@@ -4468,7 +4584,7 @@ type ListStatementsResponse struct {
 
 func (x *ListStatementsResponse) Reset() {
 	*x = ListStatementsResponse{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[58]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4480,7 +4596,7 @@ func (x *ListStatementsResponse) String() string {
 func (*ListStatementsResponse) ProtoMessage() {}
 
 func (x *ListStatementsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[58]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4493,7 +4609,7 @@ func (x *ListStatementsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatementsResponse.ProtoReflect.Descriptor instead.
 func (*ListStatementsResponse) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{58}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListStatementsResponse) GetStatements() []*CreditStatement {
@@ -4514,7 +4630,7 @@ type ReviewCreditLineRequest struct {
 
 func (x *ReviewCreditLineRequest) Reset() {
 	*x = ReviewCreditLineRequest{}
-	mi := &file_aibank_core_v1_core_proto_msgTypes[59]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4526,7 +4642,7 @@ func (x *ReviewCreditLineRequest) String() string {
 func (*ReviewCreditLineRequest) ProtoMessage() {}
 
 func (x *ReviewCreditLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aibank_core_v1_core_proto_msgTypes[59]
+	mi := &file_aibank_core_v1_core_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4539,7 +4655,7 @@ func (x *ReviewCreditLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewCreditLineRequest.ProtoReflect.Descriptor instead.
 func (*ReviewCreditLineRequest) Descriptor() ([]byte, []int) {
-	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{59}
+	return file_aibank_core_v1_core_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ReviewCreditLineRequest) GetLineId() string {
@@ -4604,7 +4720,7 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x13ListEntriesResponse\x126\n" +
 	"\aentries\x18\x01 \x03(\v2\x1c.aibank.core.v1.AccountEntryR\aentries\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor\"\x99\x03\n" +
+	"nextCursor\"\xc5\x03\n" +
 	"\aAccount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
@@ -4619,7 +4735,8 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x10allows_overdraft\x18\n" +
 	" \x01(\bR\x0fallowsOverdraft\x129\n" +
 	"\n" +
-	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x88\x01\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
+	"\x11parent_account_id\x18\f \x01(\tR\x0fparentAccountId\"\x88\x01\n" +
 	"\x1aOpenCustomerAccountRequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
@@ -4634,7 +4751,13 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x11GetAccountRequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\"'\n" +
 	"\x15GetAccountByIdRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"g\n" +
+	"\x11OpenPocketRequest\x12*\n" +
+	"\x11parent_account_id\x18\x01 \x01(\tR\x0fparentAccountId\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"1\n" +
+	"\x12ClosePocketRequest\x12\x1b\n" +
+	"\tpocket_id\x18\x01 \x01(\tR\bpocketId\">\n" +
 	"\x1bListCustomerAccountsRequest\x12\x1f\n" +
 	"\vcustomer_id\x18\x01 \x01(\tR\n" +
 	"customerId\"S\n" +
@@ -4964,14 +5087,17 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x04Post\x12\x1b.aibank.core.v1.PostRequest\x1a\x1c.aibank.core.v1.PostResponse\x12S\n" +
 	"\n" +
 	"GetBalance\x12!.aibank.core.v1.GetBalanceRequest\x1a\".aibank.core.v1.GetBalanceResponse\x12V\n" +
-	"\vListEntries\x12\".aibank.core.v1.ListEntriesRequest\x1a#.aibank.core.v1.ListEntriesResponse2\xdb\x03\n" +
+	"\vListEntries\x12\".aibank.core.v1.ListEntriesRequest\x1a#.aibank.core.v1.ListEntriesResponse2\xf1\x04\n" +
 	"\x0eAccountService\x12Z\n" +
 	"\x13OpenCustomerAccount\x12*.aibank.core.v1.OpenCustomerAccountRequest\x1a\x17.aibank.core.v1.Account\x12^\n" +
 	"\x15CreateInternalAccount\x12,.aibank.core.v1.CreateInternalAccountRequest\x1a\x17.aibank.core.v1.Account\x12H\n" +
 	"\n" +
 	"GetAccount\x12!.aibank.core.v1.GetAccountRequest\x1a\x17.aibank.core.v1.Account\x12P\n" +
 	"\x0eGetAccountById\x12%.aibank.core.v1.GetAccountByIdRequest\x1a\x17.aibank.core.v1.Account\x12q\n" +
-	"\x14ListCustomerAccounts\x12+.aibank.core.v1.ListCustomerAccountsRequest\x1a,.aibank.core.v1.ListCustomerAccountsResponse2\xaa\x01\n" +
+	"\x14ListCustomerAccounts\x12+.aibank.core.v1.ListCustomerAccountsRequest\x1a,.aibank.core.v1.ListCustomerAccountsResponse\x12H\n" +
+	"\n" +
+	"OpenPocket\x12!.aibank.core.v1.OpenPocketRequest\x1a\x17.aibank.core.v1.Account\x12J\n" +
+	"\vClosePocket\x12\".aibank.core.v1.ClosePocketRequest\x1a\x17.aibank.core.v1.Account2\xaa\x01\n" +
 	"\x0eProductService\x12N\n" +
 	"\rCreateProduct\x12$.aibank.core.v1.CreateProductRequest\x1a\x17.aibank.core.v1.Product\x12H\n" +
 	"\n" +
@@ -5018,7 +5144,7 @@ func file_aibank_core_v1_core_proto_rawDescGZIP() []byte {
 }
 
 var file_aibank_core_v1_core_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
+var file_aibank_core_v1_core_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
 var file_aibank_core_v1_core_proto_goTypes = []any{
 	(Direction)(0),                        // 0: aibank.core.v1.Direction
 	(AccountType)(0),                      // 1: aibank.core.v1.AccountType
@@ -5045,108 +5171,110 @@ var file_aibank_core_v1_core_proto_goTypes = []any{
 	(*CreateInternalAccountRequest)(nil),  // 22: aibank.core.v1.CreateInternalAccountRequest
 	(*GetAccountRequest)(nil),             // 23: aibank.core.v1.GetAccountRequest
 	(*GetAccountByIdRequest)(nil),         // 24: aibank.core.v1.GetAccountByIdRequest
-	(*ListCustomerAccountsRequest)(nil),   // 25: aibank.core.v1.ListCustomerAccountsRequest
-	(*ListCustomerAccountsResponse)(nil),  // 26: aibank.core.v1.ListCustomerAccountsResponse
-	(*Product)(nil),                       // 27: aibank.core.v1.Product
-	(*CreateProductRequest)(nil),          // 28: aibank.core.v1.CreateProductRequest
-	(*GetProductRequest)(nil),             // 29: aibank.core.v1.GetProductRequest
-	(*Finding)(nil),                       // 30: aibank.core.v1.Finding
-	(*ListOpenFindingsRequest)(nil),       // 31: aibank.core.v1.ListOpenFindingsRequest
-	(*ListOpenFindingsResponse)(nil),      // 32: aibank.core.v1.ListOpenFindingsResponse
-	(*ResolveFindingRequest)(nil),         // 33: aibank.core.v1.ResolveFindingRequest
-	(*ResolveFindingResponse)(nil),        // 34: aibank.core.v1.ResolveFindingResponse
-	(*RunInternalCheckRequest)(nil),       // 35: aibank.core.v1.RunInternalCheckRequest
-	(*RunInternalCheckResponse)(nil),      // 36: aibank.core.v1.RunInternalCheckResponse
-	(*Authorization)(nil),                 // 37: aibank.core.v1.Authorization
-	(*AuthorizeRequest)(nil),              // 38: aibank.core.v1.AuthorizeRequest
-	(*AuthorizeResponse)(nil),             // 39: aibank.core.v1.AuthorizeResponse
-	(*CaptureRequest)(nil),                // 40: aibank.core.v1.CaptureRequest
-	(*RefundRequest)(nil),                 // 41: aibank.core.v1.RefundRequest
-	(*GetAuthorizationRequest)(nil),       // 42: aibank.core.v1.GetAuthorizationRequest
-	(*ReleaseExpiredRequest)(nil),         // 43: aibank.core.v1.ReleaseExpiredRequest
-	(*ReleaseExpiredResponse)(nil),        // 44: aibank.core.v1.ReleaseExpiredResponse
-	(*SummarizeLiveHoldsRequest)(nil),     // 45: aibank.core.v1.SummarizeLiveHoldsRequest
-	(*HoldGroup)(nil),                     // 46: aibank.core.v1.HoldGroup
-	(*LookupHoldGranteesRequest)(nil),     // 47: aibank.core.v1.LookupHoldGranteesRequest
-	(*HoldGrantee)(nil),                   // 48: aibank.core.v1.HoldGrantee
-	(*LookupHoldGranteesResponse)(nil),    // 49: aibank.core.v1.LookupHoldGranteesResponse
-	(*SummarizeLiveHoldsResponse)(nil),    // 50: aibank.core.v1.SummarizeLiveHoldsResponse
-	(*Mandate)(nil),                       // 51: aibank.core.v1.Mandate
-	(*GrantMandateRequest)(nil),           // 52: aibank.core.v1.GrantMandateRequest
-	(*RevokeMandateRequest)(nil),          // 53: aibank.core.v1.RevokeMandateRequest
-	(*GetMandateRequest)(nil),             // 54: aibank.core.v1.GetMandateRequest
-	(*FindActiveMandateRequest)(nil),      // 55: aibank.core.v1.FindActiveMandateRequest
-	(*SummarizeSpendRequest)(nil),         // 56: aibank.core.v1.SummarizeSpendRequest
-	(*MandateSpend)(nil),                  // 57: aibank.core.v1.MandateSpend
-	(*SummarizeSpendResponse)(nil),        // 58: aibank.core.v1.SummarizeSpendResponse
-	(*ListMandatesRequest)(nil),           // 59: aibank.core.v1.ListMandatesRequest
-	(*ListMandatesResponse)(nil),          // 60: aibank.core.v1.ListMandatesResponse
-	(*AuthorizeUnderMandateRequest)(nil),  // 61: aibank.core.v1.AuthorizeUnderMandateRequest
-	(*AuthorizeUnderMandateResponse)(nil), // 62: aibank.core.v1.AuthorizeUnderMandateResponse
-	(*CreditLine)(nil),                    // 63: aibank.core.v1.CreditLine
-	(*OpenCreditLineRequest)(nil),         // 64: aibank.core.v1.OpenCreditLineRequest
-	(*GetCustomerCreditLineRequest)(nil),  // 65: aibank.core.v1.GetCustomerCreditLineRequest
-	(*CreditStatement)(nil),               // 66: aibank.core.v1.CreditStatement
-	(*CloseCycleRequest)(nil),             // 67: aibank.core.v1.CloseCycleRequest
-	(*ListStatementsRequest)(nil),         // 68: aibank.core.v1.ListStatementsRequest
-	(*ListStatementsResponse)(nil),        // 69: aibank.core.v1.ListStatementsResponse
-	(*ReviewCreditLineRequest)(nil),       // 70: aibank.core.v1.ReviewCreditLineRequest
-	(*timestamppb.Timestamp)(nil),         // 71: google.protobuf.Timestamp
+	(*OpenPocketRequest)(nil),             // 25: aibank.core.v1.OpenPocketRequest
+	(*ClosePocketRequest)(nil),            // 26: aibank.core.v1.ClosePocketRequest
+	(*ListCustomerAccountsRequest)(nil),   // 27: aibank.core.v1.ListCustomerAccountsRequest
+	(*ListCustomerAccountsResponse)(nil),  // 28: aibank.core.v1.ListCustomerAccountsResponse
+	(*Product)(nil),                       // 29: aibank.core.v1.Product
+	(*CreateProductRequest)(nil),          // 30: aibank.core.v1.CreateProductRequest
+	(*GetProductRequest)(nil),             // 31: aibank.core.v1.GetProductRequest
+	(*Finding)(nil),                       // 32: aibank.core.v1.Finding
+	(*ListOpenFindingsRequest)(nil),       // 33: aibank.core.v1.ListOpenFindingsRequest
+	(*ListOpenFindingsResponse)(nil),      // 34: aibank.core.v1.ListOpenFindingsResponse
+	(*ResolveFindingRequest)(nil),         // 35: aibank.core.v1.ResolveFindingRequest
+	(*ResolveFindingResponse)(nil),        // 36: aibank.core.v1.ResolveFindingResponse
+	(*RunInternalCheckRequest)(nil),       // 37: aibank.core.v1.RunInternalCheckRequest
+	(*RunInternalCheckResponse)(nil),      // 38: aibank.core.v1.RunInternalCheckResponse
+	(*Authorization)(nil),                 // 39: aibank.core.v1.Authorization
+	(*AuthorizeRequest)(nil),              // 40: aibank.core.v1.AuthorizeRequest
+	(*AuthorizeResponse)(nil),             // 41: aibank.core.v1.AuthorizeResponse
+	(*CaptureRequest)(nil),                // 42: aibank.core.v1.CaptureRequest
+	(*RefundRequest)(nil),                 // 43: aibank.core.v1.RefundRequest
+	(*GetAuthorizationRequest)(nil),       // 44: aibank.core.v1.GetAuthorizationRequest
+	(*ReleaseExpiredRequest)(nil),         // 45: aibank.core.v1.ReleaseExpiredRequest
+	(*ReleaseExpiredResponse)(nil),        // 46: aibank.core.v1.ReleaseExpiredResponse
+	(*SummarizeLiveHoldsRequest)(nil),     // 47: aibank.core.v1.SummarizeLiveHoldsRequest
+	(*HoldGroup)(nil),                     // 48: aibank.core.v1.HoldGroup
+	(*LookupHoldGranteesRequest)(nil),     // 49: aibank.core.v1.LookupHoldGranteesRequest
+	(*HoldGrantee)(nil),                   // 50: aibank.core.v1.HoldGrantee
+	(*LookupHoldGranteesResponse)(nil),    // 51: aibank.core.v1.LookupHoldGranteesResponse
+	(*SummarizeLiveHoldsResponse)(nil),    // 52: aibank.core.v1.SummarizeLiveHoldsResponse
+	(*Mandate)(nil),                       // 53: aibank.core.v1.Mandate
+	(*GrantMandateRequest)(nil),           // 54: aibank.core.v1.GrantMandateRequest
+	(*RevokeMandateRequest)(nil),          // 55: aibank.core.v1.RevokeMandateRequest
+	(*GetMandateRequest)(nil),             // 56: aibank.core.v1.GetMandateRequest
+	(*FindActiveMandateRequest)(nil),      // 57: aibank.core.v1.FindActiveMandateRequest
+	(*SummarizeSpendRequest)(nil),         // 58: aibank.core.v1.SummarizeSpendRequest
+	(*MandateSpend)(nil),                  // 59: aibank.core.v1.MandateSpend
+	(*SummarizeSpendResponse)(nil),        // 60: aibank.core.v1.SummarizeSpendResponse
+	(*ListMandatesRequest)(nil),           // 61: aibank.core.v1.ListMandatesRequest
+	(*ListMandatesResponse)(nil),          // 62: aibank.core.v1.ListMandatesResponse
+	(*AuthorizeUnderMandateRequest)(nil),  // 63: aibank.core.v1.AuthorizeUnderMandateRequest
+	(*AuthorizeUnderMandateResponse)(nil), // 64: aibank.core.v1.AuthorizeUnderMandateResponse
+	(*CreditLine)(nil),                    // 65: aibank.core.v1.CreditLine
+	(*OpenCreditLineRequest)(nil),         // 66: aibank.core.v1.OpenCreditLineRequest
+	(*GetCustomerCreditLineRequest)(nil),  // 67: aibank.core.v1.GetCustomerCreditLineRequest
+	(*CreditStatement)(nil),               // 68: aibank.core.v1.CreditStatement
+	(*CloseCycleRequest)(nil),             // 69: aibank.core.v1.CloseCycleRequest
+	(*ListStatementsRequest)(nil),         // 70: aibank.core.v1.ListStatementsRequest
+	(*ListStatementsResponse)(nil),        // 71: aibank.core.v1.ListStatementsResponse
+	(*ReviewCreditLineRequest)(nil),       // 72: aibank.core.v1.ReviewCreditLineRequest
+	(*timestamppb.Timestamp)(nil),         // 73: google.protobuf.Timestamp
 }
 var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	0,  // 0: aibank.core.v1.Entry.direction:type_name -> aibank.core.v1.Direction
 	11, // 1: aibank.core.v1.Entry.amount:type_name -> aibank.core.v1.Money
 	12, // 2: aibank.core.v1.PostRequest.entries:type_name -> aibank.core.v1.Entry
-	71, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
+	73, // 3: aibank.core.v1.PostResponse.posted_at:type_name -> google.protobuf.Timestamp
 	11, // 4: aibank.core.v1.GetBalanceResponse.balance:type_name -> aibank.core.v1.Money
 	11, // 5: aibank.core.v1.GetBalanceResponse.projected_balance:type_name -> aibank.core.v1.Money
 	0,  // 6: aibank.core.v1.AccountEntry.direction:type_name -> aibank.core.v1.Direction
 	11, // 7: aibank.core.v1.AccountEntry.amount:type_name -> aibank.core.v1.Money
-	71, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
+	73, // 8: aibank.core.v1.AccountEntry.posted_at:type_name -> google.protobuf.Timestamp
 	17, // 9: aibank.core.v1.ListEntriesResponse.entries:type_name -> aibank.core.v1.AccountEntry
 	1,  // 10: aibank.core.v1.Account.type:type_name -> aibank.core.v1.AccountType
 	2,  // 11: aibank.core.v1.Account.owner:type_name -> aibank.core.v1.AccountOwner
 	3,  // 12: aibank.core.v1.Account.status:type_name -> aibank.core.v1.AccountStatus
-	71, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	73, // 13: aibank.core.v1.Account.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 14: aibank.core.v1.CreateInternalAccountRequest.type:type_name -> aibank.core.v1.AccountType
 	20, // 15: aibank.core.v1.ListCustomerAccountsResponse.accounts:type_name -> aibank.core.v1.Account
 	5,  // 16: aibank.core.v1.Finding.kind:type_name -> aibank.core.v1.FindingKind
-	71, // 17: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
-	30, // 18: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
+	73, // 17: aibank.core.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
+	32, // 18: aibank.core.v1.ListOpenFindingsResponse.findings:type_name -> aibank.core.v1.Finding
 	11, // 19: aibank.core.v1.Authorization.amount:type_name -> aibank.core.v1.Money
 	6,  // 20: aibank.core.v1.Authorization.status:type_name -> aibank.core.v1.AuthorizationStatus
-	71, // 21: aibank.core.v1.Authorization.expires_at:type_name -> google.protobuf.Timestamp
-	71, // 22: aibank.core.v1.Authorization.created_at:type_name -> google.protobuf.Timestamp
-	71, // 23: aibank.core.v1.Authorization.settled_at:type_name -> google.protobuf.Timestamp
-	71, // 24: aibank.core.v1.Authorization.released_at:type_name -> google.protobuf.Timestamp
+	73, // 21: aibank.core.v1.Authorization.expires_at:type_name -> google.protobuf.Timestamp
+	73, // 22: aibank.core.v1.Authorization.created_at:type_name -> google.protobuf.Timestamp
+	73, // 23: aibank.core.v1.Authorization.settled_at:type_name -> google.protobuf.Timestamp
+	73, // 24: aibank.core.v1.Authorization.released_at:type_name -> google.protobuf.Timestamp
 	11, // 25: aibank.core.v1.AuthorizeRequest.amount:type_name -> aibank.core.v1.Money
-	37, // 26: aibank.core.v1.AuthorizeResponse.authorization:type_name -> aibank.core.v1.Authorization
+	39, // 26: aibank.core.v1.AuthorizeResponse.authorization:type_name -> aibank.core.v1.Authorization
 	11, // 27: aibank.core.v1.HoldGroup.total:type_name -> aibank.core.v1.Money
 	11, // 28: aibank.core.v1.HoldGroup.expired:type_name -> aibank.core.v1.Money
-	71, // 29: aibank.core.v1.HoldGroup.first_expires_at:type_name -> google.protobuf.Timestamp
-	71, // 30: aibank.core.v1.HoldGroup.last_expires_at:type_name -> google.protobuf.Timestamp
-	48, // 31: aibank.core.v1.LookupHoldGranteesResponse.holds:type_name -> aibank.core.v1.HoldGrantee
-	46, // 32: aibank.core.v1.SummarizeLiveHoldsResponse.groups:type_name -> aibank.core.v1.HoldGroup
+	73, // 29: aibank.core.v1.HoldGroup.first_expires_at:type_name -> google.protobuf.Timestamp
+	73, // 30: aibank.core.v1.HoldGroup.last_expires_at:type_name -> google.protobuf.Timestamp
+	50, // 31: aibank.core.v1.LookupHoldGranteesResponse.holds:type_name -> aibank.core.v1.HoldGrantee
+	48, // 32: aibank.core.v1.SummarizeLiveHoldsResponse.groups:type_name -> aibank.core.v1.HoldGroup
 	8,  // 33: aibank.core.v1.Mandate.status:type_name -> aibank.core.v1.MandateStatus
-	71, // 34: aibank.core.v1.Mandate.expires_at:type_name -> google.protobuf.Timestamp
-	71, // 35: aibank.core.v1.Mandate.created_at:type_name -> google.protobuf.Timestamp
-	71, // 36: aibank.core.v1.Mandate.revoked_at:type_name -> google.protobuf.Timestamp
-	71, // 37: aibank.core.v1.GrantMandateRequest.expires_at:type_name -> google.protobuf.Timestamp
+	73, // 34: aibank.core.v1.Mandate.expires_at:type_name -> google.protobuf.Timestamp
+	73, // 35: aibank.core.v1.Mandate.created_at:type_name -> google.protobuf.Timestamp
+	73, // 36: aibank.core.v1.Mandate.revoked_at:type_name -> google.protobuf.Timestamp
+	73, // 37: aibank.core.v1.GrantMandateRequest.expires_at:type_name -> google.protobuf.Timestamp
 	11, // 38: aibank.core.v1.MandateSpend.today:type_name -> aibank.core.v1.Money
 	11, // 39: aibank.core.v1.MandateSpend.month:type_name -> aibank.core.v1.Money
 	11, // 40: aibank.core.v1.MandateSpend.in_flight:type_name -> aibank.core.v1.Money
-	57, // 41: aibank.core.v1.SummarizeSpendResponse.mandates:type_name -> aibank.core.v1.MandateSpend
-	51, // 42: aibank.core.v1.ListMandatesResponse.mandates:type_name -> aibank.core.v1.Mandate
-	38, // 43: aibank.core.v1.AuthorizeUnderMandateRequest.authorization:type_name -> aibank.core.v1.AuthorizeRequest
-	37, // 44: aibank.core.v1.AuthorizeUnderMandateResponse.authorization:type_name -> aibank.core.v1.Authorization
-	51, // 45: aibank.core.v1.AuthorizeUnderMandateResponse.mandate:type_name -> aibank.core.v1.Mandate
+	59, // 41: aibank.core.v1.SummarizeSpendResponse.mandates:type_name -> aibank.core.v1.MandateSpend
+	53, // 42: aibank.core.v1.ListMandatesResponse.mandates:type_name -> aibank.core.v1.Mandate
+	40, // 43: aibank.core.v1.AuthorizeUnderMandateRequest.authorization:type_name -> aibank.core.v1.AuthorizeRequest
+	39, // 44: aibank.core.v1.AuthorizeUnderMandateResponse.authorization:type_name -> aibank.core.v1.Authorization
+	53, // 45: aibank.core.v1.AuthorizeUnderMandateResponse.mandate:type_name -> aibank.core.v1.Mandate
 	11, // 46: aibank.core.v1.CreditLine.limit:type_name -> aibank.core.v1.Money
 	11, // 47: aibank.core.v1.CreditLine.outstanding:type_name -> aibank.core.v1.Money
 	11, // 48: aibank.core.v1.CreditLine.available:type_name -> aibank.core.v1.Money
 	10, // 49: aibank.core.v1.CreditLine.status:type_name -> aibank.core.v1.CreditLineStatus
-	71, // 50: aibank.core.v1.CreditLine.opened_at:type_name -> google.protobuf.Timestamp
-	71, // 51: aibank.core.v1.CreditStatement.period_start:type_name -> google.protobuf.Timestamp
-	71, // 52: aibank.core.v1.CreditStatement.period_end:type_name -> google.protobuf.Timestamp
+	73, // 50: aibank.core.v1.CreditLine.opened_at:type_name -> google.protobuf.Timestamp
+	73, // 51: aibank.core.v1.CreditStatement.period_start:type_name -> google.protobuf.Timestamp
+	73, // 52: aibank.core.v1.CreditStatement.period_end:type_name -> google.protobuf.Timestamp
 	11, // 53: aibank.core.v1.CreditStatement.opening:type_name -> aibank.core.v1.Money
 	11, // 54: aibank.core.v1.CreditStatement.charges:type_name -> aibank.core.v1.Money
 	11, // 55: aibank.core.v1.CreditStatement.payments:type_name -> aibank.core.v1.Money
@@ -5154,9 +5282,9 @@ var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	11, // 57: aibank.core.v1.CreditStatement.closing:type_name -> aibank.core.v1.Money
 	11, // 58: aibank.core.v1.CreditStatement.minimum_payment:type_name -> aibank.core.v1.Money
 	11, // 59: aibank.core.v1.CreditStatement.paid_since_cut:type_name -> aibank.core.v1.Money
-	71, // 60: aibank.core.v1.CloseCycleRequest.cut_at:type_name -> google.protobuf.Timestamp
-	66, // 61: aibank.core.v1.ListStatementsResponse.statements:type_name -> aibank.core.v1.CreditStatement
-	71, // 62: aibank.core.v1.ReviewCreditLineRequest.as_of:type_name -> google.protobuf.Timestamp
+	73, // 60: aibank.core.v1.CloseCycleRequest.cut_at:type_name -> google.protobuf.Timestamp
+	68, // 61: aibank.core.v1.ListStatementsResponse.statements:type_name -> aibank.core.v1.CreditStatement
+	73, // 62: aibank.core.v1.ReviewCreditLineRequest.as_of:type_name -> google.protobuf.Timestamp
 	13, // 63: aibank.core.v1.LedgerService.Post:input_type -> aibank.core.v1.PostRequest
 	15, // 64: aibank.core.v1.LedgerService.GetBalance:input_type -> aibank.core.v1.GetBalanceRequest
 	18, // 65: aibank.core.v1.LedgerService.ListEntries:input_type -> aibank.core.v1.ListEntriesRequest
@@ -5164,65 +5292,69 @@ var file_aibank_core_v1_core_proto_depIdxs = []int32{
 	22, // 67: aibank.core.v1.AccountService.CreateInternalAccount:input_type -> aibank.core.v1.CreateInternalAccountRequest
 	23, // 68: aibank.core.v1.AccountService.GetAccount:input_type -> aibank.core.v1.GetAccountRequest
 	24, // 69: aibank.core.v1.AccountService.GetAccountById:input_type -> aibank.core.v1.GetAccountByIdRequest
-	25, // 70: aibank.core.v1.AccountService.ListCustomerAccounts:input_type -> aibank.core.v1.ListCustomerAccountsRequest
-	28, // 71: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
-	29, // 72: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
-	31, // 73: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
-	33, // 74: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
-	35, // 75: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
-	38, // 76: aibank.core.v1.AuthorizationService.Authorize:input_type -> aibank.core.v1.AuthorizeRequest
-	40, // 77: aibank.core.v1.AuthorizationService.Capture:input_type -> aibank.core.v1.CaptureRequest
-	41, // 78: aibank.core.v1.AuthorizationService.Refund:input_type -> aibank.core.v1.RefundRequest
-	42, // 79: aibank.core.v1.AuthorizationService.GetAuthorization:input_type -> aibank.core.v1.GetAuthorizationRequest
-	43, // 80: aibank.core.v1.AuthorizationService.ReleaseExpired:input_type -> aibank.core.v1.ReleaseExpiredRequest
-	45, // 81: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:input_type -> aibank.core.v1.SummarizeLiveHoldsRequest
-	47, // 82: aibank.core.v1.AuthorizationService.LookupHoldGrantees:input_type -> aibank.core.v1.LookupHoldGranteesRequest
-	52, // 83: aibank.core.v1.MandateService.GrantMandate:input_type -> aibank.core.v1.GrantMandateRequest
-	53, // 84: aibank.core.v1.MandateService.RevokeMandate:input_type -> aibank.core.v1.RevokeMandateRequest
-	54, // 85: aibank.core.v1.MandateService.GetMandate:input_type -> aibank.core.v1.GetMandateRequest
-	55, // 86: aibank.core.v1.MandateService.FindActiveMandate:input_type -> aibank.core.v1.FindActiveMandateRequest
-	59, // 87: aibank.core.v1.MandateService.ListMandates:input_type -> aibank.core.v1.ListMandatesRequest
-	61, // 88: aibank.core.v1.MandateService.AuthorizeUnderMandate:input_type -> aibank.core.v1.AuthorizeUnderMandateRequest
-	56, // 89: aibank.core.v1.MandateService.SummarizeSpend:input_type -> aibank.core.v1.SummarizeSpendRequest
-	64, // 90: aibank.core.v1.CreditService.OpenCreditLine:input_type -> aibank.core.v1.OpenCreditLineRequest
-	65, // 91: aibank.core.v1.CreditService.GetCustomerCreditLine:input_type -> aibank.core.v1.GetCustomerCreditLineRequest
-	67, // 92: aibank.core.v1.CreditService.CloseCycle:input_type -> aibank.core.v1.CloseCycleRequest
-	68, // 93: aibank.core.v1.CreditService.ListStatements:input_type -> aibank.core.v1.ListStatementsRequest
-	70, // 94: aibank.core.v1.CreditService.ReviewCreditLine:input_type -> aibank.core.v1.ReviewCreditLineRequest
-	14, // 95: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
-	16, // 96: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
-	19, // 97: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
-	20, // 98: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
-	20, // 99: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
-	20, // 100: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
-	20, // 101: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
-	26, // 102: aibank.core.v1.AccountService.ListCustomerAccounts:output_type -> aibank.core.v1.ListCustomerAccountsResponse
-	27, // 103: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
-	27, // 104: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
-	32, // 105: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
-	34, // 106: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
-	36, // 107: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
-	39, // 108: aibank.core.v1.AuthorizationService.Authorize:output_type -> aibank.core.v1.AuthorizeResponse
-	37, // 109: aibank.core.v1.AuthorizationService.Capture:output_type -> aibank.core.v1.Authorization
-	37, // 110: aibank.core.v1.AuthorizationService.Refund:output_type -> aibank.core.v1.Authorization
-	37, // 111: aibank.core.v1.AuthorizationService.GetAuthorization:output_type -> aibank.core.v1.Authorization
-	44, // 112: aibank.core.v1.AuthorizationService.ReleaseExpired:output_type -> aibank.core.v1.ReleaseExpiredResponse
-	50, // 113: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:output_type -> aibank.core.v1.SummarizeLiveHoldsResponse
-	49, // 114: aibank.core.v1.AuthorizationService.LookupHoldGrantees:output_type -> aibank.core.v1.LookupHoldGranteesResponse
-	51, // 115: aibank.core.v1.MandateService.GrantMandate:output_type -> aibank.core.v1.Mandate
-	51, // 116: aibank.core.v1.MandateService.RevokeMandate:output_type -> aibank.core.v1.Mandate
-	51, // 117: aibank.core.v1.MandateService.GetMandate:output_type -> aibank.core.v1.Mandate
-	51, // 118: aibank.core.v1.MandateService.FindActiveMandate:output_type -> aibank.core.v1.Mandate
-	60, // 119: aibank.core.v1.MandateService.ListMandates:output_type -> aibank.core.v1.ListMandatesResponse
-	62, // 120: aibank.core.v1.MandateService.AuthorizeUnderMandate:output_type -> aibank.core.v1.AuthorizeUnderMandateResponse
-	58, // 121: aibank.core.v1.MandateService.SummarizeSpend:output_type -> aibank.core.v1.SummarizeSpendResponse
-	63, // 122: aibank.core.v1.CreditService.OpenCreditLine:output_type -> aibank.core.v1.CreditLine
-	63, // 123: aibank.core.v1.CreditService.GetCustomerCreditLine:output_type -> aibank.core.v1.CreditLine
-	66, // 124: aibank.core.v1.CreditService.CloseCycle:output_type -> aibank.core.v1.CreditStatement
-	69, // 125: aibank.core.v1.CreditService.ListStatements:output_type -> aibank.core.v1.ListStatementsResponse
-	63, // 126: aibank.core.v1.CreditService.ReviewCreditLine:output_type -> aibank.core.v1.CreditLine
-	95, // [95:127] is the sub-list for method output_type
-	63, // [63:95] is the sub-list for method input_type
+	27, // 70: aibank.core.v1.AccountService.ListCustomerAccounts:input_type -> aibank.core.v1.ListCustomerAccountsRequest
+	25, // 71: aibank.core.v1.AccountService.OpenPocket:input_type -> aibank.core.v1.OpenPocketRequest
+	26, // 72: aibank.core.v1.AccountService.ClosePocket:input_type -> aibank.core.v1.ClosePocketRequest
+	30, // 73: aibank.core.v1.ProductService.CreateProduct:input_type -> aibank.core.v1.CreateProductRequest
+	31, // 74: aibank.core.v1.ProductService.GetProduct:input_type -> aibank.core.v1.GetProductRequest
+	33, // 75: aibank.core.v1.ReconciliationService.ListOpenFindings:input_type -> aibank.core.v1.ListOpenFindingsRequest
+	35, // 76: aibank.core.v1.ReconciliationService.ResolveFinding:input_type -> aibank.core.v1.ResolveFindingRequest
+	37, // 77: aibank.core.v1.ReconciliationService.RunInternalCheck:input_type -> aibank.core.v1.RunInternalCheckRequest
+	40, // 78: aibank.core.v1.AuthorizationService.Authorize:input_type -> aibank.core.v1.AuthorizeRequest
+	42, // 79: aibank.core.v1.AuthorizationService.Capture:input_type -> aibank.core.v1.CaptureRequest
+	43, // 80: aibank.core.v1.AuthorizationService.Refund:input_type -> aibank.core.v1.RefundRequest
+	44, // 81: aibank.core.v1.AuthorizationService.GetAuthorization:input_type -> aibank.core.v1.GetAuthorizationRequest
+	45, // 82: aibank.core.v1.AuthorizationService.ReleaseExpired:input_type -> aibank.core.v1.ReleaseExpiredRequest
+	47, // 83: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:input_type -> aibank.core.v1.SummarizeLiveHoldsRequest
+	49, // 84: aibank.core.v1.AuthorizationService.LookupHoldGrantees:input_type -> aibank.core.v1.LookupHoldGranteesRequest
+	54, // 85: aibank.core.v1.MandateService.GrantMandate:input_type -> aibank.core.v1.GrantMandateRequest
+	55, // 86: aibank.core.v1.MandateService.RevokeMandate:input_type -> aibank.core.v1.RevokeMandateRequest
+	56, // 87: aibank.core.v1.MandateService.GetMandate:input_type -> aibank.core.v1.GetMandateRequest
+	57, // 88: aibank.core.v1.MandateService.FindActiveMandate:input_type -> aibank.core.v1.FindActiveMandateRequest
+	61, // 89: aibank.core.v1.MandateService.ListMandates:input_type -> aibank.core.v1.ListMandatesRequest
+	63, // 90: aibank.core.v1.MandateService.AuthorizeUnderMandate:input_type -> aibank.core.v1.AuthorizeUnderMandateRequest
+	58, // 91: aibank.core.v1.MandateService.SummarizeSpend:input_type -> aibank.core.v1.SummarizeSpendRequest
+	66, // 92: aibank.core.v1.CreditService.OpenCreditLine:input_type -> aibank.core.v1.OpenCreditLineRequest
+	67, // 93: aibank.core.v1.CreditService.GetCustomerCreditLine:input_type -> aibank.core.v1.GetCustomerCreditLineRequest
+	69, // 94: aibank.core.v1.CreditService.CloseCycle:input_type -> aibank.core.v1.CloseCycleRequest
+	70, // 95: aibank.core.v1.CreditService.ListStatements:input_type -> aibank.core.v1.ListStatementsRequest
+	72, // 96: aibank.core.v1.CreditService.ReviewCreditLine:input_type -> aibank.core.v1.ReviewCreditLineRequest
+	14, // 97: aibank.core.v1.LedgerService.Post:output_type -> aibank.core.v1.PostResponse
+	16, // 98: aibank.core.v1.LedgerService.GetBalance:output_type -> aibank.core.v1.GetBalanceResponse
+	19, // 99: aibank.core.v1.LedgerService.ListEntries:output_type -> aibank.core.v1.ListEntriesResponse
+	20, // 100: aibank.core.v1.AccountService.OpenCustomerAccount:output_type -> aibank.core.v1.Account
+	20, // 101: aibank.core.v1.AccountService.CreateInternalAccount:output_type -> aibank.core.v1.Account
+	20, // 102: aibank.core.v1.AccountService.GetAccount:output_type -> aibank.core.v1.Account
+	20, // 103: aibank.core.v1.AccountService.GetAccountById:output_type -> aibank.core.v1.Account
+	28, // 104: aibank.core.v1.AccountService.ListCustomerAccounts:output_type -> aibank.core.v1.ListCustomerAccountsResponse
+	20, // 105: aibank.core.v1.AccountService.OpenPocket:output_type -> aibank.core.v1.Account
+	20, // 106: aibank.core.v1.AccountService.ClosePocket:output_type -> aibank.core.v1.Account
+	29, // 107: aibank.core.v1.ProductService.CreateProduct:output_type -> aibank.core.v1.Product
+	29, // 108: aibank.core.v1.ProductService.GetProduct:output_type -> aibank.core.v1.Product
+	34, // 109: aibank.core.v1.ReconciliationService.ListOpenFindings:output_type -> aibank.core.v1.ListOpenFindingsResponse
+	36, // 110: aibank.core.v1.ReconciliationService.ResolveFinding:output_type -> aibank.core.v1.ResolveFindingResponse
+	38, // 111: aibank.core.v1.ReconciliationService.RunInternalCheck:output_type -> aibank.core.v1.RunInternalCheckResponse
+	41, // 112: aibank.core.v1.AuthorizationService.Authorize:output_type -> aibank.core.v1.AuthorizeResponse
+	39, // 113: aibank.core.v1.AuthorizationService.Capture:output_type -> aibank.core.v1.Authorization
+	39, // 114: aibank.core.v1.AuthorizationService.Refund:output_type -> aibank.core.v1.Authorization
+	39, // 115: aibank.core.v1.AuthorizationService.GetAuthorization:output_type -> aibank.core.v1.Authorization
+	46, // 116: aibank.core.v1.AuthorizationService.ReleaseExpired:output_type -> aibank.core.v1.ReleaseExpiredResponse
+	52, // 117: aibank.core.v1.AuthorizationService.SummarizeLiveHolds:output_type -> aibank.core.v1.SummarizeLiveHoldsResponse
+	51, // 118: aibank.core.v1.AuthorizationService.LookupHoldGrantees:output_type -> aibank.core.v1.LookupHoldGranteesResponse
+	53, // 119: aibank.core.v1.MandateService.GrantMandate:output_type -> aibank.core.v1.Mandate
+	53, // 120: aibank.core.v1.MandateService.RevokeMandate:output_type -> aibank.core.v1.Mandate
+	53, // 121: aibank.core.v1.MandateService.GetMandate:output_type -> aibank.core.v1.Mandate
+	53, // 122: aibank.core.v1.MandateService.FindActiveMandate:output_type -> aibank.core.v1.Mandate
+	62, // 123: aibank.core.v1.MandateService.ListMandates:output_type -> aibank.core.v1.ListMandatesResponse
+	64, // 124: aibank.core.v1.MandateService.AuthorizeUnderMandate:output_type -> aibank.core.v1.AuthorizeUnderMandateResponse
+	60, // 125: aibank.core.v1.MandateService.SummarizeSpend:output_type -> aibank.core.v1.SummarizeSpendResponse
+	65, // 126: aibank.core.v1.CreditService.OpenCreditLine:output_type -> aibank.core.v1.CreditLine
+	65, // 127: aibank.core.v1.CreditService.GetCustomerCreditLine:output_type -> aibank.core.v1.CreditLine
+	68, // 128: aibank.core.v1.CreditService.CloseCycle:output_type -> aibank.core.v1.CreditStatement
+	71, // 129: aibank.core.v1.CreditService.ListStatements:output_type -> aibank.core.v1.ListStatementsResponse
+	65, // 130: aibank.core.v1.CreditService.ReviewCreditLine:output_type -> aibank.core.v1.CreditLine
+	97, // [97:131] is the sub-list for method output_type
+	63, // [63:97] is the sub-list for method input_type
 	63, // [63:63] is the sub-list for extension type_name
 	63, // [63:63] is the sub-list for extension extendee
 	0,  // [0:63] is the sub-list for field type_name
@@ -5233,18 +5365,18 @@ func file_aibank_core_v1_core_proto_init() {
 	if File_aibank_core_v1_core_proto != nil {
 		return
 	}
-	file_aibank_core_v1_core_proto_msgTypes[16].OneofWrappers = []any{}
-	file_aibank_core_v1_core_proto_msgTypes[17].OneofWrappers = []any{}
-	file_aibank_core_v1_core_proto_msgTypes[26].OneofWrappers = []any{}
-	file_aibank_core_v1_core_proto_msgTypes[40].OneofWrappers = []any{}
-	file_aibank_core_v1_core_proto_msgTypes[41].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[18].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[19].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[28].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[42].OneofWrappers = []any{}
+	file_aibank_core_v1_core_proto_msgTypes[43].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aibank_core_v1_core_proto_rawDesc), len(file_aibank_core_v1_core_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   60,
+			NumMessages:   62,
 			NumExtensions: 0,
 			NumServices:   7,
 		},

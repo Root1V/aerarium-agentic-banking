@@ -191,6 +191,10 @@ func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request, p *P
 	}
 	out := make([]accountJSON, 0, len(accounts))
 	for _, a := range accounts {
+		// Los bolsillos se ven dentro de su cuenta, no como una cuenta más.
+		if a.GetParentAccountId() != "" {
+			continue
+		}
 		out = append(out, accountJSON{ID: a.Id, Name: a.Name, Currency: a.Currency})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"accounts": out})

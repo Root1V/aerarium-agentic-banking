@@ -228,6 +228,12 @@ func (s *Service) movements(ctx context.Context, accountID string, now time.Time
 			if m.PostedAt.Before(since) {
 				return out, nil
 			}
+			if m.Kind == coreclient.PocketTransferKind {
+				// Apartar en un bolsillo y devolverlo no es gastar ni cobrar: si
+				// contara, mover dinero de ida y vuelta inflaría el ingreso que ve
+				// el motor, y con él el límite de la tarjeta.
+				continue
+			}
 			direction := "out"
 			if m.Direction == corev1.Direction_DIRECTION_CREDIT {
 				direction = "in"

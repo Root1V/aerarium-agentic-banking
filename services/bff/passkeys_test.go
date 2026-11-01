@@ -24,6 +24,7 @@ import (
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
+	"github.com/aibank/aibank/services/pockets"
 	"github.com/aibank/aibank/services/sessions"
 	"github.com/aibank/aibank/services/stepup"
 	"github.com/descope/virtualwebauthn"
@@ -116,6 +117,10 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	}))
 	t.Cleanup(risk.Close)
 	assessor := credit.NewHTTPAssessor(risk.URL)
+	pocketSvc := pockets.NewService(db, f.core)
+	if err := pocketSvc.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
 	cards := credit.NewService(db, f.core, assessor, credit.Config{})
 	if err := cards.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
@@ -153,7 +158,8 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithSandboxFunds(cashPrefix, "RETAIL-").
 		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
 		WithCredit(cards).
-		WithForecast(forecast.NewService(f.core, cards, assessor, time.UTC)).
+		WithForecast(forecast.NewService(f.core, cards, assessor, time.UTC).WithCardReserve(pocketSvc)).
+		WithPockets(pocketSvc).
 		WithConsents(consents).
 		WithAgents(agentStore)
 	ts := httptest.NewServer(server.Handler())

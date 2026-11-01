@@ -117,6 +117,8 @@ pub struct Account {
     pub status: AccountStatus,
     pub allows_overdraft: bool,
     pub created_at: DateTime<Utc>,
+    /// La cuenta madre, si esta es un bolsillo.
+    pub parent_account_id: Option<Uuid>,
 }
 
 /// Movimiento de una cuenta tal como aparece en un extracto.
@@ -281,6 +283,8 @@ impl PostingError {
             Some("AB010") => PostingError::CreditLimitExceeded(message),
             Some("AB011") => PostingError::CreditLineInactive(message),
             Some("AB012") => PostingError::Overpayment(message),
+            // Una regla de los bolsillos: no hay nada que reintentar.
+            Some("AB013") => PostingError::Invalid(message),
             Some("23505") => PostingError::Conflict(message),
             _ => PostingError::Database(err),
         }

@@ -137,6 +137,10 @@ fn account_to_pb(account: Account) -> pb::Account {
         } as i32,
         allows_overdraft: account.allows_overdraft,
         created_at: Some(to_timestamp(account.created_at)),
+        parent_account_id: account
+            .parent_account_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
     }
 }
 
@@ -394,6 +398,33 @@ impl AccountService for AccountApi {
             .await
             .map_err(to_status)?;
 
+        Ok(Response::new(account_to_pb(account)))
+    }
+
+    async fn open_pocket(
+        &self,
+        request: Request<pb::OpenPocketRequest>,
+    ) -> Result<Response<pb::Account>, Status> {
+        let req = request.into_inner();
+        let parent = parse_uuid(&req.parent_account_id, "parent_account_id")?;
+        let account = self
+            .accounts
+            .open_pocket(parent, &req.code, &req.name)
+            .await
+            .map_err(to_status)?;
+        Ok(Response::new(account_to_pb(account)))
+    }
+
+    async fn close_pocket(
+        &self,
+        request: Request<pb::ClosePocketRequest>,
+    ) -> Result<Response<pb::Account>, Status> {
+        let pocket = parse_uuid(&request.into_inner().pocket_id, "pocket_id")?;
+        let account = self
+            .accounts
+            .close_pocket(pocket)
+            .await
+            .map_err(to_status)?;
         Ok(Response::new(account_to_pb(account)))
     }
 

@@ -51,6 +51,99 @@ impl AccountRepository {
         .await
     }
 
+    /// Abre un bolsillo de una cuenta: una cuenta hija, del mismo cliente y bajo el
+    /// mismo producto. Las reglas las hace cumplir la base (V012): mismo cliente,
+    /// moneda y producto, un solo nivel, y la madre activa.
+    pub async fn open_pocket(
+        &self,
+        parent_id: Uuid,
+        code: &str,
+        name: &str,
+    ) -> Result<Account, PostingError> {
+        let parent = self
+            .find_by_id(parent_id)
+            .await?
+            .ok_or_else(|| PostingError::Invalid(format!("account {parent_id} not found")))?;
+        let r = sqlx::query!(
+            r#"
+            INSERT INTO accounts (code, name, type, owner, owner_id, product_id,
+                                  currency, allows_overdraft, parent_account_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+            RETURNING id, code, name,
+                      type   as "account_type: AccountType",
+                      owner  as "owner: AccountOwner",
+                      owner_id, product_id, currency,
+                      status as "status: AccountStatus",
+                      allows_overdraft, created_at, parent_account_id
+            "#,
+            code,
+            name,
+            parent.account_type as AccountType,
+            parent.owner as AccountOwner,
+            parent.owner_id,
+            parent.product_id,
+            parent.currency,
+            parent_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(PostingError::from_db)?;
+
+        Ok(Account {
+            id: r.id,
+            code: r.code,
+            name: r.name,
+            account_type: r.account_type,
+            owner: r.owner,
+            owner_id: r.owner_id,
+            product_id: r.product_id,
+            currency: r.currency,
+            status: r.status,
+            allows_overdraft: r.allows_overdraft,
+            created_at: r.created_at,
+            parent_account_id: r.parent_account_id,
+        })
+    }
+
+    /// Cierra un bolsillo vacío. Con saldo no se cierra: el dinero se devuelve
+    /// antes a la cuenta, y así cerrar nunca hace desaparecer nada.
+    pub async fn close_pocket(&self, pocket_id: Uuid) -> Result<Account, PostingError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            r#"
+            SELECT a.parent_account_id, b.balance_micros
+              FROM accounts a JOIN account_balances b ON b.account_id = a.id
+             WHERE a.id = $1
+               FOR UPDATE OF b
+            "#,
+            pocket_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| PostingError::Invalid(format!("pocket {pocket_id} not found")))?;
+        if row.parent_account_id.is_none() {
+            return Err(PostingError::Invalid(format!(
+                "account {pocket_id} is not a pocket"
+            )));
+        }
+        if row.balance_micros != 0 {
+            return Err(PostingError::Invalid(format!(
+                "pocket {pocket_id} still holds {}; move it back first",
+                row.balance_micros
+            )));
+        }
+        sqlx::query!(
+            "UPDATE accounts SET status = 'CLOSED' WHERE id = $1",
+            pocket_id
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.find_by_id(pocket_id)
+            .await?
+            .ok_or_else(|| PostingError::Invalid(format!("pocket {pocket_id} not found")))
+    }
+
     /// Crea una cuenta interna del banco. Admite saldo negativo por defecto:
     /// representa una posición contable propia, no fondos de un cliente.
     pub async fn create_internal(
@@ -86,7 +179,7 @@ impl AccountRepository {
                    owner  as "owner: AccountOwner",
                    owner_id, product_id, currency,
                    status as "status: AccountStatus",
-                   allows_overdraft, created_at
+                   allows_overdraft, created_at, parent_account_id
             FROM accounts WHERE code = $1
             "#,
             code,
@@ -106,6 +199,7 @@ impl AccountRepository {
             status: r.status,
             allows_overdraft: r.allows_overdraft,
             created_at: r.created_at,
+            parent_account_id: r.parent_account_id,
         }))
     }
 
@@ -122,7 +216,7 @@ impl AccountRepository {
                    owner  as "owner: AccountOwner",
                    owner_id, product_id, currency,
                    status as "status: AccountStatus",
-                   allows_overdraft, created_at
+                   allows_overdraft, created_at, parent_account_id
             FROM accounts
             WHERE owner = 'CUSTOMER' AND owner_id = $1
             ORDER BY created_at, id
@@ -146,6 +240,7 @@ impl AccountRepository {
                 status: r.status,
                 allows_overdraft: r.allows_overdraft,
                 created_at: r.created_at,
+                parent_account_id: r.parent_account_id,
             })
             .collect())
     }
@@ -158,7 +253,7 @@ impl AccountRepository {
                    owner  as "owner: AccountOwner",
                    owner_id, product_id, currency,
                    status as "status: AccountStatus",
-                   allows_overdraft, created_at
+                   allows_overdraft, created_at, parent_account_id
             FROM accounts WHERE id = $1
             "#,
             id,
@@ -178,6 +273,7 @@ impl AccountRepository {
             status: r.status,
             allows_overdraft: r.allows_overdraft,
             created_at: r.created_at,
+            parent_account_id: r.parent_account_id,
         }))
     }
 
@@ -305,7 +401,7 @@ impl AccountRepository {
                       owner  as "owner: AccountOwner",
                       owner_id, product_id, currency,
                       status as "status: AccountStatus",
-                      allows_overdraft, created_at
+                      allows_overdraft, created_at, parent_account_id
             "#,
             code,
             name,
@@ -332,6 +428,7 @@ impl AccountRepository {
             status: r.status,
             allows_overdraft: r.allows_overdraft,
             created_at: r.created_at,
+            parent_account_id: r.parent_account_id,
         })
     }
 }

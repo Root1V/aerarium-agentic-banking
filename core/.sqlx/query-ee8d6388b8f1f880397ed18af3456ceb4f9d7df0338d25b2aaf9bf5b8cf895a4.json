@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, code, name,\n                   type   as \"account_type: AccountType\",\n                   owner  as \"owner: AccountOwner\",\n                   owner_id, product_id, currency,\n                   status as \"status: AccountStatus\",\n                   allows_overdraft, created_at\n            FROM accounts WHERE id = $1\n            ",
+  "query": "\n            SELECT id, code, name,\n                   type   as \"account_type: AccountType\",\n                   owner  as \"owner: AccountOwner\",\n                   owner_id, product_id, currency,\n                   status as \"status: AccountStatus\",\n                   allows_overdraft, created_at, parent_account_id\n            FROM accounts\n            WHERE owner = 'CUSTOMER' AND owner_id = $1\n            ORDER BY created_at, id\n            ",
   "describe": {
     "columns": [
       {
@@ -91,6 +91,11 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "parent_account_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -109,8 +114,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "dad81b712392c0016f8d749ac7e94905f6a875e17130acc422dd70ea474dbfb5"
+  "hash": "ee8d6388b8f1f880397ed18af3456ceb4f9d7df0338d25b2aaf9bf5b8cf895a4"
 }

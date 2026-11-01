@@ -51,6 +51,21 @@ type CardDue struct {
 	TotalMicros   int64
 	// Overdue: el vencimiento ya pasó y no se pagó el mínimo.
 	Overdue bool
+	// ReservedMicros es lo apartado en el bolsillo para la tarjeta: ya está
+	// reservado para pagarla, y se descuenta de lo que sale de la cuenta.
+	ReservedMicros int64
+}
+
+// fromAccount es lo que el pago saca de la cuenta, descontado lo apartado.
+func (c *CardDue) fromAccount(minimum bool) int64 {
+	due := c.TotalMicros
+	if minimum {
+		due = c.MinimumMicros
+	}
+	if due -= c.ReservedMicros; due < 0 {
+		return 0
+	}
+	return due
 }
 
 // Input es lo que se sabe hoy.
@@ -114,9 +129,10 @@ var refunds = map[string]bool{
 	"authorization_release": true, "authorization_refund": true, "rail_outbound_reverse": true,
 }
 
-// excluded no son gasto del día a día: el pago de la tarjeta se proyecta aparte, y
-// usar la tarjeta no mueve el saldo de la cuenta.
-var excluded = map[string]bool{"credit_payment": true, "credit_drawdown": true}
+// excluded no son gasto del día a día: el pago de la tarjeta se proyecta aparte,
+// usar la tarjeta no mueve el saldo de la cuenta, y apartar en un bolsillo no es
+// gastar (los movimientos de bolsillo ya no llegan aquí; se excluyen igual).
+var excluded = map[string]bool{"credit_payment": true, "credit_drawdown": true, "pocket_transfer": true}
 
 // Project calcula la previsión. Es una función pura: los mismos datos dan la
 // misma previsión.
@@ -169,11 +185,7 @@ func walk(balance, daily int64, today, until time.Time, card *CardDue, minimum b
 	var paid *Point
 	pay := func(day time.Time) {
 		if card != nil && sameDay(day, maxDay(card.DueOn, today)) {
-			if minimum {
-				balance -= card.MinimumMicros
-			} else {
-				balance -= card.TotalMicros
-			}
+			balance -= card.fromAccount(minimum)
 			paid = &Point{On: day, AmountMicros: balance}
 		}
 	}
@@ -209,7 +221,7 @@ func options(in Input, f Forecast, card *CardDue) []Option {
 	days := spendDays(in.Today, f.Until)
 	committed := int64(0)
 	if card != nil {
-		committed = card.TotalMicros
+		committed = card.fromAccount(false)
 	}
 	if days > 0 && in.BalanceMicros-committed >= 0 {
 		limit := (in.BalanceMicros - committed) / int64(days)
