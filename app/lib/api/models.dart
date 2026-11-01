@@ -85,8 +85,13 @@ class Movement {
   bool get _withOwnCard => kind == 'credit_drawdown' || kind == 'credit_payment';
 
   /// Etiqueta legible: a quién o de quién, si se sabe; si no, el tipo.
+  /// Un movimiento entre la cuenta y uno de sus bolsillos. La descripción es el
+  /// nombre del bolsillo.
+  bool get isPocketMove => kind == 'pocket_transfer';
+
   String get label => switch (counterparty) {
         _ when isPlatformPayment => 'Pago a $merchant',
+        _ when isPocketMove => sign < 0 ? 'Apartado en «$description»' : 'Devuelto de «$description»',
         _ when _withOwnCard => _kindLabel,
         final Account who? => sign < 0 ? 'A ${who.name}' : 'De ${who.name}',
         null => _kindLabel,

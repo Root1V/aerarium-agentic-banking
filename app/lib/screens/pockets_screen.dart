@@ -14,11 +14,15 @@ import '../money.dart';
 /// Mover entre la cuenta y sus bolsillos no pide la cara: el dinero no sale de la
 /// persona. Lo que no se puede es mandarlo a otro desde un bolsillo.
 class PocketsScreen extends StatefulWidget {
-  const PocketsScreen({super.key, required this.client, required this.accountId, required this.currency});
+  const PocketsScreen(
+      {super.key, required this.client, required this.accountId, required this.currency, this.available});
 
   final BffClient client;
   final String accountId;
   final String currency;
+
+  /// Lo disponible en la cuenta, para el resumen. Nulo si no se conoce.
+  final Money? available;
 
   @override
   State<PocketsScreen> createState() => _PocketsScreenState();
@@ -106,12 +110,78 @@ class _PocketsScreenState extends State<PocketsScreen> {
     if (sure == true) await _run(() => widget.client.closePocket(pocket.id));
   }
 
+  /// Las acciones de un bolsillo, en una hoja: apartar y devolver a mano, y
+  /// cerrar abajo y en otro color, lejos del dedo.
+  Future<void> _actions(Pocket pocket) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(pocket.name, style: theme.textTheme.titleLarge),
+                const SizedBox(height: 4),
+                Text(pocket.balance.format(), style: theme.textTheme.headlineSmall),
+                if (pocket.isForCard) ...[
+                  const SizedBox(height: 8),
+                  Text('Para pagar la tarjeta. La previsión lo da por reservado.',
+                      style: theme.textTheme.bodySmall),
+                ],
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop('fill'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Apartar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            pocket.balance.amountMicros == 0 ? null : () => Navigator.of(context).pop('empty'),
+                        icon: const Icon(Icons.undo),
+                        label: const Text('Devolver'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop('close'),
+                  style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                  child: const Text('Cerrar el bolsillo'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    switch (action) {
+      case 'fill':
+        await _move(pocket, fill: true);
+      case 'empty':
+        await _move(pocket, fill: false);
+      case 'close':
+        await _close(pocket);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pockets = _pockets;
     return Scaffold(
       appBar: AppBar(title: const Text('Bolsillos')),
-      floatingActionButton: pockets == null
+      floatingActionButton: pockets == null || pockets.isEmpty
           ? null
           : FloatingActionButton.extended(
               onPressed: _busy ? null : _create,
@@ -121,61 +191,112 @@ class _PocketsScreenState extends State<PocketsScreen> {
       body: switch ((pockets, _error)) {
         (_, final ApiError error?) => Center(child: Text(error.userMessage)),
         (null, _) => const Center(child: CircularProgressIndicator()),
-        (final List<Pocket> list, _) when list.isEmpty => const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(
-              child: Text(
-                'Aparta dinero para algo —para pagar la tarjeta, para unas vacaciones— y '
-                'no lo gastarás sin querer. Sigue siendo tuyo y vuelve a tu cuenta cuando quieras.',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
+        (final List<Pocket> list, _) when list.isEmpty => _Empty(onCreate: _busy ? null : _create),
         (final List<Pocket> list, _) => ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             children: [
-              for (final p in list)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(p.isForCard ? Icons.credit_card : Icons.savings_outlined),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text(p.name, style: Theme.of(context).textTheme.titleMedium)),
-                            Text(p.balance.format(), style: const TextStyle(fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 8),
-                          ],
-                        ),
-                        if (p.isForCard)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 36, top: 4),
-                            child: Text('Para pagar la tarjeta. La previsión lo da por reservado.'),
-                          ),
-                        Row(
-                          children: [
-                            TextButton(onPressed: _busy ? null : () => _move(p, fill: true), child: const Text('Apartar')),
-                            TextButton(
-                                onPressed: _busy || p.balance.amountMicros == 0 ? null : () => _move(p, fill: false),
-                                child: const Text('Devolver')),
-                            const Spacer(),
-                            IconButton(
-                              tooltip: 'Cerrar el bolsillo',
-                              onPressed: _busy ? null : () => _close(p),
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+              _Summary(
+                set: Money(list.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), widget.currency),
+                available: widget.available,
+              ),
+              const SizedBox(height: 16),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (final (i, p) in list.indexed) ...[
+                      if (i > 0) const Divider(height: 1, indent: 72),
+                      _PocketRow(pocket: p, onTap: _busy ? null : () => _actions(p)),
+                    ],
+                  ],
                 ),
+              ),
             ],
           ),
       },
+    );
+  }
+}
+
+class _Summary extends StatelessWidget {
+  const _Summary({required this.set, this.available});
+
+  final Money set;
+  final Money? available;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Apartado', style: theme.textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Text(set.format(), style: theme.textTheme.headlineMedium),
+          if (available != null) ...[
+            const SizedBox(height: 4),
+            Text('Y ${available!.format()} disponibles en tu cuenta', style: theme.textTheme.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PocketRow extends StatelessWidget {
+  const _PocketRow({required this.pocket, this.onTap});
+
+  final Pocket pocket;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: CircleAvatar(
+        backgroundColor: pocket.isForCard ? scheme.tertiaryContainer : scheme.primaryContainer,
+        foregroundColor: pocket.isForCard ? scheme.onTertiaryContainer : scheme.onPrimaryContainer,
+        child: Icon(pocket.isForCard ? Icons.credit_card : Icons.savings_outlined),
+      ),
+      title: Text(pocket.name),
+      subtitle: Text(pocket.isForCard ? 'Para pagar la tarjeta' : 'Apartado'),
+      trailing: Text(pocket.balance.format(), style: const TextStyle(fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _Empty extends StatelessWidget {
+  const _Empty({this.onCreate});
+
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.savings_outlined, size: 56, color: theme.colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Aparta dinero para algo', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            const Text(
+              'Para pagar la tarjeta, para unas vacaciones. No lo gastarás sin querer: '
+              'sigue siendo tuyo y vuelve a tu cuenta cuando quieras.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(onPressed: onCreate, icon: const Icon(Icons.add), label: const Text('Nuevo bolsillo')),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -189,7 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final home = _home;
     if (home == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PocketsScreen(client: widget.client, accountId: widget.accountId, currency: home.balance.currency),
+      builder: (_) => PocketsScreen(
+          client: widget.client, accountId: widget.accountId, currency: home.balance.currency, available: home.balance),
     ));
     // Apartar mueve el disponible y la previsión: se recarga todo.
     if (mounted) await _load();
@@ -332,14 +333,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _BalanceCard(home: home, onOpenPending: _openPending),
+        _BalanceCard(home: home, onOpenPending: _openPending, pockets: _pockets, onOpenPockets: _openPockets),
         if (_forecast case final forecast?) ...[
           const SizedBox(height: 12),
           _ForecastTile(forecast: forecast, onTap: () => _openForecast(forecast)),
-        ],
-        if (_pockets case final pockets?) ...[
-          const SizedBox(height: 12),
-          _PocketsTile(pockets: pockets, currency: home.balance.currency, onTap: _openPockets),
         ],
         if (_creditOffered) ...[
           const SizedBox(height: 12),
@@ -392,10 +389,16 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.home, required this.onOpenPending});
+  const _BalanceCard({required this.home, required this.onOpenPending, this.pockets, this.onOpenPockets});
 
   final Home home;
   final VoidCallback onOpenPending;
+
+  /// Los bolsillos: van dentro de la tarjeta del saldo, como lo retenido, porque
+  /// son parte de la misma pregunta —cuánto tengo y dónde—. Nulos si el banco no
+  /// los ofrece.
+  final List<Pocket>? pockets;
+  final VoidCallback? onOpenPockets;
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +434,19 @@ class _BalanceCard extends StatelessWidget {
           // Solo si hay algo que contar. Ni "0,00 retenidos" —ruido que hace
           // dudar— ni una fila cuando el banco no pudo calcularlo: callar es
           // mejor que afirmar algo que no se sabe.
+          if (pockets case final list?) ...[
+            const Divider(height: 1),
+            _CardRow(
+              key: const Key('pockets'),
+              icon: Icons.savings_outlined,
+              label: list.isEmpty ? 'Apartar en un bolsillo' : 'Apartado en bolsillos',
+              value: list.isEmpty
+                  ? null
+                  : Money(list.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), home.balance.currency)
+                      .format(),
+              onTap: onOpenPockets,
+            ),
+          ],
           if (home.hasRetained) ...[
             const Divider(height: 1),
             InkWell(
@@ -500,33 +516,40 @@ class _PaymentGroupTile extends StatelessWidget {
   }
 }
 
-/// Lo apartado en bolsillos, en una fila. No suma al disponible: está apartado.
-class _PocketsTile extends StatelessWidget {
-  const _PocketsTile({required this.pockets, required this.currency, required this.onTap});
+/// Una fila dentro de la tarjeta del saldo: icono, qué es, cuánto y adónde lleva.
+class _CardRow extends StatelessWidget {
+  const _CardRow({super.key, required this.icon, required this.label, this.value, this.onTap});
 
-  final List<Pocket> pockets;
-  final String currency;
-  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final set = Money(pockets.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), currency);
-    return Card(
-      key: const Key('pockets'),
-      child: ListTile(
-        onTap: onTap,
-        leading: const Icon(Icons.savings_outlined),
-        title: Text(pockets.isEmpty ? 'Bolsillos' : 'Apartado en bolsillos: ${set.format()}'),
-        subtitle: Text(pockets.isEmpty
-            ? 'Aparta dinero para algo y no lo gastarás sin querer'
-            : pockets.map((p) => p.name).join(' · ')),
-        trailing: const Icon(Icons.chevron_right),
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+            if (value != null)
+              Text(value!, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: AppSpacing.xs),
+            Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// La previsión en una fila. Si no alcanza, se ve: es un aviso, no un adorno.
+/// La previsión, en un aviso corto: un título que se lee de un vistazo y una línea
+/// con el porqué. El detalle, al tocarlo. Si no alcanza, se nota sin gritar.
 class _ForecastTile extends StatelessWidget {
   const _ForecastTile({required this.forecast, required this.onTap});
 
@@ -535,21 +558,40 @@ class _ForecastTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final warn = forecast.isDeficit || forecast.isTight;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final (icon, tint) = switch (forecast.status) {
+      'deficit' => (Icons.error_outline, scheme.error),
+      'tight' => (Icons.warning_amber_rounded, scheme.tertiary),
+      _ => (Icons.check_circle_outline, scheme.primary),
+    };
     return Card(
       key: const Key('forecast'),
-      color: forecast.isDeficit ? scheme.errorContainer : null,
-      child: ListTile(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: onTap,
-        leading: Icon(
-          warn ? Icons.warning_amber_rounded : Icons.trending_flat,
-          color: forecast.isDeficit ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+        child: Container(
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: tint, width: 4))),
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              Icon(icon, color: tint),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(forecastTitle(forecast),
+                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(forecastDetail(forecast), style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+            ],
+          ),
         ),
-        title: Text(headline(forecast),
-            style: TextStyle(color: forecast.isDeficit ? scheme.onErrorContainer : null)),
-        subtitle: warn ? const Text('Ver qué puedes hacer') : null,
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
@@ -566,12 +608,18 @@ class _MovementTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
-        child: Icon(incoming ? Icons.south_west : Icons.north_east),
+        child: Icon(movement.isPocketMove
+            ? Icons.savings_outlined
+            : incoming
+                ? Icons.south_west
+                : Icons.north_east),
       ),
       title: Text(movement.label),
       // En el pago de un agente, qué compró; en lo demás, el concepto, salvo que
       // repita el título ("Saldo de prueba" / "saldo de prueba").
-      subtitle: movement.purchase.isNotEmpty
+      subtitle: movement.isPocketMove
+          ? null
+          : movement.purchase.isNotEmpty
           ? Text(movement.agentName.isEmpty
               ? movement.purchase
               : '${movement.agentName} · ${movement.purchase}')

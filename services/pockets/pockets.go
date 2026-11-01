@@ -179,14 +179,16 @@ func (s *Service) Move(ctx context.Context, customerID, pocketID, idempotencyKey
 	if err != nil {
 		return nil, err
 	}
-	from, to, what := pocket.GetParentAccountId(), pocket.Id, "A "+pocket.Name
+	// La descripción es el nombre del bolsillo: la app arma «Apartado en …» o
+	// «Devuelto de …» según el sentido.
+	from, to := pocket.GetParentAccountId(), pocket.Id
 	if !in {
-		from, to, what = pocket.Id, pocket.GetParentAccountId(), "De "+pocket.Name
+		from, to = pocket.Id, pocket.GetParentAccountId()
 	}
 	// La clave se compone con el bolsillo: la misma clave para otro bolsillo es
 	// otra operación.
 	return s.core.MovePocket(ctx, "pocket:"+pocketID+":"+idempotencyKey, from, to, amountMicros,
-		pocket.Currency, what)
+		pocket.Currency, pocket.Name)
 }
 
 // Close devuelve lo que quede a la cuenta y cierra el bolsillo. Cerrar nunca hace
@@ -202,7 +204,7 @@ func (s *Service) Close(ctx context.Context, customerID, pocketID string) error 
 	}
 	if balance.AmountMicros > 0 {
 		if _, err := s.core.MovePocket(ctx, "pocket-close:"+pocketID, pocketID, pocket.GetParentAccountId(),
-			balance.AmountMicros, balance.Currency, "Cierre de "+pocket.Name); err != nil {
+			balance.AmountMicros, balance.Currency, pocket.Name); err != nil {
 			return err
 		}
 	}

@@ -101,11 +101,15 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: HomeScreen(client: client(deficitJson()), accountId: 'acc-1')));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Tu tarjeta vence el 16 de noviembre'), findsOneWidget);
+      // En el inicio, corto: título y una línea con el porqué.
+      expect(find.text('No llegas a tu ingreso del 30'), findsOneWidget);
+      expect(find.text('Al pagar la tarjeta el 16 de noviembre quedarías en -40,00 USD'), findsOneWidget);
       await tester.tap(find.byKey(const Key('forecast')));
       await tester.pumpAndSettle();
 
       expect(find.byType(ForecastScreen), findsOneWidget);
+      // En el detalle, la frase entera.
+      expect(find.textContaining('Tu tarjeta vence el 16 de noviembre y te dejaría con -40,00 USD'), findsOneWidget);
       expect(find.text('Qué puedes hacer'), findsOneWidget);
       expect(find.textContaining('Paga el mínimo (20,00 USD)'), findsOneWidget);
       expect(find.textContaining('Si gastas hasta'), findsOneWidget);
