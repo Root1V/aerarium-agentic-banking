@@ -9,6 +9,7 @@ import '../money.dart';
 import '../theme.dart';
 import 'credit_card_screen.dart';
 import 'mandates_screen.dart';
+import 'payment_group_screen.dart';
 import 'pending_payments_screen.dart';
 import 'phone_alias_screen.dart';
 import 'transfer_screen.dart';
@@ -237,6 +238,13 @@ class _HomeScreenState extends State<HomeScreen> {
     ));
   }
 
+  /// Los pagos del grupo, uno por uno. Desde ahí se llega al permiso.
+  void _openGroup(PaymentGroup group) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PaymentGroupScreen(group: group, onOpenMandates: _openMandates),
+    ));
+  }
+
   void _openMandates() {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => MandatesScreen(
@@ -297,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
         else
           ...groupHistory(home.movements, hasMore: home.hasMore).map((item) => switch (item) {
                 SingleMovement(:final movement) => _MovementTile(movement: movement),
-                PaymentGroup() => _PaymentGroupTile(group: item, onTap: _openMandates),
+                PaymentGroup() => _PaymentGroupTile(group: item, onTap: () => _openGroup(item)),
               }),
       ],
     );
@@ -392,9 +400,10 @@ class _BalanceCard extends StatelessWidget {
 
 /// Varios pagos seguidos a una misma plataforma, en una fila.
 ///
-/// Lleva a los permisos y no a una lista de los pagos: lo que la persona quiere
-/// hacer con cien micropagos de un agente es entender cuánto lleva y, si no le
-/// cuadra, cortarlo — no leerlos uno por uno.
+/// Abre la lista de esos pagos, cada uno con lo que el agente compró, y desde
+/// ella el permiso: lo primero que quiere alguien con cien micropagos de un
+/// agente es entender cuánto lleva, y lo segundo, en qué, para decidir si lo
+/// corta.
 class _PaymentGroupTile extends StatelessWidget {
   const _PaymentGroupTile({required this.group, required this.onTap});
 

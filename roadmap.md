@@ -147,9 +147,8 @@ retención vence. Propuesto en el canal (AE-09).
 - **Los mandatos de antes de la 1.1 no tienen agente**: sirven a cualquier agente de la
   plataforma hasta que vencen. Los pagos del modelo A no pasan por la capa de control:
   el dinero es de la plataforma, no de un titular.
-- **El historial agrupa los pagos de un agente y dice qué compró en cada uno, pero un
-  grupo no se abre**: tocarlo lleva a los permisos. Ver la lista de compras de un grupo
-  queda pendiente.
+- **La lista de compras de un grupo es la de lo ya cargado**: si la racha sigue más
+  atrás, la pantalla lo dice, pero no pide más páginas.
 - **La aprobación previa de pagos grandes** (AE-12) espera la respuesta de Mercatus.
 - **El registro de decisiones no se ve todavía**: ni el titular ni el backoffice lo
   consultan. Lo muestran F3-06 (centro de permisos) y F3-07 (revisión humana).
