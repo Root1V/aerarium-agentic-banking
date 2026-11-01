@@ -18,8 +18,12 @@ const (
 	CodeAccountFrozen        = "account_frozen"
 	CodeAccountNotFound      = "account_not_found"
 	CodeAuthorizationMissing = "authorization_not_found"
-	CodeAlreadyCaptured      = "already_captured"
-	CodeAlreadyRefunded      = "already_refunded"
+	// La autorización ya no está viva: venció y se liberó, o se cobró y se
+	// devolvió. Sustituye a `already_refunded`, que se emitía en la captura y
+	// decía "ya reembolsado" de un pago que en realidad había vencido.
+	// `already_captured` desaparece: capturar dos veces nunca fue un error, devuelve
+	// la misma captura.
+	CodeNotCapturable        = "authorization_not_capturable"
 	CodeAuthorizationExpired = "authorization_expired"
 	CodeIdempotencyReused    = "idempotency_key_reused"
 	CodeRecipientMismatch    = "recipient_mismatch"
@@ -102,9 +106,11 @@ func coreError(w http.ResponseWriter, err error) {
 			"esa Idempotency-Key ya se usó con otro monto o con otras cuentas")
 
 	case errors.Is(err, coreclient.ErrInvalidState):
-		// El core distingue los estados; para el contrato basta con decir que la
-		// operación no aplica al estado actual.
-		writeError(w, http.StatusConflict, CodeAlreadyRefunded,
+		// Hoy solo la alcanzan capture y refund, y los dos tratan el caso antes
+		// con un mensaje propio. Queda como red para una operación futura sobre
+		// autorizaciones: el core distingue los estados, y para el contrato basta
+		// con decir que la operación no aplica al estado actual.
+		writeError(w, http.StatusConflict, CodeNotCapturable,
 			"la operación no aplica al estado actual de la autorización")
 
 	case errors.Is(err, coreclient.ErrInvalid):
