@@ -6,6 +6,7 @@ import 'package:aibank_app/history.dart';
 import 'package:aibank_app/money.dart';
 import 'package:aibank_app/screens/home_screen.dart';
 import 'package:aibank_app/screens/mandates_screen.dart';
+import 'package:aibank_app/screens/payment_group_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -123,7 +124,9 @@ void main() {
   });
 
   group('pantallas', () {
-    Map<String, dynamic> movementJson(String kind, int micros, int sign, {String merchant = ''}) => {
+    Map<String, dynamic> movementJson(String kind, int micros, int sign,
+            {String merchant = '', String agent = '', String purchase = ''}) =>
+        {
           'id': 'm${_seq++}',
           'cursor': 'c$_seq',
           'amount': {'amount_micros': micros, 'currency': 'USD'},
@@ -131,6 +134,8 @@ void main() {
           'kind': kind,
           'description': '',
           if (merchant.isNotEmpty) 'merchant': merchant,
+          if (agent.isNotEmpty) 'agent_name': agent,
+          if (purchase.isNotEmpty) 'purchase': purchase,
           'posted_at': '2026-10-25T12:00:00Z',
         };
 
@@ -213,7 +218,37 @@ void main() {
       expect(find.text('3 pagos'), findsNothing);
     });
 
-    testWidgets('tocar el grupo lleva a los permisos', (tester) async {
+    testWidgets('tocar el grupo muestra qué compró el agente en cada pago, y de ahí el permiso', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: HomeScreen(
+          client: client(movements: [
+            movementJson('authorization_hold', 250000, -1,
+                merchant: 'Mercatus', agent: 'Agente de investigación', purchase: 'Text Summarizer: resumen'),
+            movementJson('authorization_hold', 1200000, -1,
+                merchant: 'Mercatus', agent: 'Agente de investigación', purchase: 'Búsqueda de vuelos Lima–Cusco'),
+          ]),
+          accountId: 'acc-1',
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Pagos a Mercatus'));
+      await tester.pumpAndSettle();
+
+      // Primero en qué se fue el dinero, con las palabras del agente.
+      expect(find.byType(PaymentGroupScreen), findsOneWidget);
+      expect(find.text('Text Summarizer: resumen'), findsOneWidget);
+      expect(find.text('Búsqueda de vuelos Lima–Cusco'), findsOneWidget);
+      expect(find.text('-1,45 USD'), findsOneWidget);
+      expect(find.text('2 pagos · Agente de investigación'), findsOneWidget);
+
+      // Y si no cuadra, el permiso, para cortarlo.
+      await tester.tap(find.text('Ver el permiso de Mercatus'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MandatesScreen), findsOneWidget);
+    });
+
+    testWidgets('los pagos de antes no dicen qué se compró, y la pantalla lo explica', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: HomeScreen(
           client: client(movements: [
@@ -224,13 +259,11 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
-
       await tester.tap(find.text('Pagos a Mercatus'));
       await tester.pumpAndSettle();
 
-      // Lo que la persona quiere hacer con cien micropagos es entender cuánto
-      // lleva y, si no le cuadra, cortarlo.
-      expect(find.byType(MandatesScreen), findsOneWidget);
+      expect(find.text('Pago autorizado'), findsNWidgets(2));
+      expect(find.textContaining('de antes de que los agentes dijeran'), findsOneWidget);
     });
 
     testWidgets('cada permiso dice cuánto gastó hoy y este mes', (tester) async {
