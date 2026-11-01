@@ -144,6 +144,8 @@ retención vence. Propuesto en el canal (AE-09).
 - **La confirmación cubre transferencias y dar permisos de pago.** Todavía no la piden
   pedir la tarjeta de crédito ni cambiar datos de seguridad: son nivel 4 y entran al
   catálogo de la capa de control cuando se pase su flujo por ella.
+- **Los «consentimientos de datos» del centro de permisos están vacíos a propósito**:
+  hoy nadie lee datos de la cuenta con permiso. Aparecerán con Finanzas Abiertas (F3-10).
 - **Los mandatos de antes de la 1.1 no tienen agente**: sirven a cualquier agente de la
   plataforma hasta que vencen. Los pagos del modelo A no pasan por la capa de control:
   el dinero es de la plataforma, no de un titular.
@@ -158,8 +160,8 @@ retención vence. Propuesto en el canal (AE-09).
   por notificación, solo en el inicio. Detectar gastos recurrentes y avisar a tiempo
   vienen con las notificaciones push.
 - **La aprobación previa de pagos grandes** (AE-12) espera la respuesta de Mercatus.
-- **El registro de decisiones no se ve todavía**: ni el titular ni el backoffice lo
-  consultan. Lo muestran F3-06 (centro de permisos) y F3-07 (revisión humana).
+- **El registro de decisiones lo ve el titular** (lo último, en el centro de permisos),
+  **pero no el backoffice**: eso es F3-07, con la revisión humana.
 - **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
   "Carmen H.": con tres palabras o más, la penúltima). Falla con dos nombres y un
   apellido. Lo correcto es guardar nombres y apellidos por separado desde el alta.
@@ -229,8 +231,13 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   bolsillos, y moverse entre ellos no cuenta contra el tope por operación ni sale de la
   familia. Uno «para la tarjeta» por cuenta, que la previsión da por reservado. Desde un
   bolsillo no se transfiere a otros, y sus movimientos no llegan al motor de riesgo.
-- [ ] **F3-06 Centro de permisos y privacidad**: agentes, teléfonos, passkeys y
-  consentimientos en una pantalla, revocables. *Alta.*
+- [x] **F3-06 Centro de permisos y privacidad** (`GET /v1/access`, app «Permisos y
+  privacidad»): en una pantalla, las plataformas que pueden pagar (con su agente), los
+  teléfonos vinculados, las passkeys, el número en el directorio y lo último que decidió
+  la capa de control, con nombres que la persona reconoce. Todo se retira con un toque,
+  confirmándolo. Nuevo: listar teléfonos y passkeys, y quitar una passkey. Ni un
+  teléfono ni una passkey se quitan si son la última forma de entrar (`409
+  last_way_in`), y en ese caso el teléfono tampoco borra sus llaves.
 - [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*
 - [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
 - [x] **F3-05 Identidad del agente** (`services/agents`, contrato 1.1): cada agente se

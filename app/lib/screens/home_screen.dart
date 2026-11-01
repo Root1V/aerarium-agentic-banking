@@ -8,6 +8,7 @@ import '../history.dart';
 import '../money.dart';
 import '../theme.dart';
 import '../forecast_text.dart';
+import 'access_screen.dart';
 import 'credit_card_screen.dart';
 import 'forecast_screen.dart';
 import 'mandates_screen.dart';
@@ -108,13 +109,13 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Mi cuenta'),
         actions: [
-          // Los permisos de pago viven en la barra y no escondidos en un menú:
-          // "¿a quién le di acceso a mi dinero?" es una pregunta que tiene que
-          // poder responderse rápido.
+          // Los permisos viven en la barra y no escondidos en un menú: "¿quién
+          // tiene acceso a mi cuenta?" es una pregunta que tiene que poder
+          // responderse rápido.
           IconButton(
-            icon: const Icon(Icons.key_outlined),
-            tooltip: 'Permisos de pago',
-            onPressed: _openMandates,
+            icon: const Icon(Icons.shield_outlined),
+            tooltip: 'Permisos y privacidad',
+            onPressed: _openAccess,
           ),
           if (widget.onSignOut != null)
             IconButton(
@@ -275,7 +276,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-    if (confirmed == true) await widget.onUnlink!();
+    if (confirmed != true) return;
+    try {
+      await widget.onUnlink!();
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+    }
   }
 
   void _openPhoneAlias() {
@@ -300,9 +306,23 @@ class _HomeScreenState extends State<HomeScreen> {
     ));
   }
 
-  void _openMandates() {
+  /// El centro de permisos: plataformas, teléfonos, passkeys, directorio y lo
+  /// último que pasó. Los permisos de pago, con su gasto, se abren desde ahí.
+  void _openAccess() {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => MandatesScreen(
+      builder: (_) => AccessScreen(
+        client: widget.client,
+        onUnlinkThisPhone: widget.onUnlink,
+        mandates: _mandatesScreen,
+      ),
+    ));
+  }
+
+  void _openMandates() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _mandatesScreen()));
+  }
+
+  MandatesScreen _mandatesScreen() => MandatesScreen(
         client: widget.client,
         consent: _home == null
             ? null
@@ -312,9 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 confirmer: widget.confirmer,
               ),
         offerSimulation: widget.offerTestFunds,
-      ),
-    ));
-  }
+      );
 
   Widget _buildBody() {
     if (_loading) {

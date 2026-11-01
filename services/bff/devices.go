@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/aibank/aibank/services/devices"
@@ -192,7 +193,26 @@ func (s *Server) handleDeviceLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request, p *Principal) {
-	err := s.devices.svc.Revoke(r.Context(), p.CustomerID, r.PathValue("id"))
+	// Primero, que sea suyo: el teléfono de otro responde 404, como siempre.
+	phones, err := s.devices.svc.List(r.Context(), p.CustomerID)
+	if err != nil {
+		s.deviceError(w, r, "desvincular", err)
+		return
+	}
+	if !slices.ContainsFunc(phones, func(d devices.DeviceInfo) bool { return d.ID == r.PathValue("id") }) {
+		writeError(w, http.StatusNotFound, "not_found", "no hay un teléfono vinculado con ese id")
+		return
+	}
+	// Y no si es la única forma de entrar que le queda.
+	if last, err := s.lastWayIn(r.Context(), p.CustomerID); err != nil {
+		s.accessUnavailable(w, r, "formas de entrar", err)
+		return
+	} else if last {
+		writeError(w, http.StatusConflict, "last_way_in",
+			"es tu única forma de entrar: crea una passkey o vincula otro teléfono antes")
+		return
+	}
+	err = s.devices.svc.Revoke(r.Context(), p.CustomerID, r.PathValue("id"))
 	if errors.Is(err, devices.ErrRejected) {
 		// Mismo 404 para "no existe" y "es de otro": no se confirma qué ids existen.
 		writeError(w, http.StatusNotFound, "not_found", "no hay un teléfono vinculado con ese id")

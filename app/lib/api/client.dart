@@ -136,6 +136,12 @@ class BffClient {
 
   /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
   /// tarjetas (la ruta no existe).
+  /// Todo lo que tiene acceso a la cuenta, para el centro de permisos.
+  Future<AccessOverview> access() async => AccessOverview.fromJson(await _get('/v1/access', const {}));
+
+  /// Quita una passkey: el banco deja de aceptarla.
+  Future<void> removePasskey(String id) => _deleteNoContent('/v1/passkeys/$id');
+
   /// Los bolsillos de la cuenta.
   Future<List<Pocket>> pockets(String accountId) async {
     final json = await _get('/v1/accounts/$accountId/pockets', const {});

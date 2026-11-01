@@ -352,3 +352,39 @@ func (s *Store) SandboxAgent(ctx context.Context, clientID, name string) (*Agent
 	}
 	return s.Register(ctx, clientID, name, ToJWK(pub))
 }
+
+// AgentName es el nombre de un agente y la integración a la que pertenece.
+type AgentName struct {
+	Name     string
+	ClientID string
+}
+
+// Names devuelve el nombre de cada agente pedido que exista. Lo usa el titular
+// para leer quién actuó sobre su cuenta, así que no filtra por integración.
+func (s *Store) Names(ctx context.Context, ids []string) (map[string]AgentName, error) {
+	valid := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, err := uuid.Parse(id); err == nil {
+			valid = append(valid, id)
+		}
+	}
+	out := map[string]AgentName{}
+	if len(valid) == 0 {
+		return out, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, name, client_id FROM agents.agents WHERE id = ANY($1::uuid[])`, pq.Array(valid))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var n AgentName
+		if err := rows.Scan(&id, &n.Name, &n.ClientID); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}

@@ -976,3 +976,110 @@ class Pocket {
         balance: Money.fromJson(json['balance'] as Map<String, dynamic>),
       );
 }
+
+/// Todo lo que tiene acceso a la cuenta (F3-06).
+class AccessOverview {
+  const AccessOverview({
+    required this.platforms,
+    required this.phones,
+    required this.passkeys,
+    required this.phoneDirectory,
+    required this.activity,
+  });
+
+  /// Plataformas con permiso de pago vigente.
+  final List<Mandate> platforms;
+  final List<LinkedPhone> phones;
+  final List<PasskeyEntry> passkeys;
+
+  /// El número con el que otros te encuentran para mandarte dinero. Nulo si no
+  /// estás en el directorio.
+  final String? phoneDirectory;
+  final List<ActivityEntry> activity;
+
+  factory AccessOverview.fromJson(Map<String, dynamic> json) => AccessOverview(
+        platforms: [for (final m in (json['platforms'] as List<dynamic>? ?? const [])) Mandate.fromJson(m as Map<String, dynamic>)],
+        phones: [for (final p in (json['phones'] as List<dynamic>? ?? const [])) LinkedPhone.fromJson(p as Map<String, dynamic>)],
+        passkeys: [
+          for (final p in (json['passkeys'] as List<dynamic>? ?? const [])) PasskeyEntry.fromJson(p as Map<String, dynamic>)
+        ],
+        phoneDirectory: json['phone_directory'] as String?,
+        activity: [
+          for (final a in (json['activity'] as List<dynamic>? ?? const [])) ActivityEntry.fromJson(a as Map<String, dynamic>)
+        ],
+      );
+}
+
+class LinkedPhone {
+  const LinkedPhone({required this.id, required this.name, required this.lastUsedAt, required this.current, required this.locked});
+
+  final String id;
+  final String name;
+  final DateTime? lastUsedAt;
+
+  /// Es el teléfono con el que se está usando la app.
+  final bool current;
+  final bool locked;
+
+  factory LinkedPhone.fromJson(Map<String, dynamic> json) => LinkedPhone(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? 'Teléfono',
+        lastUsedAt: json['last_used_at'] == null ? null : DateTime.parse(json['last_used_at'] as String),
+        current: json['current'] as bool? ?? false,
+        locked: json['locked'] as bool? ?? false,
+      );
+}
+
+class PasskeyEntry {
+  const PasskeyEntry({required this.id, required this.createdAt, required this.lastUsedAt, required this.synced, required this.current});
+
+  final String id;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+
+  /// Vive en un llavero que se sincroniza (iCloud, Google), no en un solo aparato.
+  final bool synced;
+  final bool current;
+
+  factory PasskeyEntry.fromJson(Map<String, dynamic> json) => PasskeyEntry(
+        id: json['id'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        lastUsedAt: json['last_used_at'] == null ? null : DateTime.parse(json['last_used_at'] as String),
+        synced: json['synced'] as bool? ?? false,
+        current: json['current'] as bool? ?? false,
+      );
+}
+
+/// Una decisión del registro de la capa de control: quién hizo qué, y cómo quedó.
+class ActivityEntry {
+  const ActivityEntry({
+    required this.at,
+    required this.actorKind,
+    required this.actorName,
+    required this.action,
+    required this.outcome,
+    required this.reason,
+  });
+
+  final DateTime at;
+
+  /// `holder` (la persona), `agent`, `rule` o `assistant`.
+  final String actorKind;
+  final String actorName;
+
+  /// `transfer`, `mandate_payment` o `grant_permission`.
+  final String action;
+
+  /// `allow`, `confirm`, `deny`, `confirmed` o `rejected`.
+  final String outcome;
+  final String reason;
+
+  factory ActivityEntry.fromJson(Map<String, dynamic> json) => ActivityEntry(
+        at: DateTime.parse(json['at'] as String),
+        actorKind: json['actor_kind'] as String? ?? '',
+        actorName: json['actor_name'] as String? ?? '',
+        action: json['action'] as String? ?? '',
+        outcome: json['outcome'] as String? ?? '',
+        reason: json['reason'] as String? ?? '',
+      );
+}
