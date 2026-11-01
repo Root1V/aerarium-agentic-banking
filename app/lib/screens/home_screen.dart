@@ -14,6 +14,7 @@ import 'mandates_screen.dart';
 import 'payment_group_screen.dart';
 import 'pending_payments_screen.dart';
 import 'phone_alias_screen.dart';
+import 'pockets_screen.dart';
 import 'transfer_screen.dart';
 
 /// Pantalla principal: saldo y últimos movimientos.
@@ -68,6 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// La previsión de saldo. Nula si el banco no la ofrece o no respondió.
   Forecast? _forecast;
 
+  /// Los bolsillos de la cuenta. Nulos si el banco no los ofrece o no respondió.
+  List<Pocket>? _pockets;
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _loadCredit();
     _loadForecast();
+    _loadPockets();
     try {
       final home = await widget.client.home(widget.accountId);
       if (!mounted) return;
@@ -169,6 +174,25 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (mounted) setState(() => _forecast = null);
     }
+  }
+
+  Future<void> _loadPockets() async {
+    try {
+      final pockets = await widget.client.pockets(widget.accountId);
+      if (mounted) setState(() => _pockets = pockets);
+    } catch (_) {
+      if (mounted) setState(() => _pockets = null);
+    }
+  }
+
+  Future<void> _openPockets() async {
+    final home = _home;
+    if (home == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PocketsScreen(client: widget.client, accountId: widget.accountId, currency: home.balance.currency),
+    ));
+    // Apartar mueve el disponible y la previsión: se recarga todo.
+    if (mounted) await _load();
   }
 
   void _openForecast(Forecast forecast) {
@@ -312,6 +336,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_forecast case final forecast?) ...[
           const SizedBox(height: 12),
           _ForecastTile(forecast: forecast, onTap: () => _openForecast(forecast)),
+        ],
+        if (_pockets case final pockets?) ...[
+          const SizedBox(height: 12),
+          _PocketsTile(pockets: pockets, currency: home.balance.currency, onTap: _openPockets),
         ],
         if (_creditOffered) ...[
           const SizedBox(height: 12),
@@ -467,6 +495,32 @@ class _PaymentGroupTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
+      ),
+    );
+  }
+}
+
+/// Lo apartado en bolsillos, en una fila. No suma al disponible: está apartado.
+class _PocketsTile extends StatelessWidget {
+  const _PocketsTile({required this.pockets, required this.currency, required this.onTap});
+
+  final List<Pocket> pockets;
+  final String currency;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final set = Money(pockets.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), currency);
+    return Card(
+      key: const Key('pockets'),
+      child: ListTile(
+        onTap: onTap,
+        leading: const Icon(Icons.savings_outlined),
+        title: Text(pockets.isEmpty ? 'Bolsillos' : 'Apartado en bolsillos: ${set.format()}'),
+        subtitle: Text(pockets.isEmpty
+            ? 'Aparta dinero para algo y no lo gastarás sin querer'
+            : pockets.map((p) => p.name).join(' · ')),
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

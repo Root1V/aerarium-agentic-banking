@@ -136,6 +136,29 @@ class BffClient {
 
   /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
   /// tarjetas (la ruta no existe).
+  /// Los bolsillos de la cuenta.
+  Future<List<Pocket>> pockets(String accountId) async {
+    final json = await _get('/v1/accounts/$accountId/pockets', const {});
+    return [for (final p in (json['pockets'] as List<dynamic>? ?? const [])) Pocket.fromJson(p as Map<String, dynamic>)];
+  }
+
+  Future<Pocket> openPocket(String accountId, String name, {String purpose = 'general'}) async =>
+      Pocket.fromJson(await _post('/v1/accounts/$accountId/pockets',
+          headers: const {}, body: {'name': name, 'purpose': purpose}));
+
+  /// Aparta dinero de la cuenta en el bolsillo.
+  Future<void> fillPocket(String pocketId, int amountMicros, {required String idempotencyKey}) =>
+      _post('/v1/pockets/$pocketId/deposit',
+          headers: {'Idempotency-Key': idempotencyKey}, body: {'amount_micros': amountMicros});
+
+  /// Devuelve dinero del bolsillo a la cuenta.
+  Future<void> emptyPocket(String pocketId, int amountMicros, {required String idempotencyKey}) =>
+      _post('/v1/pockets/$pocketId/withdraw',
+          headers: {'Idempotency-Key': idempotencyKey}, body: {'amount_micros': amountMicros});
+
+  /// Cierra el bolsillo; lo que quede vuelve a la cuenta.
+  Future<void> closePocket(String pocketId) => _deleteNoContent('/v1/pockets/$pocketId');
+
   /// La previsión de saldo de la cuenta hasta el próximo ingreso.
   Future<Forecast> forecast(String accountId) async =>
       Forecast.fromJson(await _get('/v1/accounts/$accountId/forecast', const {}));
