@@ -44,6 +44,8 @@ func main() {
 		currency     = flag.String("currency", "USD", "moneda")
 		devKey       = flag.String("dev-key", env("DEV_API_KEY", ""),
 			"clave del simulador de titulares, si el entorno la exige")
+		approveInApp = flag.Bool("approve-in-app", false,
+			"modelo B: el permiso lo concede una persona en la app del banco, con el código que imprime la demo")
 	)
 	flag.Parse()
 
@@ -57,6 +59,7 @@ func main() {
 		holder:   &api{base: strings.TrimRight(*holderURL, "/"), devKey: *devKey},
 		currency: strings.ToUpper(*currency),
 		amount:   *amount,
+		inApp:    *approveInApp,
 	}
 
 	var err error
@@ -88,6 +91,9 @@ type demo struct {
 	agentID  string
 	agentKey string
 	agentPK  ed25519.PrivateKey
+	// inApp: el permiso lo concede una persona de verdad en su app, en vez del
+	// titular de prueba que la demo crea y aprueba sola.
+	inApp bool
 }
 
 // ------------------------------------------------------------------ modelo A
@@ -140,6 +146,10 @@ func (d *demo) modelB(clientID, clientSecret string) error {
 		return err
 	}
 
+	if d.inApp {
+		return d.modelBInApp(payee)
+	}
+
 	holder, err := d.createSandboxHolder()
 	if err != nil {
 		return err
@@ -154,7 +164,7 @@ func (d *demo) modelB(clientID, clientSecret string) error {
 		return err
 	}
 
-	granted, err := d.pollConsent(request.ConsentRequestID)
+	granted, err := d.pollConsent(request.ConsentRequestID, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -167,6 +177,43 @@ func (d *demo) modelB(clientID, clientSecret string) error {
 		return err
 	}
 
+	return d.showMandate(granted.MandateID)
+}
+
+// modelBInApp es el modelo B con una persona de verdad: ella abre el código en
+// la app del banco y decide. Después el agente compra tres cosas, y cada una
+// aparece en el historial de esa persona con lo que el agente declaró.
+func (d *demo) modelBInApp(payee string) error {
+	request, err := d.requestConsent()
+	if err != nil {
+		return err
+	}
+	say("")
+	say("En la app: Permisos de pago › Abrir una solicitud, y pega el código.")
+	say("La demo espera hasta 10 minutos a que decidas.")
+
+	granted, err := d.pollConsent(request.ConsentRequestID, 10*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	purchases := []struct {
+		amount      int64
+		description string
+	}{
+		{250_000, "Text Summarizer: resumen de un texto en 2 oraciones"},
+		{1_200_000, "Búsqueda de vuelos Lima–Cusco para el 15/11"},
+		{50_000, "Traducción de un párrafo al inglés"},
+	}
+	for _, p := range purchases {
+		auth, err := d.authorizeFor(granted.AccountID, payee, granted.MandateID, p.amount, p.description)
+		if err != nil {
+			return err
+		}
+		if err := d.capture(auth); err != nil {
+			return err
+		}
+	}
 	return d.showMandate(granted.MandateID)
 }
 
@@ -350,10 +397,10 @@ func (d *demo) holderApproves(holder *sandboxHolder, handoff string) error {
 }
 
 // pollConsent descubre el permiso consultando, no esperando un webhook.
-func (d *demo) pollConsent(requestID string) (*consentRequest, error) {
+func (d *demo) pollConsent(requestID string, wait time.Duration) (*consentRequest, error) {
 	d.step("La plataforma consulta si ya se concedió")
 
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(wait)
 	for attempt := 1; ; attempt++ {
 		var request consentRequest
 		if err := d.partner.json("GET", "/v1/consent-requests/"+requestID, nil, &request); err != nil {
@@ -383,18 +430,22 @@ type authorization struct {
 }
 
 func (d *demo) authorize(payer, payee, mandateID string) (*authorization, error) {
-	d.step("Autorizar — el dinero se retiene, todavía no se mueve")
+	return d.authorizeFor(payer, payee, mandateID, d.amount, "Demo: búsqueda de precios de vuelos Lima–Cusco")
+}
+
+func (d *demo) authorizeFor(payer, payee, mandateID string, amount int64, description string) (*authorization, error) {
+	d.step("Autorizar %s — %s", micros(amount, d.currency), description)
 
 	body := map[string]any{
 		"payer_account_id": payer,
 		"payee_account_id": payee,
-		"amount":           d.amount,
+		"amount":           amount,
 		"currency":         d.currency,
 		// Quién paga y por qué. El titular lee `description` tal cual.
 		"agent_id": d.agentID,
 		"intent": map[string]any{
 			"reference":   fmt.Sprintf("demo-tarea-%d", time.Now().Unix()),
-			"description": "Demo: búsqueda de precios de vuelos Lima–Cusco",
+			"description": description,
 		},
 	}
 	if mandateID != "" {
@@ -413,14 +464,14 @@ func (d *demo) authorize(payer, payee, mandateID string) (*authorization, error)
 
 	// El importe se toma de lo pedido: la respuesta de `authorize` solo trae
 	// identificador, estado y vencimiento. Lo demás se consulta con el GET.
-	say("%s · %s · %s", auth.AuthorizationID, auth.Status, micros(d.amount, d.currency))
+	say("%s · %s · %s", auth.AuthorizationID, auth.Status, micros(amount, d.currency))
 	if auth.ExpiresAt != nil {
 		say("si nadie captura, se libera sola a las %s", auth.ExpiresAt.Format(time.Kitchen))
 	}
 	return &auth, nil
 }
 
-func (d *demo) settle(auth *authorization) error {
+func (d *demo) capture(auth *authorization) error {
 	d.step("Capturar — ahora sí se mueve")
 
 	var captured authorization
@@ -429,6 +480,13 @@ func (d *demo) settle(auth *authorization) error {
 		return err
 	}
 	say("%s", captured.Status)
+	return nil
+}
+
+func (d *demo) settle(auth *authorization) error {
+	if err := d.capture(auth); err != nil {
+		return err
+	}
 
 	d.step("Devolver una parte")
 

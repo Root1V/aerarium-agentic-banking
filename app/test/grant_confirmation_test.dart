@@ -4,6 +4,7 @@ import 'package:aibank_app/auth/device_keys.dart';
 import 'package:aibank_app/screens/consent_screen.dart';
 import 'package:aibank_app/screens/mandates_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -164,11 +165,12 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: MandatesScreen(
         client: bank.client(token: 'tok'),
-        testRequest: TestConsentRequest(
+        consent: ConsentContext(
           accountId: 'acc-1',
           currency: 'USD',
           confirmer: TransferConfirmer(keys: FakeKeys(deviceId: 'dev-1')),
         ),
+        offerSimulation: true,
       ),
     ));
     await tester.pumpAndSettle();
@@ -178,6 +180,43 @@ void main() {
 
     expect(bank.received['POST /v1/sandbox/consent-request'], {'currency': 'USD'});
     expect(find.text('Mercatus'), findsOneWidget, reason: 'se abre la solicitud para decidir');
+  });
+
+  testWidgets('una solicitud se abre con el código que dio la plataforma', (tester) async {
+    final bank = _bank();
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const code = 'csr_codigoDeLaPlataformaDePrueba01';
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.getData') return {'text': code};
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final opened = FakeBank({
+      ...bank.routes,
+      'GET /v1/consent-requests/$code': (_) => json(_prompt()),
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: MandatesScreen(
+        client: opened.client(token: 'tok'),
+        consent: ConsentContext(
+          accountId: 'acc-1',
+          currency: 'USD',
+          confirmer: TransferConfirmer(keys: FakeKeys(deviceId: 'dev-1')),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Simular una solicitud'), findsNothing, reason: 'fuera del sandbox no se simula');
+
+    await tester.tap(find.byTooltip('Abrir una solicitud'));
+    await tester.pumpAndSettle();
+    expect(find.text(code), findsOneWidget, reason: 'el código del portapapeles, ya pegado');
+
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    expect(opened.calls, contains('GET /v1/consent-requests/$code'));
+    expect(find.text('Dar permiso'), findsOneWidget);
   });
 
   testWidgets('fuera del sandbox no hay simulación', (tester) async {

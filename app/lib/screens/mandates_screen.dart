@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/client.dart';
 import '../api/errors.dart';
@@ -17,22 +18,25 @@ import 'consent_screen.dart';
 /// pregunta que trae aquí a alguien suele ser "¿a quién le di acceso?", y esa
 /// respuesta incluye el pasado.
 class MandatesScreen extends StatefulWidget {
-  const MandatesScreen({super.key, required this.client, this.testRequest});
+  const MandatesScreen({super.key, required this.client, this.consent, this.offerSimulation = false});
 
   final BffClient client;
 
-  /// En el sandbox, para simular que una plataforma pide permiso. Nulo fuera
-  /// de él.
-  final TestConsentRequest? testRequest;
+  /// Lo necesario para conceder un permiso desde aquí: abrir la solicitud de una
+  /// plataforma con su código. Nulo si todavía no se sabe desde qué cuenta.
+  final ConsentContext? consent;
+
+  /// En el sandbox, ofrecer simular que una plataforma pide permiso.
+  final bool offerSimulation;
 
   @override
   State<MandatesScreen> createState() => _MandatesScreenState();
 }
 
-/// Lo necesario para simular una solicitud en el sandbox: desde qué cuenta se
-/// concedería y con qué se firma la confirmación.
-class TestConsentRequest {
-  const TestConsentRequest({required this.accountId, required this.currency, this.confirmer});
+/// Lo necesario para conceder un permiso: desde qué cuenta y con qué se firma
+/// la confirmación.
+class ConsentContext {
+  const ConsentContext({required this.accountId, required this.currency, this.confirmer});
 
   final String accountId;
   final String currency;
@@ -74,14 +78,24 @@ class _MandatesScreenState extends State<MandatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final test = widget.testRequest;
+    final consent = widget.consent;
     return Scaffold(
-      appBar: AppBar(title: const Text('Permisos de pago')),
+      appBar: AppBar(
+        title: const Text('Permisos de pago'),
+        actions: [
+          if (consent != null)
+            IconButton(
+              icon: const Icon(Icons.input),
+              tooltip: 'Abrir una solicitud',
+              onPressed: _requesting ? null : () => _openByCode(consent),
+            ),
+        ],
+      ),
       body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
-      floatingActionButton: test == null
+      floatingActionButton: consent == null || !widget.offerSimulation
           ? null
           : FloatingActionButton.extended(
-              onPressed: _requesting ? null : () => _simulateRequest(test),
+              onPressed: _requesting ? null : () => _simulateRequest(consent),
               icon: const Icon(Icons.science_outlined),
               label: const Text('Simular una solicitud'),
             ),
@@ -92,17 +106,52 @@ class _MandatesScreenState extends State<MandatesScreen> {
 
   /// La plataforma de prueba pide permiso y se abre la pantalla donde se decide,
   /// como si la persona hubiera llegado desde el enlace de la plataforma.
-  Future<void> _simulateRequest(TestConsentRequest test) async {
+  Future<void> _simulateRequest(ConsentContext consent) async {
     setState(() => _requesting = true);
     try {
-      final handoff = await widget.client.sandboxConsentRequest(test.currency);
+      final handoff = await widget.client.sandboxConsentRequest(consent.currency);
       if (!mounted) return;
+      await _decide(consent, handoff);
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+    } finally {
+      if (mounted) setState(() => _requesting = false);
+    }
+  }
+
+  /// Abre la solicitud que una plataforma entregó con su código. Si el código
+  /// está en el portapapeles —copiado en otro dispositivo, por ejemplo—, se
+  /// propone ya pegado.
+  Future<void> _openByCode(ConsentContext consent) async {
+    String? pasted;
+    try {
+      pasted = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+    } on PlatformException {
+      pasted = null;
+    }
+    if (!mounted) return;
+    final code = await showDialog<String>(
+      context: context,
+      builder: (_) => _HandoffCodeDialog(initial: isHandoffCode(pasted) ? pasted! : ''),
+    );
+    if (code == null || !mounted) return;
+    setState(() => _requesting = true);
+    try {
+      await _decide(consent, code);
+    } finally {
+      if (mounted) setState(() => _requesting = false);
+    }
+  }
+
+  Future<void> _decide(ConsentContext consent, String handoff) async {
+    try {
       await Navigator.of(context).push(MaterialPageRoute<Mandate?>(
         builder: (_) => ConsentScreen(
           client: widget.client,
           handoffCode: handoff,
-          accountId: test.accountId,
-          confirmer: test.confirmer,
+          accountId: consent.accountId,
+          confirmer: consent.confirmer,
         ),
       ));
       if (!mounted) return;
@@ -352,6 +401,60 @@ class _Row extends StatelessWidget {
           Text(value, style: theme.textTheme.bodyMedium),
         ],
       ),
+    );
+  }
+}
+
+/// Si un texto parece el código de una solicitud de permiso.
+bool isHandoffCode(String? text) =>
+    text != null && RegExp(r'^csr_[A-Za-z0-9_-]{20,}$').hasMatch(text.trim());
+
+class _HandoffCodeDialog extends StatefulWidget {
+  const _HandoffCodeDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_HandoffCodeDialog> createState() => _HandoffCodeDialogState();
+}
+
+class _HandoffCodeDialogState extends State<_HandoffCodeDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Abrir una solicitud'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Pega el código que te dio la plataforma. Empieza con «csr_».'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: widget.initial.isEmpty,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Código de la solicitud'),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: isHandoffCode(_controller.text)
+              ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+          child: const Text('Abrir'),
+        ),
+      ],
     );
   }
 }

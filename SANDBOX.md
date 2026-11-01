@@ -110,6 +110,11 @@ docker compose -f platform/docker-compose.sandbox.yml \
   run --rm -e CLIENT_SECRET="<el secreto>" demo -model b
 ```
 
+Con `-approve-in-app`, el permiso no lo concede un titular de prueba sino una
+persona en la app del banco: la demo imprime el código, la persona lo abre en
+*Permisos de pago › Abrir una solicitud*, y después el agente hace tres pagos
+firmados que aparecen en su historial con lo que compró.
+
 Narra el camino entero del modelo B: token, sub-cuenta del receptor, titular de
 prueba, solicitud de permiso, decisión de la persona, consulta del resultado,
 autorización, captura, reembolso parcial y estado del mandato. `-model a` hace el
