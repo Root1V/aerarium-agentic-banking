@@ -136,6 +136,10 @@ class BffClient {
 
   /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
   /// tarjetas (la ruta no existe).
+  /// La previsión de saldo de la cuenta hasta el próximo ingreso.
+  Future<Forecast> forecast(String accountId) async =>
+      Forecast.fromJson(await _get('/v1/accounts/$accountId/forecast', const {}));
+
   Future<CreditCard?> creditCard() async {
     try {
       return CreditCard.fromJson(await _get('/v1/credit/card', const {}));

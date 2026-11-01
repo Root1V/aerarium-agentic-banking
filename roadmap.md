@@ -149,6 +149,10 @@ retención vence. Propuesto en el canal (AE-09).
   el dinero es de la plataforma, no de un titular.
 - **La lista de compras de un grupo es la de lo ya cargado**: si la racha sigue más
   atrás, la pantalla lo dice, pero no pide más páginas.
+- **La previsión de saldo es simple a propósito**: el gasto diario es un promedio de 60
+  días, sin estacionalidad ni gastos fijos detectados (alquiler, servicios), y no avisa
+  por notificación, solo en el inicio. Detectar gastos recurrentes y avisar a tiempo
+  vienen con las notificaciones push.
 - **La aprobación previa de pagos grandes** (AE-12) espera la respuesta de Mercatus.
 - **El registro de decisiones no se ve todavía**: ni el titular ni el backoffice lo
   consultan. Lo muestran F3-06 (centro de permisos) y F3-07 (revisión humana).
@@ -209,8 +213,13 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   permiso de pago a una plataforma**, que ahora pide la cara con los topes y la
   vigencia dentro de lo firmado. En el sandbox, «Simular una solicitud» en Permisos de
   pago crea una solicitud de Mercatus para probarlo.
-- [ ] **F3-01 Previsión de saldo y aviso de déficit** hasta el próximo ingreso, con los
-  pagos de la tarjeta. *Alta.*
+- [x] **F3-01 Previsión de saldo y aviso de déficit** (`services/forecast`): proyecta el
+  saldo hasta el próximo ingreso con el gasto diario de los últimos 60 días y el pago de
+  la tarjeta si vence antes. Avisa en el inicio («Tu tarjeta vence el 16 de noviembre y
+  te dejaría con −40,00 USD antes de tu ingreso del 30») y propone opciones que no se
+  ejecutan: pagar el mínimo y el resto al cobrar, un tope de gasto diario, o cuánto
+  falta. El próximo ingreso lo fecha el motor de riesgo (`/v1/income`) con el mismo
+  criterio de ingreso recurrente que la tarjeta. Nivel 1–2: observa y recomienda.
 - [ ] **F3-02 Bolsillos**: dinero apartado dentro de la cuenta («para la tarjeta»). *Alta.*
 - [ ] **F3-06 Centro de permisos y privacidad**: agentes, teléfonos, passkeys y
   consentimientos en una pantalla, revocables. *Alta.*
