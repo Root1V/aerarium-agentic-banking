@@ -376,6 +376,23 @@ func (s *Service) checkPIN(ctx context.Context, d *device, pin string) error {
 	return &WrongPINError{Remaining: s.cfg.MaxPINAttempts - attempts}
 }
 
+// DeviceInfo es un teléfono vinculado, tal como se le muestra a su dueño.
+type DeviceInfo struct {
+	ID             string
+	Name           string
+	HardwareBacked bool
+	CreatedAt      time.Time
+	LastUsedAt     *time.Time
+	// Locked: se bloqueó por claves equivocadas.
+	Locked bool
+}
+
+// List devuelve los teléfonos vinculados del cliente, del último usado al
+// primero. Los desvinculados no aparecen.
+func (s *Service) List(ctx context.Context, customerID string) ([]DeviceInfo, error) {
+	return s.store.list(ctx, customerID)
+}
+
 // Revoke desvincula un teléfono del cliente y cierra lo que tenga abierto.
 func (s *Service) Revoke(ctx context.Context, customerID, deviceID string) error {
 	if _, err := uuid.Parse(deviceID); err != nil {
