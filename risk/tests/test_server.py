@@ -104,3 +104,29 @@ def test_los_instantes_con_zona_se_entienden_igual_que_sin_ella(base_url):
     assert (status_a, status_b) == (200, 200)
     assert a["outcome"] == b["outcome"] == "approved"
     assert a["limit_micros"] == b["limit_micros"]
+
+
+def test_el_proximo_ingreso_se_consulta_sin_evaluar(base_url):
+    movements = [{"occurred_at": f"2026-{m:02d}-30T09:00:00Z", "direction": "in", "amount_micros": 1_500_000_000,
+                  "counterparty": "empleador", "kind": "rail_inbound_credit"} for m in (8, 9, 10)]
+    request = urllib.request.Request(
+        base_url + "/v1/income",
+        data=json.dumps({"as_of": "2026-11-02", "movements": movements}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        body = json.loads(response.read())
+    assert body["recurring_income"]["next_expected_on"] == "2026-11-30"
+    assert body["recurring_income"]["typical_amount_micros"] == 1_500_000_000
+
+
+def test_sin_ingreso_recurrente_la_respuesta_lo_dice(base_url):
+    request = urllib.request.Request(
+        base_url + "/v1/income",
+        data=json.dumps({"as_of": "2026-11-02", "movements": []}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        assert json.loads(response.read()) == {"recurring_income": None}

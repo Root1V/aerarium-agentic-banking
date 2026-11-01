@@ -188,9 +188,42 @@ def _detect_recurring_income(inflows: list[Movement]) -> bool:
     la penetración de nómina es el mejor indicador de permanencia y capacidad de
     pago de un cliente.
     """
-    payroll_like = [m for m in inflows if m.kind in {"payroll", "rail_inbound_credit", "deposit"}]
+    return bool(recurring_groups(inflows))
+
+
+#: Naturalezas de movimiento que pueden ser un sueldo.
+PAYROLL_KINDS = frozenset({"payroll", "rail_inbound_credit", "deposit"})
+
+
+def recurring_groups(inflows: list[Movement]) -> list[list[Movement]]:
+    """Los ingresos que se comportan como un sueldo, agrupados por su origen.
+
+    Es EL criterio de ingreso recurrente del banco: lo usa la evaluación de
+    crédito y lo usa la previsión de saldo. Si cada una tuviera el suyo, la
+    tarjeta podría decir que alguien tiene sueldo y la previsión que no.
+    """
+    payroll_like = [m for m in inflows if m.kind in PAYROLL_KINDS]
     if len(payroll_like) < 3:
-        return False
+        return []
+
+    by_counterparty: dict[str, list[Movement]] = {}
+    for movement in payroll_like:
+        if movement.counterparty:
+            by_counterparty.setdefault(movement.counterparty, []).append(movement)
+
+    groups = []
+    for movements in by_counterparty.values():
+        if len(movements) < 3:
+            continue
+        amounts = [m.amount_micros for m in movements]
+        mean = statistics.fmean(amounts)
+        if mean == 0:
+            continue
+        # Mismo origen, importe parecido y al menos tres veces: se comporta como
+        # un sueldo aunque nadie lo haya declarado como tal.
+        if statistics.pstdev(amounts) / mean <= RECURRING_AMOUNT_TOLERANCE:
+            groups.append(sorted(movements, key=lambda m: m.occurred_at))
+    return groups
 
     by_counterparty: dict[str, list[Movement]] = {}
     for movement in payroll_like:

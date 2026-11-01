@@ -42,6 +42,7 @@ import (
 	"github.com/aibank/aibank/services/bff/sim"
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/credit"
+	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/stepup"
@@ -153,7 +154,8 @@ func run(log *slog.Logger) error {
 		// Tarjeta de crédito: necesita el motor de riesgo, que decide. Sin él no se
 		// origina nada.
 		if riskURL := os.Getenv("RISK_URL"); riskURL != "" {
-			cards := credit.NewService(db, core, credit.NewHTTPAssessor(riskURL), credit.Config{
+			risk := credit.NewHTTPAssessor(riskURL)
+			cards := credit.NewService(db, core, risk, credit.Config{
 				// Solo en el sandbox: una cuenta recién abierta nunca califica.
 				SyntheticHistory: devAuth,
 				Cooldown:         creditCooldown(devAuth),
@@ -163,6 +165,15 @@ func run(log *slog.Logger) error {
 			}
 			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithCredit(cards) })
 			log.Info("tarjeta de crédito habilitada", "motor_de_riesgo", riskURL, "historial_sintetico", devAuth)
+
+			// La previsión de saldo lee del mismo motor el próximo ingreso, con el
+			// mismo criterio de ingreso recurrente que la tarjeta.
+			zone, err := time.LoadLocation(bff.DefaultTimeZone)
+			if err != nil {
+				return err
+			}
+			forecasts := forecast.NewService(core, cards, risk, zone)
+			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithForecast(forecasts) })
 		} else {
 			log.Warn("tarjeta de crédito deshabilitada: falta RISK_URL")
 		}

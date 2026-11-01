@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	kycsim "github.com/aibank/aibank/adapters/kyc/sim"
 	"github.com/aibank/aibank/clients/go/coreclient"
@@ -19,6 +20,7 @@ import (
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/devices"
+	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
@@ -100,13 +102,21 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	}
 
 	deviceSvc := devices.NewService(devices.Config{}, devStore, onb, sess)
-	// Un motor de riesgo de mentira que aprueba 500.
-	risk := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	// Un motor de riesgo de mentira que aprueba 500, y que espera un sueldo de
+	// 1.500 dentro de 25 días.
+	risk := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/income" {
+			_, _ = w.Write([]byte(`{"recurring_income":{"counterparty":"empleador","typical_amount_micros":1500000000,` +
+				`"occurrences":6,"cadence":"monthly","last_received_on":"2026-01-01","next_expected_on":"` +
+				time.Now().AddDate(0, 0, 25).Format(time.DateOnly) + `"}}`))
+			return
+		}
 		_, _ = w.Write([]byte(`{"outcome":"approved","limit_micros":500000000,"currency":"USD","score":700,` +
 			`"model_version":"scorecard-v1","reasons":[]}`))
 	}))
 	t.Cleanup(risk.Close)
-	cards := credit.NewService(db, f.core, credit.NewHTTPAssessor(risk.URL), credit.Config{})
+	assessor := credit.NewHTTPAssessor(risk.URL)
+	cards := credit.NewService(db, f.core, assessor, credit.Config{})
 	if err := cards.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +153,7 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithSandboxFunds(cashPrefix, "RETAIL-").
 		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
 		WithCredit(cards).
+		WithForecast(forecast.NewService(f.core, cards, assessor, time.UTC)).
 		WithConsents(consents).
 		WithAgents(agentStore)
 	ts := httptest.NewServer(server.Handler())

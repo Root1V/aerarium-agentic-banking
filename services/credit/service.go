@@ -119,13 +119,11 @@ func (s *Service) Apply(ctx context.Context, customerID, accountID, holderName s
 	}
 
 	now := s.now().UTC()
-	movements, err := s.movements(ctx, accountID, now)
+	real, synthetic, err := s.Observed(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	if s.cfg.SyntheticHistory {
-		movements = append(movements, syntheticHistory(now)...)
-	}
+	movements := append(real, synthetic...)
 	assessment, err := s.risk.Assess(ctx, AssessmentRequest{
 		CustomerID: customerID, AsOf: now.Format(time.DateOnly), EvaluatedAt: now,
 		Currency: "USD", ObservedDays: s.cfg.ObservedDays, Movements: movements,
@@ -199,6 +197,23 @@ func (s *Service) recentDecision(ctx context.Context, customerID string) (*Decis
 	return &d, nil
 }
 
+// Observed es lo que el motor ve de la cuenta: los movimientos reales de la
+// ventana de evaluación y, en el sandbox, el historial sintético que se usó para
+// la tarjeta, aparte. La previsión de saldo lee de aquí para que el sueldo que ve
+// sea el mismo con el que se aprobó la tarjeta, sin confundir el gasto inventado
+// con el de la persona.
+func (s *Service) Observed(ctx context.Context, accountID string) (real, synthetic []RiskMovement, err error) {
+	now := s.now().UTC()
+	real, err = s.movements(ctx, accountID, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.cfg.SyntheticHistory {
+		synthetic = syntheticHistory(now)
+	}
+	return real, synthetic, nil
+}
+
 // movements trae lo observado en la cuenta durante la ventana de evaluación.
 func (s *Service) movements(ctx context.Context, accountID string, now time.Time) ([]RiskMovement, error) {
 	since := now.AddDate(0, 0, -s.cfg.ObservedDays)
@@ -240,8 +255,10 @@ func syntheticHistory(now time.Time) []RiskMovement {
 	var out []RiskMovement
 	for m := 0; m < 6; m++ {
 		payday := now.AddDate(0, -m, -3)
+		// Como sueldo (`payroll`): es lo que simula, y así el motor lo reconoce
+		// como ingreso recurrente, igual que haría con uno de verdad.
 		out = append(out, RiskMovement{OccurredAt: payday, Direction: "in", AmountMicros: 1_500_000_000,
-			Counterparty: "sandbox-empleador", Kind: "sandbox_history"})
+			Counterparty: "sandbox-empleador", Kind: "payroll"})
 		for i := 0; i < 4; i++ {
 			out = append(out, RiskMovement{OccurredAt: payday.AddDate(0, 0, 3+i*6), Direction: "out",
 				AmountMicros: 150_000_000, Counterparty: fmt.Sprintf("sandbox-comercio-%d", i), Kind: "sandbox_history"})
