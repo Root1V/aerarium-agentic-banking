@@ -167,7 +167,7 @@ func (s *Server) handleApproveConsent(w http.ResponseWriter, r *http.Request, pr
 	}
 
 	grant := grantOperation(request, body, s.merchantName(r.Context(), request.ClientID))
-	if !s.authorizeOperation(w, r, principal, grant, body.Confirmation) {
+	if _, ok := s.authorizeOperation(w, r, principal, grant, body.Confirmation); !ok {
 		return
 	}
 

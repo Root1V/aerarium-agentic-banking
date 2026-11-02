@@ -728,6 +728,7 @@ fn authorization_to_pb(auth: &Authorization) -> pb::Authorization {
         created_at: Some(to_timestamp(auth.created_at)),
         settled_at: auth.settled_at.map(to_timestamp),
         released_at: auth.released_at.map(to_timestamp),
+        hold_transaction_id: auth.hold_transaction_id.to_string(),
     }
 }
 

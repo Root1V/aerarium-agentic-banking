@@ -82,13 +82,19 @@ type holderOperation struct {
 }
 
 // authorizeOperation pasa la operación por la capa de control y, si hay que
-// confirmarla y trae la firma, la verifica. Devuelve `false` cuando ya respondió
-// y la operación no debe seguir.
-func (s *Server) authorizeOperation(w http.ResponseWriter, r *http.Request, p *Principal, op holderOperation, c *operationConfirmation) bool {
+// confirmarla y trae la firma, la verifica. Devuelve cómo quedó autorizada, para
+// enlazarla con lo que se ejecute, y `false` cuando ya respondió y la operación
+// no debe seguir.
+func (s *Server) authorizeOperation(w http.ResponseWriter, r *http.Request, p *Principal, op holderOperation, c *operationConfirmation) (control.Authorization, bool) {
 	// Sin capa de control, o con el sustituto de desarrollo del sandbox (que no
 	// tiene teléfono que firme), no hay nada que decidir.
 	if s.control == nil || p.Factor == "" {
-		return true
+		return control.Authorization{}, true
+	}
+	authorized := control.Authorization{
+		Actor:    control.Actor{Kind: control.ActorHolder, ID: p.DeviceID},
+		Action:   op.action,
+		Evidence: "device:" + p.DeviceID + ";factor:" + p.Factor,
 	}
 	ctx := r.Context()
 	req := control.Request{
@@ -107,14 +113,19 @@ func (s *Server) authorizeOperation(w http.ResponseWriter, r *http.Request, p *P
 	if err != nil {
 		s.logger.ErrorContext(ctx, "capa de control", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "inténtalo de nuevo")
-		return false
+		return authorized, false
 	}
 	switch decision.Outcome {
 	case control.Allow:
-		return true
+		authorized.Outcome = "allow"
+		if op.action == control.ActionTransfer {
+			// No pidió la cara: el destinatario es conocido y el monto, bajo.
+			authorized.Reason = control.ReasonKnownPayee
+		}
+		return authorized, true
 	case control.Deny:
 		writeError(w, http.StatusForbidden, "not_allowed", "esta operación no está permitida")
-		return false
+		return authorized, false
 	}
 
 	isDevice := p.Factor == string(sessions.FactorDeviceBiometric) || p.Factor == string(sessions.FactorDevicePIN)
@@ -123,15 +134,21 @@ func (s *Server) authorizeOperation(w http.ResponseWriter, r *http.Request, p *P
 		// teléfono con la que firmar la operación.
 		writeError(w, http.StatusForbidden, "confirmation_unavailable",
 			"confirma esta operación desde tu teléfono vinculado")
-		return false
+		return authorized, false
 	}
 	if c != nil {
-		return s.verifyConfirmation(w, r, p, req, c)
+		if !s.verifyConfirmation(w, r, p, req, c) {
+			return authorized, false
+		}
+		authorized.Outcome = "confirmed"
+		authorized.Reason = decision.Reason
+		authorized.Evidence = "device:" + p.DeviceID + ";method:" + c.Method
+		return authorized, true
 	}
 	challenge, err := s.control.devices.BeginConfirmation(ctx, p.CustomerID, p.DeviceID, op.canonical)
 	if err != nil {
 		s.deviceError(w, r, "desafío de confirmación", err)
-		return false
+		return authorized, false
 	}
 	writeJSON(w, http.StatusPreconditionRequired, confirmationRequired{
 		Code:        "confirmation_required",
@@ -141,7 +158,7 @@ func (s *Server) authorizeOperation(w http.ResponseWriter, r *http.Request, p *P
 		Reason:      string(decision.Reason),
 		Summary:     op.summary,
 	})
-	return false
+	return authorized, false
 }
 
 func (s *Server) verifyConfirmation(w http.ResponseWriter, r *http.Request, p *Principal, req control.Request, c *operationConfirmation) bool {

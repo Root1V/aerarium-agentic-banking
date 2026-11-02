@@ -46,6 +46,8 @@ type Server struct {
 	forecast *forecast.Service
 	// pockets habilita los bolsillos: dinero apartado dentro de la cuenta.
 	pockets *pockets.Service
+	// receipts habilita las constancias verificables.
+	receipts *receiptConfig
 	// agents dice qué agente hizo cada pago con un permiso y qué compró. Sin él
 	// el historial agrupa por plataforma, sin el detalle.
 	agents *agents.Store
@@ -107,10 +109,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/home", s.requireAuth(s.handleHome))
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
+	mux.Handle("GET /v1/accounts/{accountID}/movements/{transactionID}", s.requireAuth(s.handleMovementDetail))
 	if s.forecast != nil {
 		mux.Handle("GET /v1/accounts/{accountID}/forecast", s.requireAuth(s.handleForecast))
 	}
 	s.accessRoutes(mux)
+	if s.receipts != nil {
+		s.receiptRoutes(mux)
+	}
 	if s.pockets != nil {
 		s.pocketRoutes(mux)
 	}

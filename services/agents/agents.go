@@ -261,6 +261,8 @@ func (s *Store) RetireKey(ctx context.Context, clientID, agentID, keyID string) 
 
 // Signer es quién firmó: el agente dueño de la clave, y su integración.
 type Signer struct {
+	// KeyID es la clave con la que firmó: queda como evidencia del pago.
+	KeyID     string
 	AgentID   string
 	ClientID  string
 	AgentName string
@@ -273,7 +275,7 @@ func (s *Store) KeyForSignature(ctx context.Context, keyID string) (*Signer, err
 	if _, err := uuid.Parse(keyID); err != nil {
 		return nil, ErrNotFound
 	}
-	var sg Signer
+	sg := Signer{KeyID: keyID}
 	var pub []byte
 	var expires, retired, revoked *time.Time
 	err := s.db.QueryRowContext(ctx, `
