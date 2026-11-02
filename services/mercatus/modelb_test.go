@@ -55,7 +55,8 @@ func setupModelB(t *testing.T) *modelBFixture {
 	// El servicio ya tiene un store; se le enchufa al BFF el mismo, que es lo que
 	// une los dos lados del flujo.
 	bffAuth := bffsim.NewAuthenticator()
-	bffServer := bff.NewServer(f.core, bffAuth, nil).WithConsents(store).WithAgents(f.agents)
+	bffServer := bff.NewServer(f.core, bffAuth, nil).WithConsents(store).WithAgents(f.agents).
+		WithControl(ctrl, nil, nil)
 	ts := httptest.NewServer(bffServer.Handler())
 	ts.Client().Transport = &http.Transport{DisableKeepAlives: true}
 	t.Cleanup(ts.Close)
@@ -550,4 +551,73 @@ func TestElTitularVeQueComproElAgente(t *testing.T) {
 		return
 	}
 	t.Errorf("el pago no aparece en el historial: %v", page)
+}
+
+// El detalle de un pago dice en qué quedó, quién lo pagó y con qué permiso, y
+// qué otros pagos son de la misma tarea. Solo lo ve el titular de la cuenta.
+func TestElDetalleDeUnPagoDiceEnQueQuedoYQuienLoHizo(t *testing.T) {
+	f := setupModelB(t)
+	mandateID := f.grantMandate(t, i64(5_000000), nil)
+	pay := func(amount int64, description string) string {
+		t.Helper()
+		status, out, _ := f.do(t, http.MethodPost, "/v1/authorizations", f.token, map[string]any{
+			"mandate_id": mandateID, "payer_account_id": encodeID(accountPrefix, f.agentAcct),
+			"payee_account_id": f.payee, "amount": amount, "currency": "USD",
+			"intent": map[string]any{"reference": "vuelos-cusco", "description": description},
+		}, map[string]string{"Idempotency-Key": "cart-" + uuid.NewString()})
+		if status != http.StatusCreated {
+			t.Fatalf("pagar: %d %v", status, out)
+		}
+		return out["authorization_id"].(string)
+	}
+	pay(1_000000, "Búsqueda de vuelos")
+	id := pay(2_000000, "Comparar precios")
+
+	_, page := f.callBFF(t, http.MethodGet, "/v1/accounts/"+f.agentAcct+"/movements", f.holderToken, nil)
+	var hold string // el más reciente: el segundo pago
+	for _, m := range page["movements"].([]any) {
+		if mv := m.(map[string]any); mv["kind"] == "authorization_hold" && hold == "" {
+			hold = mv["id"].(string)
+		}
+	}
+	path := "/v1/accounts/" + f.agentAcct + "/movements/" + hold
+	detail := func() map[string]any {
+		t.Helper()
+		status, out := f.callBFF(t, http.MethodGet, path, f.holderToken, nil)
+		if status != http.StatusOK {
+			t.Fatalf("detalle: %d %v", status, out)
+		}
+		return out
+	}
+
+	d := detail()
+	if d["payment"].(map[string]any)["status"] != "held" {
+		t.Errorf("recién autorizado: %v", d["payment"])
+	}
+	auth := d["authorization"].(map[string]any)
+	if auth["actor_kind"] != "agent" || auth["agent"] != "Agente de pruebas" || auth["platform"] != "Mercatus" ||
+		auth["signed"] != true || auth["mandate_max_per_operation"].(map[string]any)["amount_micros"] != float64(5_000000) {
+		t.Errorf("quién lo pagó: %v", auth)
+	}
+	task := d["task"].(map[string]any)
+	if task["reference"] != "vuelos-cusco" || task["count"] != float64(2) ||
+		task["total"].(map[string]any)["amount_micros"] != float64(3_000000) {
+		t.Errorf("la tarea: %v", task)
+	}
+
+	f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/capture", f.token, nil, nil)
+	if got := detail()["payment"].(map[string]any)["status"]; got != "captured" {
+		t.Errorf("cobrado: %v", got)
+	}
+	f.do(t, http.MethodPost, "/v1/authorizations/"+id+"/refund", f.token, nil, nil)
+	d = detail()
+	if d["payment"].(map[string]any)["status"] != "refunded" ||
+		d["task"].(map[string]any)["total"].(map[string]any)["amount_micros"] != float64(1_000000) {
+		t.Errorf("devuelto, y la tarea ya no lo cuenta: %v", d)
+	}
+
+	intruso := uuid.NewString()
+	if status, _ := f.callBFF(t, http.MethodGet, path, f.bffAuth.Issue(intruso, "device-"+intruso), nil); status != http.StatusNotFound {
+		t.Errorf("otro titular viendo el pago: %d", status)
+	}
 }

@@ -151,6 +151,10 @@ retención vence. Propuesto en el canal (AE-09).
   el dinero es de la plataforma, no de un titular.
 - **La lista de compras de un grupo es la de lo ya cargado**: si la racha sigue más
   atrás, la pantalla lo dice, pero no pide más páginas.
+- **Los movimientos de antes del detalle no dicen cómo se autorizaron**: el enlace
+  (`control.executions`) existe desde este cambio. La constancia se comparte copiándola;
+  compartirla como imagen o PDF necesita un paquete nuevo. Reclamar un movimiento
+  desde el detalle queda para cuando exista la cola de revisión (F3-07).
 - **Los bolsillos son manuales**: apartar y devolver lo hace la persona. Las reglas que
   apartan solas (redondeo, un porcentaje del sueldo) son F3-03. Pagar la tarjeta desde
   su bolsillo funciona por la API, pero la pantalla de la tarjeta todavía paga desde la
@@ -238,6 +242,13 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   confirmándolo. Nuevo: listar teléfonos y passkeys, y quitar una passkey. Ni un
   teléfono ni una passkey se quitan si son la última forma de entrar (`409
   last_way_in`), y en ese caso el teléfono tampoco borra sus llaves.
+- [x] **Detalle del movimiento** (fuera del doc 15, pedido al probar): tocar un movimiento
+  muestra qué fue, en qué quedó y su número de operación, y además lo que solo este
+  banco sabe: **cómo se autorizó** (con la cara o la clave y en qué teléfono, sin
+  confirmar y por qué, o qué agente pagó con su firma y dentro de qué permiso), **la
+  tarea del agente** (los pagos con la misma intención y su total) y una **constancia
+  verificable**: un código que cualquiera, sin ser cliente, comprueba con el banco
+  (`/c/{código}`), contra las capturas falsas de un pago.
 - [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*
 - [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
 - [x] **F3-05 Identidad del agente** (`services/agents`, contrato 1.1): cada agente se

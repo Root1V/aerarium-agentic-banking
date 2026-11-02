@@ -49,6 +49,8 @@ type Authorization struct {
 	CreatedAt      time.Time
 	SettledAt      *time.Time
 	ReleasedAt     *time.Time
+	// HoldTransactionID es el movimiento que ve el pagador en su historial.
+	HoldTransactionID string
 }
 
 // AuthorizeResult trae la autorización y si vino de una clave ya usada.
@@ -215,16 +217,17 @@ func toAuthorization(pb *corev1.Authorization) *Authorization {
 		return nil
 	}
 	auth := &Authorization{
-		ID:             pb.GetId(),
-		IdempotencyKey: pb.GetIdempotencyKey(),
-		PayerAccountID: pb.GetPayerAccountId(),
-		PayeeAccountID: pb.GetPayeeAccountId(),
-		AmountMicros:   pb.GetAmount().GetAmountMicros(),
-		Currency:       pb.GetAmount().GetCurrency(),
-		Status:         pb.GetStatus(),
-		RefundedMicros: pb.GetRefundedMicros(),
-		ExpiresAt:      pb.GetExpiresAt().AsTime(),
-		CreatedAt:      pb.GetCreatedAt().AsTime(),
+		ID:                pb.GetId(),
+		IdempotencyKey:    pb.GetIdempotencyKey(),
+		PayerAccountID:    pb.GetPayerAccountId(),
+		PayeeAccountID:    pb.GetPayeeAccountId(),
+		HoldTransactionID: pb.GetHoldTransactionId(),
+		AmountMicros:      pb.GetAmount().GetAmountMicros(),
+		Currency:          pb.GetAmount().GetCurrency(),
+		Status:            pb.GetStatus(),
+		RefundedMicros:    pb.GetRefundedMicros(),
+		ExpiresAt:         pb.GetExpiresAt().AsTime(),
+		CreatedAt:         pb.GetCreatedAt().AsTime(),
 	}
 	if pb.SettledAt != nil {
 		t := pb.GetSettledAt().AsTime()
