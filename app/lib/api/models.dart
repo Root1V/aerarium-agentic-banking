@@ -97,6 +97,9 @@ class Movement {
         null => _kindLabel,
       };
 
+  /// Qué clase de movimiento es, en palabras: «Transferencia», «Depósito»…
+  String get kindName => _kindLabel;
+
   String get _kindLabel => switch (kind) {
         'deposit' => 'Depósito',
         'withdrawal' => 'Retiro',
@@ -1081,5 +1084,158 @@ class ActivityEntry {
         action: json['action'] as String? ?? '',
         outcome: json['outcome'] as String? ?? '',
         reason: json['reason'] as String? ?? '',
+      );
+}
+
+/// En qué quedó el pago de una plataforma (la retención del historial).
+class PaymentStatus {
+  const PaymentStatus({required this.status, required this.amount, required this.refunded, required this.expiresAt});
+
+  /// `held`, `captured`, `partially_refunded`, `refunded`, `released` o `expired`.
+  final String status;
+  final Money amount;
+  final Money refunded;
+  final DateTime expiresAt;
+
+  factory PaymentStatus.fromJson(Map<String, dynamic> json) => PaymentStatus(
+        status: json['status'] as String? ?? 'unknown',
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        refunded: Money.fromJson(json['refunded'] as Map<String, dynamic>),
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+      );
+}
+
+/// Lo que el detalle de un movimiento sabe además del historial.
+class MovementDetail {
+  const MovementDetail({this.payment, this.authorization, this.task});
+
+  final PaymentStatus? payment;
+  final AuthorizationInfo? authorization;
+  final AgentTask? task;
+
+  factory MovementDetail.fromJson(Map<String, dynamic> json) => MovementDetail(
+        payment: json['payment'] == null ? null : PaymentStatus.fromJson(json['payment'] as Map<String, dynamic>),
+        authorization: json['authorization'] == null
+            ? null
+            : AuthorizationInfo.fromJson(json['authorization'] as Map<String, dynamic>),
+        task: json['task'] == null ? null : AgentTask.fromJson(json['task'] as Map<String, dynamic>),
+      );
+}
+
+/// Cómo se autorizó una operación.
+class AuthorizationInfo {
+  const AuthorizationInfo({
+    required this.actorKind,
+    required this.outcome,
+    this.reason = '',
+    this.method = '',
+    this.device = '',
+    this.agent = '',
+    this.platform = '',
+    this.signed = false,
+    this.mandateMaxPerOperation,
+    this.mandateExpiresAt,
+  });
+
+  /// `holder` o `agent`.
+  final String actorKind;
+
+  /// `allow` (no pidió confirmación) o `confirmed`.
+  final String outcome;
+  final String reason;
+
+  /// `biometric` o `pin`.
+  final String method;
+  final String device;
+  final String agent;
+  final String platform;
+  final bool signed;
+  final Money? mandateMaxPerOperation;
+  final DateTime? mandateExpiresAt;
+
+  factory AuthorizationInfo.fromJson(Map<String, dynamic> json) => AuthorizationInfo(
+        actorKind: json['actor_kind'] as String? ?? '',
+        outcome: json['outcome'] as String? ?? '',
+        reason: json['reason'] as String? ?? '',
+        method: json['method'] as String? ?? '',
+        device: json['device'] as String? ?? '',
+        agent: json['agent'] as String? ?? '',
+        platform: json['platform'] as String? ?? '',
+        signed: json['signed'] as bool? ?? false,
+        mandateMaxPerOperation: json['mandate_max_per_operation'] == null
+            ? null
+            : Money.fromJson(json['mandate_max_per_operation'] as Map<String, dynamic>),
+        mandateExpiresAt:
+            json['mandate_expires_at'] == null ? null : DateTime.parse(json['mandate_expires_at'] as String),
+      );
+}
+
+/// Los pagos de una misma tarea del agente.
+class AgentTask {
+  const AgentTask({required this.reference, required this.count, required this.total, required this.payments});
+
+  final String reference;
+  final int count;
+  final Money total;
+  final List<AgentTaskPayment> payments;
+
+  factory AgentTask.fromJson(Map<String, dynamic> json) => AgentTask(
+        reference: json['reference'] as String? ?? '',
+        count: json['count'] as int? ?? 0,
+        total: Money.fromJson(json['total'] as Map<String, dynamic>),
+        payments: [
+          for (final p in (json['payments'] as List<dynamic>? ?? const []))
+            AgentTaskPayment(
+              description: (p as Map<String, dynamic>)['description'] as String? ?? '',
+              amount: Money.fromJson(p['amount'] as Map<String, dynamic>),
+              at: DateTime.parse(p['at'] as String),
+              isThis: p['this'] as bool? ?? false,
+            ),
+        ],
+      );
+}
+
+class AgentTaskPayment {
+  const AgentTaskPayment({required this.description, required this.amount, required this.at, required this.isThis});
+
+  final String description;
+  final Money amount;
+  final DateTime at;
+
+  /// Es el movimiento que se está mirando.
+  final bool isThis;
+}
+
+/// Una constancia verificable: cualquiera comprueba con su código que el pago es
+/// real.
+class VerifiableReceipt {
+  const VerifiableReceipt({
+    required this.code,
+    required this.amount,
+    required this.from,
+    required this.to,
+    required this.postedAt,
+    required this.url,
+    this.status = '',
+  });
+
+  final String code;
+  final Money amount;
+  final String from;
+  final String to;
+  final DateTime postedAt;
+  final String url;
+
+  /// Al verificar: `completed`, o en qué quedó el pago de una plataforma.
+  final String status;
+
+  factory VerifiableReceipt.fromJson(Map<String, dynamic> json) => VerifiableReceipt(
+        code: json['code'] as String,
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        from: json['from'] as String? ?? '',
+        to: json['to'] as String? ?? '',
+        postedAt: DateTime.parse(json['posted_at'] as String),
+        url: json['url'] as String? ?? '',
+        status: json['status'] as String? ?? '',
       );
 }

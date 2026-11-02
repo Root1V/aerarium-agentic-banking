@@ -136,6 +136,26 @@ class BffClient {
 
   /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
   /// tarjetas (la ruta no existe).
+  /// Lo que el detalle de un movimiento sabe además del historial.
+  Future<MovementDetail> movementDetail(String accountId, String transactionId) async =>
+      MovementDetail.fromJson(await _get('/v1/accounts/$accountId/movements/$transactionId', const {}));
+
+  /// Emite la constancia verificable de un movimiento (o devuelve la que ya tenía).
+  Future<VerifiableReceipt> issueReceipt(String accountId, String transactionId) async =>
+      VerifiableReceipt.fromJson(await _post('/v1/accounts/$accountId/movements/$transactionId/receipt',
+          headers: const {}, body: const {}));
+
+  /// Comprueba una constancia con su código. Nula si no existe: el comprobante no
+  /// es de Aerarium.
+  Future<VerifiableReceipt?> verifyReceipt(String code) async {
+    try {
+      return VerifiableReceipt.fromJson(await _get('/v1/receipts/${Uri.encodeComponent(code.trim())}', const {}));
+    } on ApiError catch (e) {
+      if (e.code == ApiErrorCode.notFound || e.code == ApiErrorCode.receiptNotFound) return null;
+      rethrow;
+    }
+  }
+
   /// Todo lo que tiene acceso a la cuenta, para el centro de permisos.
   Future<AccessOverview> access() async => AccessOverview.fromJson(await _get('/v1/access', const {}));
 
