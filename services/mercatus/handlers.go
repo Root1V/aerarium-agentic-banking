@@ -94,6 +94,12 @@ func (s *Server) handleOpenAccount(w http.ResponseWriter, r *http.Request, claim
 		return
 	}
 
+	// Antes de abrir nada en el core: una cuenta para un agente que no existe o
+	// que ya no tiene cupo quedaría abierta y sin dueño.
+	if !s.checkAccountQuota(w, r, claims, req.AgentID) {
+		return
+	}
+
 	// El código de la cuenta en el core es DETERMINISTA a partir de la
 	// integración, el agente y la moneda. Con eso el core es la segunda red de
 	// seguridad: si el proceso muere entre abrir la cuenta y registrar el enlace,
@@ -158,6 +164,24 @@ func (s *Server) bindAccountAgent(w http.ResponseWriter, r *http.Request, claims
 		return false
 	}
 	if err != nil {
+		s.agentError(w, r, err)
+		return false
+	}
+	return true
+}
+
+// checkAccountQuota comprueba que el agente indicado, si se indicó, pueda
+// recibir una sub-cuenta más.
+func (s *Server) checkAccountQuota(w http.ResponseWriter, r *http.Request, claims *oauth.Claims, publicAgentID string) bool {
+	if publicAgentID == "" || s.agents == nil {
+		return true
+	}
+	agentID, err := decodeID(agentPrefix, publicAgentID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, CodeAgentNotFound, "el agente no existe")
+		return false
+	}
+	if err := s.agents.CheckAccountQuota(r.Context(), claims.Subject, agentID); err != nil {
 		s.agentError(w, r, err)
 		return false
 	}

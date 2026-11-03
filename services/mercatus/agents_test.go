@@ -240,3 +240,35 @@ func TestDuranteLaRotacionFirmanLasDosClaves(t *testing.T) {
 		t.Errorf("con la nueva: %d %v", status, out)
 	}
 }
+
+// Los topes de cantidad (M-18) responden 409 quota_exceeded, y una cuenta que no
+// se puede atar al agente no se llega a abrir.
+func TestLosTopesDeCantidadSeRespondenConQuotaExceeded(t *testing.T) {
+	f := setup(t)
+	// El agente de la fixture ya tiene dos cuentas: la pagadora y la receptora.
+	f.agents.SetLimits(agents.Limits{AgentsPerClient: 2, KeysPerAgent: 1, AccountsPerAgent: 2})
+
+	f.registerAgent(t, "Segundo")
+	jwk, _ := newAgentKey(t)
+	status, out, _ := f.do(t, http.MethodPost, "/v1/agents", f.token,
+		map[string]any{"name": "Tercero", "public_key": jwk}, nil)
+	if status != http.StatusConflict || out["error"] != CodeQuotaExceeded {
+		t.Errorf("tercer agente: %d %v", status, out)
+	}
+
+	status, out, _ = f.do(t, http.MethodPost, "/v1/agents/"+f.agentID+"/keys", f.token,
+		map[string]any{"public_key": jwk}, nil)
+	if status != http.StatusConflict || out["error"] != CodeQuotaExceeded {
+		t.Errorf("segunda clave: %d %v", status, out)
+	}
+
+	body := map[string]any{"owner_reference": "tope_" + uuid.NewString(), "currency": "USD", "agent_id": f.agentID}
+	status, out, _ = f.do(t, http.MethodPost, "/v1/accounts", f.token, body, nil)
+	if status != http.StatusConflict || out["error"] != CodeQuotaExceeded {
+		t.Fatalf("tercera cuenta: %d %v", status, out)
+	}
+	f.agents.SetLimits(agents.DefaultLimits)
+	if status, out, _ = f.do(t, http.MethodPost, "/v1/accounts", f.token, body, nil); status != http.StatusCreated {
+		t.Errorf("la cuenta rechazada no se abrió y ahora sí se abre: %d %v", status, out)
+	}
+}

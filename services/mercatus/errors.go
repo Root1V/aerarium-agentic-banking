@@ -54,6 +54,9 @@ const (
 	CodeMandateAgentScope     = "mandate_agent_scope"
 	CodeAccountAgentScope     = "account_agent_scope"
 	CodeAccountAgentConflict  = "account_agent_conflict"
+	// Tope de cantidad: agentes por integración, claves por agente o
+	// sub-cuentas por agente (M-18). Se libera dando de baja o retirando.
+	CodeQuotaExceeded = "quota_exceeded"
 )
 
 type errorBody struct {
