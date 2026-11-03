@@ -160,6 +160,39 @@ void main() {
     expect(find.textContaining('no es de Aerarium'), findsOneWidget);
   });
 
+  testWidgets('se verifica pegando la constancia entera, como llega por chat', (tester) async {
+    final bank = FakeBank({
+      'GET /v1/receipts/K7Q2M-9XR4T': (_) => json({
+            'code': 'K7Q2M-9XR4T',
+            'amount': usd(50000000),
+            'from': 'Ana E.',
+            'to': 'Juan P.',
+            'posted_at': '2026-11-01T15:15:00Z',
+            'url': 'http://bff.test/c/K7Q2M-9XR4T',
+            'status': 'completed',
+          }),
+    });
+    await tester.pumpWidget(MaterialApp(home: VerifyReceiptScreen(client: bank.client(token: 't'))));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byType(TextField),
+        'Aerarium · Constancia de operación\nAna E. → Juan P.\nMonto: 50,00 USD\n'
+        'Código de verificación: K7Q2M-9XR4T\nComprueba que es real en: http://bff.test/c/K7Q2M-9XR4T');
+    await tester.pump();
+    expect(find.text('K7Q2M-9XR4T'), findsOneWidget, reason: 'queda solo el código');
+
+    await tester.tap(find.text('Verificar'));
+    await tester.pumpAndSettle();
+    expect(bank.calls, contains('GET /v1/receipts/K7Q2M-9XR4T'));
+    expect(find.text('Este pago es real'), findsOneWidget);
+  });
+
+  test('el código sale del enlace o de la constancia', () {
+    expect(receiptCodeIn('http://192.168.68.63:38080/c/k7q2m-9xr4t'), 'K7Q2M-9XR4T');
+    expect(receiptCodeIn('nada que ver'), isNull);
+  });
+
   test('cómo se autorizó, sin confirmar', () {
     final (title, why) = authorizationText(const AuthorizationInfo(
         actorKind: 'holder', outcome: 'allow', reason: 'known_payee', device: 'iPhone de Ana'));
