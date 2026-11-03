@@ -113,7 +113,8 @@ func run(clientID, name, currencies string, sandbox, rotate bool) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("MERCATUS_SANDBOX_CASH=%s   # %s\n", account.Id, cash)
+			// Como comentario: el servidor la busca por código, no hace falta copiarla.
+			fmt.Printf("# caja del sandbox en %s: %s (%s)\n", currency, account.Id, cash)
 		}
 	}
 

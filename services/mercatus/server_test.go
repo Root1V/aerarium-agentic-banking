@@ -103,6 +103,11 @@ func setup(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatalf("crear caja: %v", err)
 	}
+	penCash, err := core.CreateInternalAccount(ctx, "sbx-cash-pen-"+suffix, "Caja de sandbox en soles",
+		corev1.AccountType_ACCOUNT_TYPE_ASSET, "PEN")
+	if err != nil {
+		t.Fatalf("crear caja en soles: %v", err)
+	}
 
 	// La cuenta de retención tiene que existir para que el core pueda autorizar.
 	if _, err := core.GetAccount(ctx, "AUTH-HOLDS-USD"); err != nil {
@@ -137,9 +142,9 @@ func setup(t *testing.T) *fixture {
 
 	oauthSrv := oauth.NewServer(store, issuer, nil)
 	server := NewServer(core, oauthSrv, store, Config{
-		Sandbox:              true,
-		ProductByCurrency:    products,
-		SandboxCashAccountID: cash.Id,
+		Sandbox:           true,
+		ProductByCurrency: products,
+		SandboxCash:       map[string]string{"USD": cash.Id, "PEN": penCash.Id},
 	}, nil).WithAgents(agentStore)
 
 	srv := httptest.NewServer(server.Handler())
@@ -332,6 +337,31 @@ func TestElMismoAgenteEnOtraMonedaEsOtraCuenta(t *testing.T) {
 	}
 	if pen["currency"] != "PEN" {
 		t.Errorf("currency = %v, se esperaba PEN", pen["currency"])
+	}
+}
+
+// Cada moneda se fondea desde su propia caja: debitar la caja en dólares para
+// dar saldo en soles mezclaría dos monedas en un asiento.
+func TestElSaldoInicialEnSolesSaleDeLaCajaEnSoles(t *testing.T) {
+	f := setup(t)
+	for _, currency := range []string{"PEN", "USD"} {
+		status, out, _ := f.do(t, http.MethodPost, "/v1/accounts", f.token, map[string]any{
+			"owner_reference": "agent_" + uuid.NewString(),
+			"currency":        currency,
+			"initial_balance": 25_000000,
+		}, nil)
+		if status != http.StatusCreated {
+			t.Fatalf("abrir en %s con saldo: %d %v", currency, status, out)
+		}
+		status, txs, _ := f.do(t, http.MethodGet, "/v1/accounts/"+out["account_id"].(string)+"/transactions",
+			f.token, nil, nil)
+		list, _ := txs["transactions"].([]any)
+		if status != http.StatusOK || len(list) != 1 {
+			t.Fatalf("movimientos en %s: %d %v", currency, status, txs)
+		}
+		if tx := list[0].(map[string]any); tx["currency"] != currency || tx["amount"] != float64(25_000000) {
+			t.Errorf("fondeo en %s: %v", currency, tx)
+		}
 	}
 }
 
