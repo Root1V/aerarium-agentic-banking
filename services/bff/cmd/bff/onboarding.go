@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/aibank/aibank/adapters/kyc/sim"
 	"github.com/aibank/aibank/clients/go/coreclient"
+	"github.com/aibank/aibank/services/bff"
 	"github.com/aibank/aibank/services/onboarding"
 )
 
@@ -28,32 +28,16 @@ const (
 	TestDNIWatchlist    = "22222222" // coincidencia en listas → revisión
 )
 
-// Producto de las cuentas de nivel 1 (doc 14).
-//
-// Los topes son PROVISIONALES: los fija la norma de cuentas simplificadas de la
-// SBS, que hay que validar con el asesor regulatorio. Lo que sí es definitivo es
-// que el nivel 1 tiene topes bajos — es lo que permite abrirla sin prueba de vida.
-const (
-	basicProductPrefix = "BASICA-"
-	basicMaxBalance    = 1_000 * 1_000_000 // 1.000 USD
-	basicMaxTx         = 300 * 1_000_000   //   300 USD
-)
-
 func setupOnboarding(ctx context.Context, db *sql.DB, core *coreclient.Client, currency string) (*onboarding.Service, *onboarding.Store, string, error) {
 	store := onboarding.NewStore(db)
 	if err := store.Migrate(ctx); err != nil {
 		return nil, nil, "", fmt.Errorf("migrar el esquema del alta: %w", err)
 	}
 
-	product := basicProductPrefix + currency
-	maxBalance, maxTx := int64(basicMaxBalance), int64(basicMaxTx)
-	if _, err := core.CreateProduct(ctx, coreclient.NewProduct{
-		Code:                 product,
-		Name:                 "Cuenta básica " + currency,
-		Currency:             currency,
-		MaxBalanceMicros:     &maxBalance,
-		MaxTransactionMicros: &maxTx,
-	}); err != nil && !errors.Is(err, coreclient.ErrAlreadyExists) {
+	// El producto de nivel 1 de la moneda del alta (doc 14): topes bajos, que es
+	// lo que permite abrirla sin prueba de vida. Los topes viven en bff.
+	product, err := bff.EnsureBasicProduct(ctx, core, currency)
+	if err != nil {
 		return nil, nil, "", fmt.Errorf("producto de nivel 1: %w", err)
 	}
 

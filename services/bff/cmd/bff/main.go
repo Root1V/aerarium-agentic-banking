@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 	// La zona de Lima viaja dentro del binario: la imagen del contenedor no trae
@@ -46,6 +47,7 @@ import (
 	"github.com/aibank/aibank/services/control"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/forecast"
+	"github.com/aibank/aibank/services/fx"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/pockets"
@@ -156,6 +158,19 @@ func run(log *slog.Logger) error {
 			log.Warn("directorio de celulares deshabilitado: no hay proveedor de SMS")
 		}
 
+		// Cambio entre cuentas propias. En el sandbox, una referencia fija; en
+		// producción, la del día (SBS o BCRP). El margen, a cada lado, en puntos
+		// básicos.
+		fxSvc := fx.NewService(db, core, fx.FixedRate(envInt("FX_REFERENCE_PEN_PER_USD", 3_380_000)),
+			int64(envInt("FX_SPREAD_BPS", 50)))
+		if err := fxSvc.Migrate(ctx); err != nil {
+			return err
+		}
+		if err := fxSvc.EnsurePositions(ctx); err != nil {
+			return err
+		}
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithFX(fxSvc) })
+
 		// Constancias verificables: contra las capturas falsas de un pago.
 		receiptStore := receipts.NewStore(db)
 		if err := receiptStore.Migrate(ctx); err != nil {
@@ -211,7 +226,8 @@ func run(log *slog.Logger) error {
 		// el alta solo se monta en modo desarrollo, hasta que haya un proveedor
 		// de identidad real.
 		if devAuth {
-			svc, _, product, err := setupOnboarding(ctx, db, core, "USD")
+			// En el Perú, la cuenta nace en soles; la de dólares se abre después.
+			svc, _, product, err := setupOnboarding(ctx, db, core, env("ONBOARDING_CURRENCY", "PEN"))
 			if err != nil {
 				return err
 			}
@@ -286,4 +302,12 @@ func creditCooldown(sandbox bool) time.Duration {
 		return time.Minute
 	}
 	return 30 * 24 * time.Hour
+}
+
+// envInt lee un entero de una variable de entorno, o el valor por defecto.
+func envInt(name string, fallback int) int {
+	if v, err := strconv.Atoi(os.Getenv(name)); err == nil {
+		return v
+	}
+	return fallback
 }
