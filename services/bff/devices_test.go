@@ -168,6 +168,14 @@ func TestDesvincularElTelefono(t *testing.T) {
 	}
 	_ = otherLinked
 
+	// Con un solo teléfono y sin passkey, es la única forma de entrar: no se quita.
+	if status, out := e.call(t, http.MethodDelete, "/v1/devices/"+h.id, token, nil); status != http.StatusConflict || out["code"] != "last_way_in" {
+		t.Fatalf("desvincular la única forma de entrar: %d %v", status, out)
+	}
+	if status, out := e.link(t, newHandset(), "", token, "482916"); status != http.StatusCreated {
+		t.Fatalf("segundo teléfono: %d %v", status, out)
+	}
+
 	if status, _ := e.call(t, http.MethodDelete, "/v1/devices/"+h.id, token, nil); status != http.StatusNoContent {
 		t.Fatalf("desvincular: %d", status)
 	}

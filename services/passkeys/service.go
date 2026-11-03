@@ -307,6 +307,24 @@ func (s *Service) openSession(ctx context.Context, customerID string, credential
 		base64.RawURLEncoding.EncodeToString(credentialID), s.now().Add(s.cfg.SessionTTL))
 }
 
+// List devuelve las passkeys del cliente, de la última usada a la primera.
+func (s *Service) List(ctx context.Context, customerID string) ([]PasskeyInfo, error) {
+	return s.store.list(ctx, customerID)
+}
+
+// Remove quita una passkey del cliente y cierra las sesiones abiertas con ella.
+// La passkey sigue en el llavero del sistema, pero el banco ya no la acepta.
+func (s *Service) Remove(ctx context.Context, customerID, id string) error {
+	credentialID, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		return ErrUnknownCredential
+	}
+	if err := s.store.remove(ctx, customerID, credentialID); err != nil {
+		return err
+	}
+	return s.sessions.RevokeDevice(ctx, id)
+}
+
 // ResolveSession devuelve el cliente y lo que firmó detrás de un token.
 func (s *Service) ResolveSession(ctx context.Context, token string) (customerID, deviceRef string, err error) {
 	p, err := s.sessions.Resolve(ctx, token)

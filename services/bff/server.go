@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	if s.forecast != nil {
 		mux.Handle("GET /v1/accounts/{accountID}/forecast", s.requireAuth(s.handleForecast))
 	}
+	s.accessRoutes(mux)
 	if s.pockets != nil {
 		s.pocketRoutes(mux)
 	}

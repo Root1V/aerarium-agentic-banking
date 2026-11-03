@@ -173,7 +173,10 @@ class DeviceFlow {
   Future<void> unlink(String deviceId) async {
     try {
       await client.revokeDevice(deviceId);
-    } on ApiError {
+    } on ApiError catch (e) {
+      // Si es la única forma de entrar, el banco no lo desvincula, y aquí
+      // tampoco se borra: sin llaves y sin passkey, la persona quedaría fuera.
+      if (e.code == ApiErrorCode.lastWayIn) rethrow;
       // El banco ya no lo reconoce o no hay red: igual se borra aquí.
     }
     await keys.reset();

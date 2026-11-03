@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -196,4 +197,55 @@ func (s *Store) updateAfterLogin(ctx context.Context, cred *webauthn.Credential)
 		UPDATE identity.passkeys SET credential = $2, last_used_at = now()
 		 WHERE credential_id = $1`, cred.ID, raw)
 	return err
+}
+
+// PasskeyInfo es una passkey tal como se le muestra a su dueño.
+type PasskeyInfo struct {
+	// ID es el identificador de la credencial, en base64url.
+	ID         string
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+	// Synced: la passkey vive en un llavero que se sincroniza (iCloud, Google),
+	// no solo en un dispositivo.
+	Synced bool
+}
+
+func (s *Store) list(ctx context.Context, customerID string) ([]PasskeyInfo, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT credential_id, credential, created_at, last_used_at FROM identity.passkeys
+		 WHERE customer_id = $1 ORDER BY COALESCE(last_used_at, created_at) DESC`, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PasskeyInfo
+	for rows.Next() {
+		var (
+			id, raw []byte
+			p       PasskeyInfo
+			cred    webauthn.Credential
+		)
+		if err := rows.Scan(&id, &raw, &p.CreatedAt, &p.LastUsedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &cred); err != nil {
+			return nil, fmt.Errorf("passkey ilegible: %w", err)
+		}
+		p.ID = base64.RawURLEncoding.EncodeToString(id)
+		p.Synced = cred.Flags.BackupState
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) remove(ctx context.Context, customerID string, credentialID []byte) error {
+	result, err := s.db.ExecContext(ctx,
+		`DELETE FROM identity.passkeys WHERE credential_id = $1 AND customer_id = $2`, credentialID, customerID)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return ErrUnknownCredential
+	}
+	return nil
 }

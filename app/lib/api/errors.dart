@@ -50,6 +50,9 @@ enum ApiErrorCode {
   creditLimitExceeded,
   creditLineInactive,
   overpayment,
+
+  // Centro de permisos.
+  lastWayIn,
   unknown,
 }
 
@@ -110,6 +113,7 @@ class ApiError implements Exception {
         'credit_limit_exceeded' => ApiErrorCode.creditLimitExceeded,
         'credit_line_inactive' => ApiErrorCode.creditLineInactive,
         'overpayment' => ApiErrorCode.overpayment,
+        'last_way_in' => ApiErrorCode.lastWayIn,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -174,6 +178,8 @@ class ApiError implements Exception {
         ApiErrorCode.creditLimitExceeded => 'Supera lo que tienes disponible en tu tarjeta.',
         ApiErrorCode.creditLineInactive => 'Tu tarjeta está bloqueada por un pago pendiente. Puedes pagarla.',
         ApiErrorCode.overpayment => 'Ese pago es mayor que lo que debes.',
+        ApiErrorCode.lastWayIn =>
+          'Es tu única forma de entrar. Crea una passkey o vincula otro teléfono antes de quitarla.',
         ApiErrorCode.weakPin =>
           'Elige una clave que no sea repetida ni consecutiva, como 123456.',
         ApiErrorCode.unknown => 'Algo salió mal. Intenta de nuevo.',

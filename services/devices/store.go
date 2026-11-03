@@ -141,3 +141,24 @@ func (s *Store) revoke(ctx context.Context, customerID, id string) error {
 	}
 	return nil
 }
+
+func (s *Store) list(ctx context.Context, customerID string) ([]DeviceInfo, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, hardware_backed, created_at, last_used_at, locked_at IS NOT NULL
+		  FROM identity.devices
+		 WHERE customer_id = $1 AND revoked_at IS NULL
+		 ORDER BY COALESCE(last_used_at, created_at) DESC`, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DeviceInfo
+	for rows.Next() {
+		var d DeviceInfo
+		if err := rows.Scan(&d.ID, &d.Name, &d.HardwareBacked, &d.CreatedAt, &d.LastUsedAt, &d.Locked); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
