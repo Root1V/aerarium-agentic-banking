@@ -76,8 +76,19 @@ class Money {
     final fraction = absolute % microsPerUnit;
 
     final sign = negative ? '-' : (withSign ? '+' : '');
-    return '$sign${_groupThousands(units)},${_formatFraction(fraction)} $currency';
+    final number = '${_groupThousands(units)},${_formatFraction(fraction)}';
+    // Los soles se escriben como en el Perú: «S/ 1.234,50», con el símbolo
+    // delante. Las demás monedas, con su código detrás.
+    if (currency == 'PEN') return '${sign}S/ $number';
+    return '$sign$number $currency';
   }
+
+  /// Cómo se llama la moneda en una frase: «soles», «dólares».
+  static String currencyName(String currency) => switch (currency) {
+        'PEN' => 'soles',
+        'USD' => 'dólares',
+        _ => currency,
+      };
 
   /// Convierte la parte fraccionaria (0–999999 micras) a texto.
   ///

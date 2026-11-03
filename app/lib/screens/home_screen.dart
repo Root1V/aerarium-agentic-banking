@@ -11,6 +11,7 @@ import '../forecast_text.dart';
 import 'access_screen.dart';
 import 'credit_card_screen.dart';
 import 'forecast_screen.dart';
+import 'fx_screen.dart';
 import 'mandates_screen.dart';
 import 'movement_detail_screen.dart';
 import 'payment_group_screen.dart';
@@ -31,6 +32,9 @@ class HomeScreen extends StatefulWidget {
     required this.client,
     required this.accountId,
     this.onSignOut,
+    this.accounts = const [],
+    this.onSwitchAccount,
+    this.onAccountsChanged,
     this.onUnlink,
     this.confirmer,
     this.offerTestFunds = false,
@@ -44,6 +48,13 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onSignOut;
 
   /// Desvincula este teléfono de la cuenta. Sin él no se ofrece.
+  /// Todas las cuentas del titular (soles, dólares), para cambiar de una a otra.
+  final List<Account> accounts;
+  final void Function(String accountId)? onSwitchAccount;
+
+  /// Las cuentas cambiaron (se abrió una): volver a pedirlas, y ver la nueva.
+  final void Function({String? select})? onAccountsChanged;
+
   final Future<void> Function()? onUnlink;
 
   /// Firma con el teléfono las operaciones de riesgo.
@@ -109,7 +120,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mi cuenta'),
+        title: _AccountTitle(
+          currency: _home?.balance.currency,
+          onTap: widget.onSwitchAccount == null ? null : _chooseAccount,
+        ),
         actions: [
           // Los permisos viven en la barra y no escondidos en un menú: "¿quién
           // tiene acceso a mi cuenta?" es una pregunta que tiene que poder
@@ -335,6 +349,65 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => VerifyReceiptScreen(client: widget.client)));
   }
 
+  /// Las cuentas del titular: cambiar a otra, o abrir la de la moneda que falta.
+  Future<void> _chooseAccount() async {
+    const currencies = ['PEN', 'USD'];
+    final have = widget.accounts.map((a) => a.currency).toSet();
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final a in widget.accounts)
+              ListTile(
+                leading: CircleAvatar(child: Text(a.currency == 'PEN' ? 'S/' : '\$')),
+                title: Text('Cuenta en ${Money.currencyName(a.currency)}'),
+                trailing: a.id == widget.accountId ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, a.id),
+              ),
+            for (final c in currencies.where((c) => !have.contains(c)))
+              ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.add)),
+                title: Text('Abrir cuenta en ${Money.currencyName(c)}'),
+                subtitle: const Text('A tu nombre, sin trámites'),
+                onTap: () => Navigator.pop(context, 'open:$c'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice.startsWith('open:')) {
+      try {
+        final opened = await widget.client.openAccount(choice.substring(5));
+        widget.onAccountsChanged?.call(select: opened.id);
+      } on ApiError catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+      }
+      return;
+    }
+    if (choice != widget.accountId) widget.onSwitchAccount?.call(choice);
+  }
+
+  /// La cuenta de la otra moneda, si la hay: es a donde se cambia.
+  Account? get _otherCurrencyAccount {
+    final mine = widget.accounts.where((a) => a.id == widget.accountId).firstOrNull;
+    if (mine == null) return null;
+    return widget.accounts.where((a) => a.currency != mine.currency).firstOrNull;
+  }
+
+  Future<void> _openFx() async {
+    final mine = widget.accounts.where((a) => a.id == widget.accountId).firstOrNull;
+    final other = _otherCurrencyAccount;
+    if (mine == null || other == null) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => FxScreen(client: widget.client, from: mine, to: other)),
+    );
+    if (changed == true && mounted) await _load();
+  }
+
   /// El centro de permisos: plataformas, teléfonos, passkeys, directorio y lo
   /// último que pasó. Los permisos de pago, con su gasto, se abren desde ahí.
   void _openAccess() {
@@ -380,12 +453,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _BalanceCard(home: home, onOpenPending: _openPending, pockets: _pockets, onOpenPockets: _openPockets),
+        _BalanceCard(
+          home: home,
+          onOpenPending: _openPending,
+          pockets: _pockets,
+          onOpenPockets: _openPockets,
+          exchangeTo: _otherCurrencyAccount?.currency,
+          onExchange: _openFx,
+        ),
         if (_forecast case final forecast?) ...[
           const SizedBox(height: 12),
           _ForecastTile(forecast: forecast, onTap: () => _openForecast(forecast)),
         ],
-        if (_creditOffered) ...[
+        // La tarjeta es en dólares: se usa y se paga desde la cuenta de su moneda.
+        if (_creditOffered && (_card?.limit.currency ?? 'USD') == home.balance.currency) ...[
           const SizedBox(height: 12),
           CreditCardTile(card: _card, onTap: _openCredit),
         ],
@@ -437,7 +518,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.home, required this.onOpenPending, this.pockets, this.onOpenPockets});
+  const _BalanceCard({
+    required this.home,
+    required this.onOpenPending,
+    this.pockets,
+    this.onOpenPockets,
+    this.exchangeTo,
+    this.onExchange,
+  });
 
   final Home home;
   final VoidCallback onOpenPending;
@@ -447,6 +535,10 @@ class _BalanceCard extends StatelessWidget {
   /// los ofrece.
   final List<Pocket>? pockets;
   final VoidCallback? onOpenPockets;
+
+  /// La moneda de la otra cuenta del titular, si la tiene: se ofrece cambiar.
+  final String? exchangeTo;
+  final VoidCallback? onExchange;
 
   @override
   Widget build(BuildContext context) {
@@ -482,6 +574,15 @@ class _BalanceCard extends StatelessWidget {
           // Solo si hay algo que contar. Ni "0,00 retenidos" —ruido que hace
           // dudar— ni una fila cuando el banco no pudo calcularlo: callar es
           // mejor que afirmar algo que no se sabe.
+          if (exchangeTo case final other?) ...[
+            const Divider(height: 1),
+            _CardRow(
+              key: const Key('exchange'),
+              icon: Icons.currency_exchange,
+              label: 'Cambiar a ${Money.currencyName(other)}',
+              onTap: onExchange,
+            ),
+          ],
           if (pockets case final list?) ...[
             const Divider(height: 1),
             _CardRow(
@@ -559,6 +660,29 @@ class _PaymentGroupTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
+      ),
+    );
+  }
+}
+
+/// El título del inicio: de qué cuenta es, y al tocarlo, las demás.
+class _AccountTitle extends StatelessWidget {
+  const _AccountTitle({this.currency, this.onTap});
+
+  final String? currency;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = currency == null ? 'Mi cuenta' : 'Cuenta en ${Money.currencyName(currency!)}';
+    if (onTap == null) return Text(text);
+    return InkWell(
+      key: const Key('account-switcher'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Text(text), const Icon(Icons.expand_more)]),
       ),
     );
   }

@@ -1239,3 +1239,42 @@ class VerifiableReceipt {
         status: json['status'] as String? ?? '',
       );
 }
+
+/// Una cotización de cambio entre cuentas propias (F3-09). Vale unos segundos:
+/// lo que se ve es lo que se ejecuta.
+class FxQuote {
+  const FxQuote({
+    required this.id,
+    required this.from,
+    required this.to,
+    required this.referenceRate,
+    required this.appliedRate,
+    required this.cost,
+    required this.expiresAt,
+  });
+
+  final String id;
+  final Money from;
+  final Money to;
+
+  /// Soles por dólar, en millonésimas: 3,38 es 3380000.
+  final int referenceRate;
+  final int appliedRate;
+
+  /// Lo que se deja de recibir frente al tipo de referencia: el costo del cambio.
+  final Money cost;
+  final DateTime expiresAt;
+
+  factory FxQuote.fromJson(Map<String, dynamic> json) => FxQuote(
+        id: json['quote_id'] as String,
+        from: Money.fromJson(json['from'] as Map<String, dynamic>),
+        to: Money.fromJson(json['to'] as Map<String, dynamic>),
+        referenceRate: json['reference_rate'] as int,
+        appliedRate: json['applied_rate'] as int,
+        cost: Money.fromJson(json['cost'] as Map<String, dynamic>),
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+      );
+}
+
+/// Un tipo de cambio en millonésimas, como se lee: 3363100 → «3,3631».
+String rateText(int rate) => '${rate ~/ 1000000},${((rate % 1000000) ~/ 100).toString().padLeft(4, '0')}';

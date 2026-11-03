@@ -2,12 +2,19 @@ import 'package:aibank_app/money.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('los soles se escriben con su símbolo delante', () {
+    expect(const Money(1234500000, 'PEN').format(), 'S/ 1.234,50');
+    expect(const Money(-40000000, 'PEN').format(), '-S/ 40,00');
+    expect(const Money(336310000, 'PEN').format(withSign: true), '+S/ 336,31');
+    expect(const Money(50000000, 'USD').format(), '50,00 USD');
+  });
+
   group('formato', () {
     test('separa miles y muestra dos decimales', () {
       expect(const Money(1500000000, 'USD').format(), '1.500,00 USD');
       expect(const Money(50000, 'USD').format(), '0,05 USD');
       expect(const Money(1000000, 'USD').format(), '1,00 USD');
-      expect(const Money(1234567890000, 'PEN').format(), '1.234.567,89 PEN');
+      expect(const Money(1234567890000, 'PEN').format(), 'S/ 1.234.567,89');
     });
 
     test('los negativos llevan signo', () {

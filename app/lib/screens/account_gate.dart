@@ -10,7 +10,8 @@ import 'home_screen.dart';
 /// El paso entre entrar y ver la cuenta.
 ///
 /// La passkey dice quién es la persona, no qué cuenta quiere ver: se piden sus
-/// cuentas y se abre la primera. Con varias cuentas, aquí irá el selector.
+/// cuentas y se abre la primera. Con varias (soles y dólares), el inicio deja
+/// cambiar de una a otra, y aquí se recuerda cuál se está viendo.
 class AccountGate extends StatefulWidget {
   const AccountGate({
     super.key,
@@ -31,6 +32,9 @@ class AccountGate extends StatefulWidget {
 
 class _AccountGateState extends State<AccountGate> {
   late Future<List<Account>> _accounts = widget.client.listAccounts();
+
+  /// La cuenta que se está viendo. Nula: la primera.
+  String? _selected;
 
   /// Si el banco es un sandbox con saldo de prueba. Se pregunta en paralelo.
   late final Future<bool> _sandbox = widget.client.sandboxAvailable();
@@ -54,9 +58,18 @@ class _AccountGateState extends State<AccountGate> {
         }
         final accounts = snapshot.data;
         if (accounts != null && accounts.isNotEmpty) {
+          final current = accounts.firstWhere((a) => a.id == _selected, orElse: () => accounts.first);
           return HomeScreen(
+            // Otra cuenta es otro inicio: saldo, movimientos y previsión propios.
+            key: ValueKey(current.id),
             client: widget.client,
-            accountId: accounts.first.id,
+            accountId: current.id,
+            accounts: accounts,
+            onSwitchAccount: (id) => setState(() => _selected = id),
+            onAccountsChanged: ({String? select}) => setState(() {
+              _accounts = widget.client.listAccounts();
+              if (select != null) _selected = select;
+            }),
             onSignOut: widget.onSignOut,
             onUnlink: widget.onUnlink,
             confirmer: widget.confirmer,
