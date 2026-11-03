@@ -26,6 +26,7 @@ import (
 	"github.com/aibank/aibank/services/agents"
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/forecast"
+	"github.com/aibank/aibank/services/fx"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/pockets"
 	"github.com/aibank/aibank/services/sessions"
@@ -48,6 +49,8 @@ type Server struct {
 	pockets *pockets.Service
 	// receipts habilita las constancias verificables.
 	receipts *receiptConfig
+	// fx habilita cambiar entre cuentas propias, soles y dólares.
+	fx *fx.Service
 	// agents dice qué agente hizo cada pago con un permiso y qué compró. Sin él
 	// el historial agrupa por plataforma, sin el detalle.
 	agents *agents.Store
@@ -106,6 +109,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	mux.Handle("GET /v1/accounts", s.requireAuth(s.handleListAccounts))
+	mux.Handle("POST /v1/accounts", s.requireAuth(s.handleOpenAccount))
 	mux.Handle("GET /v1/home", s.requireAuth(s.handleHome))
 	mux.Handle("GET /v1/accounts/{accountID}/balance", s.requireAuth(s.handleBalance))
 	mux.Handle("GET /v1/accounts/{accountID}/movements", s.requireAuth(s.handleMovements))
@@ -116,6 +120,9 @@ func (s *Server) Handler() http.Handler {
 	s.accessRoutes(mux)
 	if s.receipts != nil {
 		s.receiptRoutes(mux)
+	}
+	if s.fx != nil {
+		s.fxRoutes(mux)
 	}
 	if s.pockets != nil {
 		s.pocketRoutes(mux)

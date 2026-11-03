@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -107,9 +108,19 @@ func newCode() (string, error) {
 	return b.String(), nil
 }
 
-// Normalize lleva un código escrito a mano a su forma: mayúsculas, con guion,
-// y las letras que se confunden, a su dígito.
-func Normalize(code string) string {
+// Normalize saca el código de lo que la persona tenga a mano y lo lleva a su
+// forma: mayúsculas, con guion, y las letras que se confunden, a su dígito.
+//
+// Acepta el código suelto (con o sin guion, en minúsculas), el enlace de
+// verificación (…/c/K7Q2M-9XR4T) o la constancia entera pegada de un chat: lo
+// natural es pegar lo que llegó, no recortarlo antes.
+func Normalize(input string) string {
+	if i := strings.LastIndex(input, "/c/"); i >= 0 {
+		input = input[i+3:]
+	}
+	if m := codePattern.FindString(input); m != "" {
+		input = m
+	}
 	clean := strings.Map(func(r rune) rune {
 		switch r {
 		case 'O', 'o':
@@ -123,9 +134,12 @@ func Normalize(code string) string {
 			return r - 'a' + 'A'
 		}
 		return r
-	}, code)
+	}, strings.TrimSpace(input))
 	if len(clean) != 10 {
 		return clean
 	}
 	return clean[:5] + "-" + clean[5:]
 }
+
+// codePattern encuentra un código XXXXX-XXXXX dentro de un texto más largo.
+var codePattern = regexp.MustCompile(`\b[0-9A-Za-z]{5}-[0-9A-Za-z]{5}\b`)

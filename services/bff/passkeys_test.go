@@ -21,6 +21,7 @@ import (
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/devices"
 	"github.com/aibank/aibank/services/forecast"
+	"github.com/aibank/aibank/services/fx"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
@@ -44,6 +45,7 @@ type passkeyEnv struct {
 	srv *httptest.Server
 	f   *fixture
 	db  *sql.DB
+	fx  *fx.Service
 }
 
 func newPasskeyEnv(t *testing.T) *passkeyEnv {
@@ -118,6 +120,13 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	}))
 	t.Cleanup(risk.Close)
 	assessor := credit.NewHTTPAssessor(risk.URL)
+	fxSvc := fx.NewService(db, f.core, fx.FixedRate(3_380_000), 50)
+	if err := fxSvc.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := fxSvc.EnsurePositions(f.ctx); err != nil {
+		t.Fatal(err)
+	}
 	receiptStore := receipts.NewStore(db)
 	if err := receiptStore.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
@@ -166,11 +175,12 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithForecast(forecast.NewService(f.core, cards, assessor, time.UTC).WithCardReserve(pocketSvc)).
 		WithPockets(pocketSvc).
 		WithReceipts(receiptStore).
+		WithFX(fxSvc).
 		WithConsents(consents).
 		WithAgents(agentStore)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
-	return &passkeyEnv{srv: ts, f: f, db: db}
+	return &passkeyEnv{srv: ts, f: f, db: db, fx: fxSvc}
 }
 
 func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (int, map[string]any) {

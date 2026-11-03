@@ -155,6 +155,11 @@ retención vence. Propuesto en el canal (AE-09).
   (`control.executions`) existe desde este cambio. La constancia se comparte copiándola;
   compartirla como imagen o PDF necesita un paquete nuevo. Reclamar un movimiento
   desde el detalle queda para cuando exista la cola de revisión (F3-07).
+- **Multimoneda, lo que falta**: el tope mensual de la cuenta básica (2,8 UIT, S/ 15.400)
+  no se hace cumplir todavía; el tipo de referencia del sandbox es fijo (3,38) y en
+  producción vendrá de la SBS o del BCRP; la tarjeta de crédito sigue en dólares y solo
+  se ve en la cuenta en dólares; transferir a alguien cuya cuenta es de otra moneda se
+  rechaza en vez de ofrecer el cambio.
 - **Los bolsillos son manuales**: apartar y devolver lo hace la persona. Las reglas que
   apartan solas (redondeo, un porcentaje del sueldo) son F3-03. Pagar la tarjeta desde
   su bolsillo funciona por la API, pero la pantalla de la tarjeta todavía paga desde la
@@ -249,7 +254,11 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   tarea del agente** (los pagos con la misma intención y su total) y una **constancia
   verificable**: un código que cualquiera, sin ser cliente, comprueba con el banco
   (`/c/{código}`), contra las capturas falsas de un pago.
-- [ ] **F3-09 Cuentas en soles (PEN)** y multimoneda. *Alta: condición para operar en Perú.*
+- [x] **F3-09 Cuentas en soles (PEN)** y multimoneda (`services/fx`): la cuenta nace en
+  soles con los topes de cuentas básicas de la SBS para 2026 (S/ 10.450 de saldo, S/
+  3.300 por operación) y se abre la de dólares desde el inicio. Cambiar entre las
+  propias muestra el tipo de referencia, el aplicado y **cuánto cuesta el cambio en
+  dinero**, con la cotización congelada 30 segundos. Los montos en soles, «S/ 1.234,50».
 - [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
 - [x] **F3-05 Identidad del agente** (`services/agents`, contrato 1.1): cada agente se
   registra con su clave Ed25519 y la rota sin darse de baja; el permiso es de un

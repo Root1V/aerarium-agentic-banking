@@ -136,6 +136,19 @@ class BffClient {
 
   /// La tarjeta del titular, o null si no tiene. Lanza si el banco no ofrece
   /// tarjetas (la ruta no existe).
+  /// Abre una cuenta en otra moneda, a nombre del titular.
+  Future<Account> openAccount(String currency) async =>
+      Account.fromJson(await _post('/v1/accounts', headers: const {}, body: {'currency': currency}));
+
+  /// Cotiza un cambio entre dos cuentas propias.
+  Future<FxQuote> fxQuote(String fromAccountId, String toAccountId, int amountMicros) async =>
+      FxQuote.fromJson(await _post('/v1/fx/quotes',
+          headers: const {},
+          body: {'from_account_id': fromAccountId, 'to_account_id': toAccountId, 'amount_micros': amountMicros}));
+
+  /// Ejecuta una cotización vigente.
+  Future<void> fxConvert(String quoteId) => _post('/v1/fx/conversions', headers: const {}, body: {'quote_id': quoteId});
+
   /// Lo que el detalle de un movimiento sabe además del historial.
   Future<MovementDetail> movementDetail(String accountId, String transactionId) async =>
       MovementDetail.fromJson(await _get('/v1/accounts/$accountId/movements/$transactionId', const {}));

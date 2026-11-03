@@ -32,8 +32,8 @@ class _VerifyReceiptScreenState extends State<VerifyReceiptScreen> {
     super.initState();
     // Si el código está en el portapapeles —se lo mandaron por chat—, se propone.
     Clipboard.getData(Clipboard.kTextPlain).then((data) {
-      final match = RegExp(r'\b[0-9A-Za-z]{5}-[0-9A-Za-z]{5}\b').firstMatch(data?.text ?? '');
-      if (match != null && mounted && _code.text.isEmpty) setState(() => _code.text = match.group(0)!);
+      final code = receiptCodeIn(data?.text ?? '');
+      if (code != null && mounted && _code.text.isEmpty) setState(() => _code.text = code);
     }).catchError((_) {});
   }
 
@@ -44,6 +44,9 @@ class _VerifyReceiptScreenState extends State<VerifyReceiptScreen> {
   }
 
   Future<void> _verify() async {
+    // Lo natural es pegar la constancia entera o su enlace: se verifica el código.
+    final code = receiptCodeIn(_code.text);
+    if (code != null && code != _code.text) _code.text = code;
     setState(() {
       _checking = true;
       _problem = null;
@@ -81,6 +84,13 @@ class _VerifyReceiptScreenState extends State<VerifyReceiptScreen> {
             textCapitalization: TextCapitalization.characters,
             autocorrect: false,
             decoration: InputDecoration(labelText: 'Código (XXXXX-XXXXX)', errorText: _problem),
+            onChanged: (text) {
+              // Al pegar algo largo, queda solo el código.
+              final code = receiptCodeIn(text);
+              if (code != null && code != text) {
+                _code.value = TextEditingValue(text: code, selection: TextSelection.collapsed(offset: code.length));
+              }
+            },
             onSubmitted: (_) => _verify(),
           ),
           const SizedBox(height: 12),
@@ -117,4 +127,12 @@ class _VerifyReceiptScreenState extends State<VerifyReceiptScreen> {
       ),
     );
   }
+}
+
+/// El código de una constancia dentro de lo que se pegue: el código suelto, su
+/// enlace (…/c/K7Q2M-9XR4T) o la constancia entera copiada de un chat. Nulo si no
+/// hay uno.
+String? receiptCodeIn(String text) {
+  final match = RegExp(r'[0-9A-Za-z]{5}-[0-9A-Za-z]{5}').allMatches(text).lastOrNull;
+  return match?.group(0)?.toUpperCase();
 }

@@ -74,7 +74,8 @@ services:
     command:
       - -client-id=${SANDBOX_CLIENT_ID:-mercatus_sandbox}
       - -name=${SANDBOX_CLIENT_NAME:-Mercatus}
-      - -currencies=${SANDBOX_CURRENCIES:-USD}
+      # Soles y dólares: la cuenta del titular nace en soles (F3-09).
+      - -currencies=${SANDBOX_CURRENCIES:-USD,PEN}
     environment:
       DATABASE_URL: postgres://aibank:aibank_sandbox@postgres:5432/aibank?sslmode=disable
       CORE_ADDR: core:50051
@@ -96,7 +97,7 @@ services:
       OAUTH_ISSUER: https://sandbox.aibank.local
       OAUTH_SIGNING_KEY: ${OAUTH_SIGNING_KEY:?falta OAUTH_SIGNING_KEY — ver la cabecera de este archivo}
       MERCATUS_SANDBOX: "true"
-      MERCATUS_PRODUCTS: USD=AGENT-USD
+      MERCATUS_PRODUCTS: USD=AGENT-USD,PEN=AGENT-PEN
     # Publicado en todas las interfaces para el uso local. Un entorno alojado lo
     # ata a 127.0.0.1 y deja que el proxy sea lo único expuesto:
     #   PARTNER_PUBLISH=127.0.0.1:8081
