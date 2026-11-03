@@ -30,6 +30,21 @@ info:
     sin agente. Una sub-cuenta abierta antes se ata a su agente repitiendo
     `POST /v1/accounts` con el mismo `owner_reference` y su `agent_id`.
 
+    ## Topes de cantidad (M-18)
+
+    | | Tope |
+    |---|---|
+    | Agentes activos por integración | 1.000 |
+    | Claves vigentes por agente (la actual y las que están rotando) | 3 |
+    | Sub-cuentas atadas a un agente | 10 |
+
+    Cuentan solo los vivos: dar de baja un agente o retirar una clave libera el
+    cupo al momento. Repetir algo ya hecho (reabrir la misma cuenta, atarla otra
+    vez al mismo agente) no gasta cupo. Al llegar al tope, `409 quota_exceeded`
+    con el tope en el mensaje; reintentar sin liberar no sirve. Iguales en
+    sandbox y producción; se revisan con datos reales, y una integración que
+    necesite más lo pide.
+
     ## Firma del agente
 
     La plataforma se autentica con su token OAuth y actúa por todos sus agentes.
@@ -268,6 +283,8 @@ paths:
           description: |
             `account_agent_conflict`: la cuenta ya es de otro agente.
             `agent_revoked`: el agente está dado de baja.
+            `quota_exceeded`: el agente ya tiene 10 sub-cuentas. Se comprueba
+            antes de abrir: la cuenta no queda abierta.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -805,7 +822,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409":
-          description: "`agent_key_in_use`: esa clave ya está registrada."
+          description: |
+            `agent_key_in_use`: esa clave ya está registrada.
+            `quota_exceeded`: la integración ya tiene 1.000 agentes activos.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -862,8 +881,9 @@ paths:
       operationId: addAgentKey
       description: |
         Desde ese momento valen la nueva y las anteriores. Las anteriores dejan de
-        valer al retirarlas, o **7 días** después de añadir la nueva, lo que
-        ocurra primero: su `expires_at` lo dice. Los permisos son del agente, no
+        valer al retirarlas, o **7 días** después de la primera rotación que las
+        reemplazó, lo que ocurra primero: su `expires_at` lo dice, y rotar otra
+        vez no lo alarga. Los permisos son del agente, no
         de la clave: rotar no toca ningún mandato.
       security:
         - bearerToken: [payments:write]
@@ -897,6 +917,7 @@ paths:
           description: |
             `agent_key_in_use`: esa clave ya está registrada.
             `agent_revoked`: el agente está dado de baja.
+            `quota_exceeded`: el agente ya tiene 3 claves vigentes; retira una.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

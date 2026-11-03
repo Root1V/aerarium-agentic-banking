@@ -265,8 +265,15 @@ autorizaciones de vida corta. Pídanlo y lo exponemos.
 | Por integración | 50 req/s sostenidos, ráfaga 100 | igual, revisable con datos reales |
 | Por sub-cuenta pagadora | 10 req/s, ráfaga 20 | igual |
 | Monto por operación | sin tope | por acordar con datos reales |
+| Agentes activos por integración | 1.000 | igual, revisable |
+| Claves vigentes por agente | 3 | igual |
+| Sub-cuentas atadas a un agente | 10 | igual |
 
-Al superar el límite: `429` con `Retry-After` en segundos. **Reintenten con la
+Los tres últimos son de cantidad y cuentan solo lo vivo: dar de baja un agente
+o retirar una clave libera el cupo. Al llegar a uno, `409 quota_exceeded`; no se
+reintenta, se libera o se pide ampliarlo (M-18).
+
+Al superar un límite de tasa: `429` con `Retry-After` en segundos. **Reintenten con la
 misma `Idempotency-Key`** — no duplica nada.
 
 El límite por sub-cuenta es más bajo a propósito: la integración comparte una
@@ -309,6 +316,7 @@ Desde la versión 1.1 del contrato (identidad del agente,
 | 409 | `agent_key_in_use` | Esa clave pública ya está registrada |
 | 409 | `agent_last_key` | Se intentó retirar la única clave vigente |
 | 409 | `account_agent_conflict` | La cuenta ya es de otro agente |
+| 409 | `quota_exceeded` | Tope de agentes, claves o sub-cuentas (§6); el mensaje dice cuál |
 
 Los errores de mandatos y consentimiento (modelo B) están en la [spec 13 §5](13-spec-modelos-a-y-b.md).
 

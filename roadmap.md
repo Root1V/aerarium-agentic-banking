@@ -266,7 +266,11 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   tarea y qué se compró) y la firma del agente según RFC 9421; en el modelo A la
   sub-cuenta pagadora es de su agente. El titular ve en su historial qué agente
   pagó y qué compró, y el registro de decisiones nombra al agente. Acordado con
-  Mercatus en AE-10 a AE-12; su cliente, para el 13/11.
+  Mercatus en AE-10 a AE-12; su cliente, para el 13/11. Con un agente por cliente
+  de Mercatus (M-18), **topes de cantidad**: 1.000 agentes activos por
+  integración, 3 claves vigentes por agente y 10 sub-cuentas por agente, `409
+  quota_exceeded`; dar de baja o retirar libera el cupo. Rotar otra vez ya no
+  alarga la clave que estaba rotando.
 - [ ] **F3-07 Registro de decisiones automáticas** con evidencia y cola de revisión
   humana en el backoffice. *Media.*
 - [ ] **F3-08 Asistente financiero** nivel 1 (solo lectura), luego nivel 2. Falta
