@@ -414,6 +414,18 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request, claims 
 	}
 
 	auth := result.Authorization
+	if mandate != nil && signer != nil && s.control != nil {
+		// El pago queda enlazado a su movimiento en el historial del titular, con
+		// el agente, el mandato y la clave que firmó: es lo que ve en el detalle.
+		if err := s.control.Executed(r.Context(), mandate.GrantedBy, auth.HoldTransactionID, control.Authorization{
+			Actor:    control.Actor{Kind: control.ActorAgent, ID: signer.AgentID},
+			Action:   control.ActionMandatePayment,
+			Outcome:  "allow",
+			Evidence: "mandate:" + mandate.ID + ";key:" + signer.KeyID,
+		}); err != nil {
+			s.log.WarnContext(r.Context(), "enlazar el pago con su autorización", "error", err)
+		}
+	}
 	if signer != nil {
 		// Sin la intención guardada, el titular vería un pago sin saber para qué.
 		// Un reintento con la misma clave la vuelve a guardar sin duplicar el pago.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../history.dart';
 
 /// Los pagos de un grupo del historial, uno por uno: qué compró el agente en
@@ -9,10 +10,13 @@ import '../history.dart';
 /// se lee es lo que el agente declaró al pagar (AE-10), tal cual. Y desde aquí
 /// se llega al permiso, por si lo que se ve no cuadra.
 class PaymentGroupScreen extends StatelessWidget {
-  const PaymentGroupScreen({super.key, required this.group, required this.onOpenMandates});
+  const PaymentGroupScreen({super.key, required this.group, required this.onOpenMandates, this.onOpenMovement});
 
   final PaymentGroup group;
   final VoidCallback onOpenMandates;
+
+  /// Abre el detalle de un pago del grupo.
+  final void Function(Movement movement)? onOpenMovement;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,7 @@ class PaymentGroupScreen extends StatelessWidget {
           for (final m in group.movements)
             ListTile(
               contentPadding: EdgeInsets.zero,
+              onTap: onOpenMovement == null ? null : () => onOpenMovement!(m),
               title: Text(m.purchase.isEmpty ? 'Pago autorizado' : m.purchase),
               subtitle: Text([
                 if (mixedAgents && m.agentName.isNotEmpty) m.agentName,

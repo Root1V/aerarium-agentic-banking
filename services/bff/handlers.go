@@ -275,7 +275,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 		return
 	}
 
-	ok := s.authorizeOperation(w, r, p, transferOperation(stepup.Transfer{
+	authorized, ok := s.authorizeOperation(w, r, p, transferOperation(stepup.Transfer{
 		CustomerID:     p.CustomerID,
 		FromAccountID:  req.FromAccountID,
 		ToAccountID:    req.ToAccountID,
@@ -298,6 +298,13 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, p *Princ
 	if err != nil {
 		s.writeCoreError(w, r, err)
 		return
+	}
+	if authorized.Outcome != "" {
+		// Cómo se autorizó queda enlazado al movimiento: es lo que el titular ve
+		// en el detalle. El dinero ya se movió; si el enlace falla, queda en el log.
+		if err := s.control.control.Executed(r.Context(), p.CustomerID, result.TransactionID, authorized); err != nil {
+			s.logger.WarnContext(r.Context(), "enlazar la transferencia con su autorización", "error", err)
+		}
 	}
 
 	if s.control != nil && p.Factor != "" {

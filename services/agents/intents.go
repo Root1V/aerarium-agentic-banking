@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/google/uuid"
@@ -122,6 +123,35 @@ func (s *Store) IntentsFor(ctx context.Context, authorizationIDs []string) (map[
 			return nil, err
 		}
 		out[id] = p
+	}
+	return out, rows.Err()
+}
+
+// TaskPayment es un pago de una misma tarea del agente.
+type TaskPayment struct {
+	AuthorizationID string
+	Description     string
+	CreatedAt       time.Time
+}
+
+// TaskPayments son los pagos de una tarea —misma `intent.reference`— de un
+// agente, del más antiguo al más reciente, hasta `limit`.
+func (s *Store) TaskPayments(ctx context.Context, agentID, reference string, limit int) ([]TaskPayment, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT authorization_id, description, created_at FROM agents.payment_intents
+		 WHERE agent_id = $1 AND reference = $2
+		 ORDER BY created_at, authorization_id LIMIT $3`, agentID, reference, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TaskPayment
+	for rows.Next() {
+		var p TaskPayment
+		if err := rows.Scan(&p.AuthorizationID, &p.Description, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

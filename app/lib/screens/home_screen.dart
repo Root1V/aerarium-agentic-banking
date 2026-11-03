@@ -12,11 +12,13 @@ import 'access_screen.dart';
 import 'credit_card_screen.dart';
 import 'forecast_screen.dart';
 import 'mandates_screen.dart';
+import 'movement_detail_screen.dart';
 import 'payment_group_screen.dart';
 import 'pending_payments_screen.dart';
 import 'phone_alias_screen.dart';
 import 'pockets_screen.dart';
 import 'transfer_screen.dart';
+import 'verify_receipt_screen.dart';
 
 /// Pantalla principal: saldo y últimos movimientos.
 ///
@@ -127,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Más',
             itemBuilder: (_) => [
               PopupMenuItem(onTap: _openPhoneAlias, child: const Text('Mi número para recibir')),
+              PopupMenuItem(onTap: _openVerifyReceipt, child: const Text('Verificar una constancia')),
               if (widget.onUnlink != null)
                 PopupMenuItem(onTap: _confirmUnlink, child: const Text('Desvincular este teléfono')),
             ],
@@ -302,8 +305,34 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Los pagos del grupo, uno por uno. Desde ahí se llega al permiso.
   void _openGroup(PaymentGroup group) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PaymentGroupScreen(group: group, onOpenMandates: _openMandates),
+      builder: (_) => PaymentGroupScreen(group: group, onOpenMandates: _openMandates, onOpenMovement: _openMovement),
     ));
+  }
+
+  /// El detalle de un movimiento: qué fue, cómo se autorizó, su constancia.
+  void _openMovement(Movement movement) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => MovementDetailScreen(
+        movement: movement,
+        client: widget.client,
+        accountId: widget.accountId,
+        onSendAgain: _home == null
+            ? null
+            : (payee) {
+                Navigator.of(context).pop();
+                _openTransfer(payee: payee);
+              },
+        onOpenMandates: _openMandates,
+        onOpenPockets: () {
+          Navigator.of(context).pop();
+          _openPockets();
+        },
+      ),
+    ));
+  }
+
+  void _openVerifyReceipt() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => VerifyReceiptScreen(client: widget.client)));
   }
 
   /// El centro de permisos: plataformas, teléfonos, passkeys, directorio y lo
@@ -381,14 +410,15 @@ class _HomeScreenState extends State<HomeScreen> {
           )
         else
           ...groupHistory(home.movements, hasMore: home.hasMore).map((item) => switch (item) {
-                SingleMovement(:final movement) => _MovementTile(movement: movement),
+                SingleMovement(:final movement) =>
+                  _MovementTile(movement: movement, onTap: () => _openMovement(movement)),
                 PaymentGroup() => _PaymentGroupTile(group: item, onTap: () => _openGroup(item)),
               }),
       ],
     );
   }
 
-  Future<void> _openTransfer() async {
+  Future<void> _openTransfer({Account? payee}) async {
     final sent = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => TransferScreen(
@@ -396,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
           fromAccountId: widget.accountId,
           currency: _home!.balance.currency,
           confirmer: widget.confirmer,
-          suggestedPayee: _testPayee,
+          suggestedPayee: payee ?? _testPayee,
         ),
       ),
     );
@@ -616,15 +646,17 @@ class _ForecastTile extends StatelessWidget {
 }
 
 class _MovementTile extends StatelessWidget {
-  const _MovementTile({required this.movement});
+  const _MovementTile({required this.movement, this.onTap});
 
   final Movement movement;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final incoming = movement.sign > 0;
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      onTap: onTap,
       leading: CircleAvatar(
         child: Icon(movement.isPocketMove
             ? Icons.savings_outlined

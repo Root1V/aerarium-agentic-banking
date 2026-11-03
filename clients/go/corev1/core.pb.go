@@ -2478,10 +2478,13 @@ type Authorization struct {
 	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Presente solo si se capturó.
-	SettledAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"`
-	ReleasedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=released_at,json=releasedAt,proto3,oneof" json:"released_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SettledAt  *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"`
+	ReleasedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=released_at,json=releasedAt,proto3,oneof" json:"released_at,omitempty"`
+	// El asiento que retuvo el dinero: es el movimiento que ve el pagador en su
+	// historial.
+	HoldTransactionId string `protobuf:"bytes,12,opt,name=hold_transaction_id,json=holdTransactionId,proto3" json:"hold_transaction_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Authorization) Reset() {
@@ -2589,6 +2592,13 @@ func (x *Authorization) GetReleasedAt() *timestamppb.Timestamp {
 		return x.ReleasedAt
 	}
 	return nil
+}
+
+func (x *Authorization) GetHoldTransactionId() string {
+	if x != nil {
+		return x.HoldTransactionId
+	}
+	return ""
 }
 
 type AuthorizeRequest struct {
@@ -4814,7 +4824,7 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"\x17RunInternalCheckRequest\"X\n" +
 	"\x18RunInternalCheckResponse\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12%\n" +
-	"\x0efindings_count\x18\x02 \x01(\x05R\rfindingsCount\"\xc8\x04\n" +
+	"\x0efindings_count\x18\x02 \x01(\x05R\rfindingsCount\"\xf8\x04\n" +
 	"\rAuthorization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12(\n" +
@@ -4831,7 +4841,8 @@ const file_aibank_core_v1_core_proto_rawDesc = "" +
 	"settled_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampH\x00R\tsettledAt\x88\x01\x01\x12@\n" +
 	"\vreleased_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampH\x01R\n" +
-	"releasedAt\x88\x01\x01B\r\n" +
+	"releasedAt\x88\x01\x01\x12.\n" +
+	"\x13hold_transaction_id\x18\f \x01(\tR\x11holdTransactionIdB\r\n" +
 	"\v_settled_atB\x0e\n" +
 	"\f_released_at\"\xdf\x01\n" +
 	"\x10AuthorizeRequest\x12'\n" +

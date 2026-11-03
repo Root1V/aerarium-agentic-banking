@@ -391,6 +391,9 @@ message Authorization {
   // Presente solo si se capturó.
   optional google.protobuf.Timestamp settled_at = 10;
   optional google.protobuf.Timestamp released_at = 11;
+  // El asiento que retuvo el dinero: es el movimiento que ve el pagador en su
+  // historial.
+  string hold_transaction_id = 12;
 }
 
 message AuthorizeRequest {

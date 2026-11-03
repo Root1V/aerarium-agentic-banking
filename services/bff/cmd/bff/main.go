@@ -49,6 +49,7 @@ import (
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/pockets"
+	"github.com/aibank/aibank/services/receipts"
 	"github.com/aibank/aibank/services/stepup"
 	_ "github.com/lib/pq"
 )
@@ -154,6 +155,13 @@ func run(log *slog.Logger) error {
 		} else {
 			log.Warn("directorio de celulares deshabilitado: no hay proveedor de SMS")
 		}
+
+		// Constancias verificables: contra las capturas falsas de un pago.
+		receiptStore := receipts.NewStore(db)
+		if err := receiptStore.Migrate(ctx); err != nil {
+			return err
+		}
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithReceipts(receiptStore) })
 
 		// Bolsillos: dinero apartado dentro de la cuenta.
 		pocketSvc := pockets.NewService(db, core)

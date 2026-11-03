@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -309,4 +310,63 @@ func (s *Service) History(ctx context.Context, customerID string, limit int) ([]
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// Authorization es cómo quedó autorizada una operación antes de ejecutarse.
+type Authorization struct {
+	Actor  Actor
+	Action Action
+	// Outcome: "allow" (no pidió confirmación) o "confirmed".
+	Outcome string
+	// Reason: por qué no pidió confirmación, si no la pidió.
+	Reason Reason
+	// Evidence: con qué se probó (teléfono y método, mandato y clave del agente).
+	Evidence string
+}
+
+// Execution es una operación ejecutada, con cómo se autorizó.
+type Execution struct {
+	Authorization
+	TransactionID string
+	ExecutedAt    time.Time
+}
+
+// ReasonKnownPayee: una transferencia que no pidió confirmación porque el
+// destinatario es conocido y el monto, bajo.
+const ReasonKnownPayee Reason = "known_payee"
+
+// Executed enlaza la operación ejecutada (su número de operación) con cómo se
+// autorizó. Un reintento de la misma operación no cambia lo que ya quedó.
+func (s *Service) Executed(ctx context.Context, customerID, transactionID string, a Authorization) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO control.executions
+			(transaction_id, customer_id, actor_kind, actor_id, action, outcome, reason, evidence)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (transaction_id) DO NOTHING`,
+		transactionID, customerID, string(a.Actor.Kind), a.Actor.ID, string(a.Action), a.Outcome,
+		string(a.Reason), a.Evidence)
+	if err != nil {
+		return fmt.Errorf("registrar ejecución: %w", err)
+	}
+	return nil
+}
+
+// ExecutionOf dice cómo se autorizó una operación del cliente. nil si no hay
+// constancia: operaciones de antes, o que no pasan por la capa de control.
+func (s *Service) ExecutionOf(ctx context.Context, customerID, transactionID string) (*Execution, error) {
+	var e Execution
+	var kind, action, reason string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT transaction_id, actor_kind, actor_id, action, outcome, reason, evidence, executed_at
+		  FROM control.executions
+		 WHERE customer_id = $1 AND transaction_id::text = $2`, customerID, transactionID).
+		Scan(&e.TransactionID, &kind, &e.Actor.ID, &action, &e.Outcome, &reason, &e.Evidence, &e.ExecutedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	e.Actor.Kind, e.Action, e.Reason = ActorKind(kind), Action(action), Reason(reason)
+	return &e, nil
 }
