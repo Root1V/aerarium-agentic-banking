@@ -10,7 +10,9 @@
 //	OAUTH_PREVIOUS_KEY    clave anterior, para rotar sin invalidar tokens en vuelo
 //	MERCATUS_SANDBOX      "true" habilita el saldo inicial al abrir cuenta
 //	MERCATUS_PRODUCTS     moneda=producto separados por coma: "USD=AGENT-USD,PEN=AGENT-PEN"
-//	MERCATUS_SANDBOX_CASH cuenta de caja que financia los saldos de sandbox
+//
+// Las cajas que financian los saldos de sandbox se buscan por código,
+// SANDBOX-CASH-<moneda>, una por moneda de MERCATUS_PRODUCTS.
 package main
 
 import (
@@ -80,7 +82,8 @@ func run(log *slog.Logger) error {
 	defer core.Close()
 
 	sandbox := os.Getenv("MERCATUS_SANDBOX") == "true"
-	cashAccount, err := sandboxCashAccount(ctx, core, sandbox)
+	products := productsFromEnv()
+	cash, err := sandboxCash(ctx, core, sandbox, products)
 	if err != nil {
 		return err
 	}
@@ -99,9 +102,9 @@ func run(log *slog.Logger) error {
 	}
 
 	server := mercatus.NewServer(core, oauth.NewServer(store, issuer, log), store, mercatus.Config{
-		Sandbox:              sandbox,
-		ProductByCurrency:    productsFromEnv(),
-		SandboxCashAccountID: cashAccount,
+		Sandbox:           sandbox,
+		ProductByCurrency: products,
+		SandboxCash:       cash,
 	}, log).WithControl(ctrl).WithAgents(agentStore)
 
 	addr := env("BIND_ADDR", "127.0.0.1:8081")
@@ -150,29 +153,28 @@ func decodeKey(name string) ([]byte, error) {
 	return key, nil
 }
 
-// sandboxCashAccount resuelve la caja que financia los saldos de prueba.
+// sandboxCash resuelve la caja que financia los saldos de prueba de cada moneda.
 //
-// El identificador se puede fijar con MERCATUS_SANDBOX_CASH, pero lo normal es
-// no tenerlo: lo genera el alta de la integración, y obligar a copiarlo a mano
-// convierte levantar el entorno en dos pasos encadenados. Por eso, si falta, se
-// busca por código —el que crea el bootstrap— y se falla en el arranque si no
-// está: un sandbox que acepta abrir cuentas y luego no puede acreditarles saldo
-// es peor que uno que no arranca.
-func sandboxCashAccount(ctx context.Context, core *coreclient.Client, sandbox bool) (string, error) {
-	if id := os.Getenv("MERCATUS_SANDBOX_CASH"); id != "" {
-		return id, nil
-	}
+// Una por moneda: el saldo en soles no puede salir de la caja en dólares. Se
+// buscan por el código que crea el alta de la integración, para no copiar
+// identificadores a mano, y se falla en el arranque si falta alguna: un sandbox
+// que acepta abrir cuentas y luego no puede acreditarles saldo es peor que uno
+// que no arranca.
+func sandboxCash(ctx context.Context, core *coreclient.Client, sandbox bool, products map[string]string) (map[string]string, error) {
 	if !sandbox {
-		return "", nil
+		return nil, nil
 	}
-
-	code := env("MERCATUS_SANDBOX_CASH_CODE", "SANDBOX-CASH-USD")
-	account, err := core.GetAccount(ctx, code)
-	if err != nil {
-		return "", fmt.Errorf("buscar la caja del sandbox %q: %w "+
-			"(¿corriste el alta de la integración?)", code, err)
+	cash := make(map[string]string, len(products))
+	for currency := range products {
+		code := "SANDBOX-CASH-" + currency
+		account, err := core.GetAccount(ctx, code)
+		if err != nil {
+			return nil, fmt.Errorf("buscar la caja del sandbox %q: %w "+
+				"(¿corriste el alta de la integración con esa moneda?)", code, err)
+		}
+		cash[currency] = account.Id
 	}
-	return account.Id, nil
+	return cash, nil
 }
 
 // productsFromEnv lee el mapa de moneda a producto de MERCATUS_PRODUCTS, con el

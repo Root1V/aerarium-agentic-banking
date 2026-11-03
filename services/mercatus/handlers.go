@@ -195,11 +195,12 @@ func displayNameOr(req openAccountRequest) string {
 
 // fundSandboxAccount acredita saldo inicial contra la caja del sandbox.
 func (s *Server) fundSandboxAccount(r *http.Request, accountID string, amount int64, currency string) error {
-	if s.cfg.SandboxCashAccountID == "" {
-		return errors.New("sandbox sin cuenta de caja configurada")
+	cash := s.cfg.SandboxCash[currency]
+	if cash == "" {
+		return errors.New("sandbox sin caja en " + currency)
 	}
 	_, err := s.core.Post(r.Context(), "sandbox-fund-"+accountID, "sandbox_funding", []coreclient.Entry{
-		coreclient.Debit(s.cfg.SandboxCashAccountID, amount, currency),
+		coreclient.Debit(cash, amount, currency),
 		coreclient.Credit(accountID, amount, currency),
 	}, "saldo inicial de sandbox")
 	return err
