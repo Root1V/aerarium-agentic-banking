@@ -46,12 +46,13 @@ type Config struct {
 	// reglas del producto de SU moneda. Una moneda sin producto configurado se
 	// rechaza en vez de abrir la cuenta en la moneda equivocada.
 	ProductByCurrency map[string]string
-	// SandboxCashAccountID financia los saldos iniciales del sandbox.
-	SandboxCashAccountID string
-	ClientRate           int
-	ClientBurst          int
-	AccountRate          int
-	AccountBurst         int
+	// SandboxCash es la caja que financia los saldos iniciales del sandbox, una
+	// por moneda: el saldo en soles sale de la caja en soles.
+	SandboxCash  map[string]string
+	ClientRate   int
+	ClientBurst  int
+	AccountRate  int
+	AccountBurst int
 }
 
 func (c Config) withDefaults() Config {
