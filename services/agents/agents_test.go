@@ -201,3 +201,96 @@ func TestLaFirmaCubreMetodoRutaYCuerpo(t *testing.T) {
 		t.Errorf("quién firmó: %+v, %v", signer, err)
 	}
 }
+
+// ---------------------------------------------------------------- los topes
+
+// Los topes cuentan solo lo vivo: dar de baja o retirar libera el cupo, y
+// repetir lo que ya estaba hecho no lo gasta (M-18).
+func TestLosTopesCuentanSoloLoVivo(t *testing.T) {
+	store, ctx := setup(t)
+	store.SetLimits(agents.Limits{AgentsPerClient: 2, KeysPerAgent: 2, AccountsPerAgent: 1})
+	client := "plataforma-" + uuid.NewString()
+
+	k1, _ := newKey(t)
+	first, err := store.Register(ctx, client, "Uno", k1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k2, _ := newKey(t)
+	if _, err := store.Register(ctx, client, "Dos", k2); err != nil {
+		t.Fatal(err)
+	}
+	k3, _ := newKey(t)
+	if _, err := store.Register(ctx, client, "Tres", k3); !errors.Is(err, agents.ErrQuotaExceeded) {
+		t.Fatalf("tercer agente: %v", err)
+	}
+	if _, err := store.Register(ctx, "otra-"+uuid.NewString(), "Tres", k3); err != nil {
+		t.Errorf("el tope es por integración: %v", err)
+	}
+
+	rotated, _ := newKey(t)
+	if _, err := store.AddKey(ctx, client, first.ID, rotated); err != nil {
+		t.Fatal(err)
+	}
+	extra, _ := newKey(t)
+	if _, err := store.AddKey(ctx, client, first.ID, extra); !errors.Is(err, agents.ErrQuotaExceeded) {
+		t.Fatalf("tercera clave: %v", err)
+	}
+	if err := store.RetireKey(ctx, client, first.ID, first.Keys[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddKey(ctx, client, first.ID, extra); err != nil {
+		t.Errorf("retirar una clave libera el cupo: %v", err)
+	}
+
+	account := uuid.NewString()
+	if err := store.BindAccount(ctx, client, first.ID, account); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindAccount(ctx, client, first.ID, account); err != nil {
+		t.Errorf("atar otra vez la misma cuenta: %v", err)
+	}
+	if err := store.BindAccount(ctx, client, first.ID, uuid.NewString()); !errors.Is(err, agents.ErrQuotaExceeded) {
+		t.Errorf("segunda cuenta: %v", err)
+	}
+	if err := store.CheckAccountQuota(ctx, client, first.ID); !errors.Is(err, agents.ErrQuotaExceeded) {
+		t.Errorf("comprobar antes de abrir: %v", err)
+	}
+
+	if err := store.Revoke(ctx, client, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	k4, _ := newKey(t)
+	if _, err := store.Register(ctx, client, "Cuatro", k4); err != nil {
+		t.Errorf("dar de baja libera el cupo: %v", err)
+	}
+}
+
+// Rotar otra vez no alarga la clave que ya estaba rotando: si lo hiciera, rotar
+// seguido la dejaría viva para siempre.
+func TestRotarOtraVezNoAlargaLaClaveVieja(t *testing.T) {
+	store, ctx := setup(t)
+	client := "plataforma-" + uuid.NewString()
+	k1, _ := newKey(t)
+	agent, err := store.Register(ctx, client, "Agente", k1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	store.SetClock(func() time.Time { return start })
+	k2, _ := newKey(t)
+	if _, err := store.AddKey(ctx, client, agent.ID, k2); err != nil {
+		t.Fatal(err)
+	}
+
+	store.SetClock(func() time.Time { return start.Add(24 * time.Hour) })
+	k3, _ := newKey(t)
+	if _, err := store.AddKey(ctx, client, agent.ID, k3); err != nil {
+		t.Fatal(err)
+	}
+
+	store.SetClock(func() time.Time { return start.Add(agents.RotationWindow + time.Minute) })
+	if _, err := store.KeyForSignature(ctx, agent.Keys[0].ID); !errors.Is(err, agents.ErrNotFound) {
+		t.Errorf("la primera clave sigue firmando pasados siete días de su rotación: %v", err)
+	}
+}

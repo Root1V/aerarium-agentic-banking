@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -54,6 +55,20 @@ func (s *Store) BindAccount(ctx context.Context, clientID, agentID, accountID st
 		return err
 	}
 	var owner string
+	err = tx.QueryRowContext(ctx,
+		`SELECT agent_id FROM agents.accounts WHERE account_id = $1`, accountID).Scan(&owner)
+	switch {
+	case err == nil && owner == agentID:
+		// Ya era suya: repetirlo no gasta cupo.
+		return nil
+	case err == nil:
+		return ErrAccountBound
+	case !errors.Is(err, sql.ErrNoRows):
+		return err
+	}
+	if err := s.accountQuota(ctx, tx, agentID); err != nil {
+		return err
+	}
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO agents.accounts (account_id, agent_id) VALUES ($1, $2)
 		ON CONFLICT (account_id) DO UPDATE SET account_id = EXCLUDED.account_id
@@ -65,6 +80,33 @@ func (s *Store) BindAccount(ctx context.Context, clientID, agentID, accountID st
 		return ErrAccountBound
 	}
 	return tx.Commit()
+}
+
+// CheckAccountQuota dice, antes de abrir una sub-cuenta para un agente, si el
+// agente existe, está vivo y le queda cupo. Atar la cuenta lo vuelve a comprobar;
+// esto evita abrir en el core una cuenta que después no se podría atar.
+func (s *Store) CheckAccountQuota(ctx context.Context, clientID, agentID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := lockLiveAgent(ctx, tx, clientID, agentID); err != nil {
+		return err
+	}
+	return s.accountQuota(ctx, tx, agentID)
+}
+
+func (s *Store) accountQuota(ctx context.Context, tx *sql.Tx, agentID string) error {
+	var bound int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT count(*) FROM agents.accounts WHERE agent_id = $1`, agentID).Scan(&bound); err != nil {
+		return err
+	}
+	if bound >= s.limits.AccountsPerAgent {
+		return fmt.Errorf("%w: %d sub-cuentas por agente", ErrQuotaExceeded, s.limits.AccountsPerAgent)
+	}
+	return nil
 }
 
 // AccountAgent dice de qué agente es una sub-cuenta; vacío si no es de ninguno.

@@ -155,6 +155,8 @@ func (s *Server) agentError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, agents.ErrLastKey):
 		writeError(w, http.StatusConflict, CodeAgentLastKey,
 			"es la única clave vigente; añade otra antes de retirarla")
+	case errors.Is(err, agents.ErrQuotaExceeded):
+		writeError(w, http.StatusConflict, CodeQuotaExceeded, err.Error())
 	case errors.Is(err, agents.ErrInvalidKey), errors.Is(err, agents.ErrBadName):
 		writeError(w, http.StatusBadRequest, CodeMalformedRequest, err.Error())
 	default:

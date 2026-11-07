@@ -36,7 +36,25 @@ var (
 	ErrKeyInUse   = errors.New("esa clave ya está registrada")
 	ErrLastKey    = errors.New("no se puede retirar la única clave vigente; añade otra antes")
 	ErrBadName    = errors.New("el nombre es obligatorio, de hasta 80 caracteres")
+	// ErrQuotaExceeded envuelve el tope que se alcanzó; el mensaje dice cuál.
+	ErrQuotaExceeded = errors.New("tope alcanzado")
 )
+
+// Limits son los topes de cantidad de una integración (M-18). Sin ellos, una
+// plataforma con un error en bucle registraría agentes, claves y cuentas sin
+// fin. Se cuentan solo los vivos: dar de baja o retirar libera el cupo.
+type Limits struct {
+	// Agentes sin dar de baja por integración.
+	AgentsPerClient int
+	// Claves que firman a la vez por agente: la vigente y las que están rotando.
+	KeysPerAgent int
+	// Sub-cuentas pagadoras atadas a un agente (modelo A).
+	AccountsPerAgent int
+}
+
+// DefaultLimits deja a un agente una clave vigente y dos rotando, y una cuenta
+// por moneda con holgura. Los 1.000 agentes se revisan con datos reales.
+var DefaultLimits = Limits{AgentsPerClient: 1000, KeysPerAgent: 3, AccountsPerAgent: 10}
 
 // JWK es una clave pública Ed25519 en el formato de RFC 8037.
 type JWK struct {
@@ -85,14 +103,21 @@ func (k Key) Valid(now time.Time) bool {
 }
 
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db     *sql.DB
+	now    func() time.Time
+	limits Limits
 }
 
-func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
+func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now, limits: DefaultLimits} }
 
 // SetClock cambia el reloj, para probar la rotación sin esperar siete días.
 func (s *Store) SetClock(now func() time.Time) { s.now = now }
+
+// SetLimits cambia los topes de cantidad.
+func (s *Store) SetLimits(l Limits) { s.limits = l }
+
+// Limits devuelve los topes vigentes.
+func (s *Store) Limits() Limits { return s.limits }
 
 func (s *Store) Migrate(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, schema)
@@ -114,6 +139,23 @@ func (s *Store) Register(ctx context.Context, clientID, name string, key JWK) (*
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// Dos altas a la vez de la misma integración no pueden pasar las dos con el
+	// último cupo.
+	if _, err := tx.ExecContext(ctx,
+		`SELECT pg_advisory_xact_lock(hashtext('agents.client:' || $1))`, clientID); err != nil {
+		return nil, err
+	}
+	var live int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT count(*) FROM agents.agents WHERE client_id = $1 AND revoked_at IS NULL`,
+		clientID).Scan(&live); err != nil {
+		return nil, err
+	}
+	if live >= s.limits.AgentsPerClient {
+		return nil, fmt.Errorf("%w: %d agentes activos por integración; da de baja los que ya no uses",
+			ErrQuotaExceeded, s.limits.AgentsPerClient)
+	}
 
 	id := uuid.NewString()
 	if _, err := tx.ExecContext(ctx,
@@ -199,9 +241,23 @@ func (s *Store) AddKey(ctx context.Context, clientID, agentID string, key JWK) (
 		return nil, err
 	}
 	now := s.now()
+	var live int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT count(*) FROM agents.keys
+		 WHERE agent_id = $1 AND retired_at IS NULL AND (expires_at IS NULL OR expires_at > $2)`,
+		agentID, now).Scan(&live); err != nil {
+		return nil, err
+	}
+	if live >= s.limits.KeysPerAgent {
+		return nil, fmt.Errorf("%w: %d claves vigentes por agente; retira una antes de añadir otra",
+			ErrQuotaExceeded, s.limits.KeysPerAgent)
+	}
+	// Solo empieza a vencer la que no tenía fecha. Una que ya estaba rotando
+	// conserva la suya: si cada rotación la alargara, rotar seguido la dejaría
+	// viva para siempre.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE agents.keys SET expires_at = $2
-		 WHERE agent_id = $1 AND retired_at IS NULL AND (expires_at IS NULL OR expires_at > $2)`,
+		 WHERE agent_id = $1 AND retired_at IS NULL AND expires_at IS NULL`,
 		agentID, now.Add(RotationWindow)); err != nil {
 		return nil, err
 	}
