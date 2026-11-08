@@ -332,10 +332,14 @@ class _RuleCard extends StatelessWidget {
             else
               Row(
                 children: [
-                  FilledButton(
-                    key: const Key('edit-rule'),
-                    onPressed: onEdit,
-                    child: Text(rule == null ? 'Programar aportes' : 'Cambiar'),
+                  // Expandido: el tema da a los botones un ancho mínimo infinito,
+                  // y suelto dentro de una fila no se puede dibujar.
+                  Expanded(
+                    child: FilledButton(
+                      key: const Key('edit-rule'),
+                      onPressed: onEdit,
+                      child: Text(rule == null ? 'Programar aportes' : 'Cambiar'),
+                    ),
                   ),
                   if (rule != null) ...[
                     const SizedBox(width: 8),

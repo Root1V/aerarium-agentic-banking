@@ -3,6 +3,7 @@ import 'package:aibank_app/auth/device_keys.dart';
 import 'package:aibank_app/goal_text.dart';
 import 'package:aibank_app/screens/goal_screen.dart';
 import 'package:aibank_app/screens/pockets_screen.dart';
+import 'package:aibank_app/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -99,8 +100,9 @@ void main() {
             ]
           }),
     });
-    await tester.pumpWidget(
-        MaterialApp(home: PocketsScreen(client: bank.client(token: 't'), accountId: 'acc-1', currency: 'PEN')));
+    await tester.pumpWidget(MaterialApp(
+        theme: appLightTheme,
+        home: PocketsScreen(client: bank.client(token: 't'), accountId: 'acc-1', currency: 'PEN')));
     await tester.pumpAndSettle();
 
     expect(find.text('Bolsillos y metas'), findsOneWidget);
@@ -145,8 +147,11 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(
+        theme: appLightTheme,
         home: GoalScreen(client: bank.client(token: 't'), goalId: 'g-1', confirmer: TransferConfirmer(keys: keys))));
     await tester.pumpAndSettle();
+    // Con el tema de la app, el botón se dibuja (antes quedaba un hueco).
+    expect(tester.takeException(), isNull);
 
     await tester.tap(find.byKey(const Key('edit-rule')));
     await tester.pumpAndSettle();
@@ -167,7 +172,8 @@ void main() {
 
   testWidgets('sin teléfono vinculado no se ofrece programar aportes', (tester) async {
     final bank = FakeBank({'GET /v1/goals/g-1': (_) => json(goalJson())});
-    await tester.pumpWidget(MaterialApp(home: GoalScreen(client: bank.client(token: 't'), goalId: 'g-1')));
+    await tester.pumpWidget(
+        MaterialApp(theme: appLightTheme, home: GoalScreen(client: bank.client(token: 't'), goalId: 'g-1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('edit-rule')), findsNothing);
     expect(find.text('Para programar aportes, entra desde tu teléfono vinculado.'), findsOneWidget);
@@ -186,6 +192,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(
+        theme: appLightTheme,
         home: GoalScreen(
             client: bank.client(token: 't'),
             goalId: 'g-1',
