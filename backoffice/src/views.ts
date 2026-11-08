@@ -8,6 +8,7 @@
 
 import { formatMicros, type Finding, type FindingKind } from './core-client.ts';
 import { can, type Operator } from './auth.ts';
+import type { Decision, DecisionSource, Verdict } from './decisions.ts';
 
 /** Escapa texto antes de insertarlo en HTML. */
 export function escapeHtml(value: string): string {
@@ -82,6 +83,69 @@ export function renderFindings(findings: readonly Finding[], operator: Operator)
 <thead><tr>
   <th>#</th><th>Tipo</th><th>Referencia</th>
   <th class="num">Esperado</th><th class="num">Registrado</th><th>Detalle</th>
+</tr></thead>
+<tbody>
+${rows}
+</tbody>
+</table>
+${footer}`;
+}
+
+const SOURCE_LABELS: Record<DecisionSource, string> = {
+  credit: 'Crédito',
+  mora: 'Mora',
+  kyc: 'Alta (KYC)',
+  control: 'Capa de control',
+};
+
+const VERDICT_LABELS: Record<Verdict, string> = {
+  upheld: 'Se sostiene',
+  overturned: 'No debió tomarse así',
+};
+
+/** Fecha y hora de Lima: es la hora en la que vive el cliente y opera el banco. */
+function limaTime(date: Date): string {
+  return date.toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'short' });
+}
+
+export function renderDecisions(decisions: readonly Decision[], operator: Operator, queue: boolean): string {
+  if (decisions.length === 0) {
+    return queue
+      ? '<p class="empty">No hay decisiones esperando revisión.</p>'
+      : '<p class="empty">No hay decisiones automáticas con ese filtro.</p>';
+  }
+
+  const rows = decisions
+    .map(
+      (d) => `<tr>
+  <td>${escapeHtml(limaTime(d.decidedAt))}</td>
+  <td class="kind">${escapeHtml(SOURCE_LABELS[d.source])}</td>
+  <td>${escapeHtml(d.customerId)}</td>
+  <td>${escapeHtml(d.summary)}</td>
+  <td>${
+    d.review
+      ? `${escapeHtml(VERDICT_LABELS[d.review.verdict])} · ${escapeHtml(d.review.operatorEmail)}<br>${escapeHtml(d.review.note)}`
+      : d.reviewable
+        ? 'Pendiente'
+        : '—'
+  }</td>
+  <td>${escapeHtml(`${d.source}/${d.id}`)}</td>
+</tr>`,
+    )
+    .join('\n');
+
+  // Como en la conciliación: la interfaz dice lo que el perfil puede hacer.
+  const footer = !can(operator, 'decisions:review')
+    ? '<p class="note">Solo lectura: tu perfil no puede revisar decisiones.</p>'
+    : queue
+      ? '<p class="note">Para revisar hay que decir si la decisión se sostiene y por qué. ' +
+        'La revisión deja constancia; revertir la decisión (aprobar a mano, levantar un bloqueo) ' +
+        'no se hace desde aquí.</p>'
+      : '';
+
+  return `<table>
+<thead><tr>
+  <th>Cuándo</th><th>Fuente</th><th>Cliente</th><th>Decisión</th><th>Revisión</th><th>Referencia</th>
 </tr></thead>
 <tbody>
 ${rows}

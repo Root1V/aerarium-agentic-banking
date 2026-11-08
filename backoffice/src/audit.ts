@@ -12,6 +12,10 @@
 import type { Pool } from 'pg';
 
 export const AUDIT_SCHEMA = `
+-- Una consola que arranca a la vez que otra (o dos suites de tests) no puede
+-- crear el esquema dos veces: el candado dura lo que la migración, que va en
+-- una sola transacción implícita.
+SELECT pg_advisory_xact_lock(hashtext('backoffice.schema'));
 CREATE SCHEMA IF NOT EXISTS backoffice;
 
 CREATE TABLE IF NOT EXISTS backoffice.audit_log (

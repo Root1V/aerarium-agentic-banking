@@ -23,11 +23,21 @@ import {
   type CoreClient,
   type Finding,
 } from './core-client.ts';
-import { renderFindings, renderLayout } from './views.ts';
+import {
+  AlreadyReviewedError,
+  DECISION_SOURCES,
+  DecisionNotFoundError,
+  NotReviewableError,
+  type DecisionLog,
+  type DecisionSource,
+  type Verdict,
+} from './decisions.ts';
+import { renderDecisions, renderFindings, renderLayout } from './views.ts';
 
 export interface ServerOptions {
   core: CoreClient;
   audit: AuditLog;
+  decisions: DecisionLog;
   authenticator: Authenticator;
 }
 
@@ -80,6 +90,19 @@ async function handle(
   }
   if (req.method === 'GET' && url.pathname === '/audit') {
     return listAudit(res, options, context);
+  }
+  if (req.method === 'GET' && url.pathname === '/decisions') {
+    return listDecisions(url, res, options, context, false);
+  }
+  if (req.method === 'GET' && url.pathname === '/decisions/queue') {
+    return listDecisions(url, res, options, context, true);
+  }
+  if (req.method === 'POST' && url.pathname === '/decisions/review') {
+    return reviewDecision(req, res, options, context);
+  }
+  const detail = /^\/decisions\/([a-z]+)\/([^/]+)$/.exec(url.pathname);
+  if (req.method === 'GET' && detail) {
+    return showDecision(detail[1]!, decodeURIComponent(detail[2]!), res, options, context);
   }
 
   sendJson(res, 404, { error: 'not_found' });
@@ -200,6 +223,116 @@ async function listAudit(
   const entries = await options.audit.recent();
   await record(options, context, 'audit:list', undefined, 'allowed');
   sendJson(res, 200, { entries });
+}
+
+// ------------------------------------------------- decisiones automáticas
+
+function isSource(value: string): value is DecisionSource {
+  return (DECISION_SOURCES as readonly string[]).includes(value);
+}
+
+async function listDecisions(
+  url: URL,
+  res: http.ServerResponse,
+  options: ServerOptions,
+  context: RequestContext,
+  queue: boolean,
+): Promise<void> {
+  const action = queue ? 'decisions:queue' : 'decisions:list';
+  const source = url.searchParams.get('source') ?? '';
+  const customer = url.searchParams.get('customer') ?? '';
+  // Lo que se buscó queda en el rastro: mirar las decisiones de un cliente
+  // concreto es acceder a sus datos.
+  const target = [source && `source=${source}`, customer && `customer=${customer}`].filter(Boolean).join(' ');
+  if (!(await authorize(options, context, 'decisions:read', action, res, target || undefined))) {
+    return;
+  }
+  if (source && !isSource(source)) {
+    return sendJson(res, 400, { error: 'invalid_request', message: 'fuente desconocida' });
+  }
+
+  const decisions = await options.decisions.list({
+    source: source ? (source as DecisionSource) : undefined,
+    customerId: customer || undefined,
+    pending: queue,
+  });
+  await record(options, context, action, target || undefined, 'allowed', `${decisions.length} decisiones`);
+  const title = queue ? 'Decisiones por revisar' : 'Decisiones automáticas';
+  sendHtml(res, 200, renderLayout(title, renderDecisions(decisions, context.operator, queue)));
+}
+
+async function showDecision(
+  source: string,
+  id: string,
+  res: http.ServerResponse,
+  options: ServerOptions,
+  context: RequestContext,
+): Promise<void> {
+  const target = `${source}/${id}`;
+  if (!(await authorize(options, context, 'decisions:read', 'decisions:read', res, target))) {
+    return;
+  }
+  if (!isSource(source)) return sendJson(res, 404, { error: 'not_found' });
+  try {
+    const decision = await options.decisions.get(source, id);
+    await record(options, context, 'decisions:read', target, 'allowed');
+    sendJson(res, 200, decision);
+  } catch (error) {
+    if (error instanceof DecisionNotFoundError) return sendJson(res, 404, { error: 'not_found' });
+    throw error;
+  }
+}
+
+async function reviewDecision(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  options: ServerOptions,
+  context: RequestContext,
+): Promise<void> {
+  const body = await readJson(req);
+  const source = String(body.source ?? '');
+  const decisionId = String(body.decision_id ?? '');
+  const verdict = String(body.verdict ?? '');
+  const note = String(body.note ?? '').trim();
+  const target = `${source}/${decisionId}`;
+
+  if (!(await authorize(options, context, 'decisions:review', 'decisions:review', res, target))) {
+    return;
+  }
+  if (!isSource(source) || !decisionId) {
+    return sendJson(res, 400, { error: 'invalid_request', message: 'faltan source y decision_id' });
+  }
+  if (verdict !== 'upheld' && verdict !== 'overturned') {
+    return sendJson(res, 400, { error: 'invalid_request', message: 'verdict: upheld u overturned' });
+  }
+  if (!note) {
+    // Como al cerrar una diferencia: sin el porqué, la revisión no le sirve a nadie.
+    return sendJson(res, 400, { error: 'note_required', message: 'hay que explicar la revisión' });
+  }
+
+  try {
+    const decision = await options.decisions.review({
+      source,
+      decisionId,
+      verdict: verdict as Verdict,
+      note,
+      operatorId: context.operator.id,
+      operatorEmail: context.operator.email,
+    });
+    await record(options, context, 'decisions:review', target, 'allowed', `${verdict}: ${note}`);
+    sendJson(res, 200, decision);
+  } catch (error) {
+    if (error instanceof DecisionNotFoundError) return sendJson(res, 404, { error: 'not_found' });
+    const refused =
+      error instanceof NotReviewableError
+        ? 'not_reviewable'
+        : error instanceof AlreadyReviewedError
+          ? 'already_reviewed'
+          : undefined;
+    if (!refused) throw error;
+    await record(options, context, 'decisions:review', target, 'failed', refused);
+    sendJson(res, 409, { error: refused, message: (error as Error).message });
+  }
 }
 
 // ---------------------------------------------------------------- apoyo

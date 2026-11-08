@@ -311,6 +311,28 @@ intentos DENEGADOS se registran igual que los permitidos — un intento rechazad
 justo lo que interesa detectar. El rastro de auditoría es de solo inserción, como
 el ledger.
 
+**Decisiones automáticas (F3-07).** `GET /decisions` reúne lo que el banco decidió
+solo sobre cada cliente, leído donde lo guarda cada servicio: crédito
+(`credit.applications`), mora (`credit_line_events` del core), alta
+(`onboarding.applications` y sus pasos) y la capa de control (`control.decisions`:
+lo que pidió confirmación o se negó, y todo lo que hizo un agente o una regla).
+Filtros `?source=credit|mora|kyc|control` y `?customer=<uuid>`; el detalle con la
+evidencia en `GET /decisions/{fuente}/{id}`. `GET /decisions/queue` es la cola de
+revisión: créditos negados y tarjetas bloqueadas sin revisar. Se revisa con
+
+```bash
+curl -X POST localhost:8090/decisions/review -H "Authorization: Bearer $TOKEN" \
+  -d '{"source":"mora","decision_id":"42","verdict":"upheld","note":"no pagó el mínimo"}'
+```
+
+`verdict` es `upheld` (se sostiene) u `overturned` (no debió tomarse así), y la nota
+es obligatoria. Una revisión por decisión, de solo agregar. Las ve el rol
+`decision_reviewer` (y el `auditor`, sin revisar); el soporte y el analista de
+conciliación no, porque llevan datos de clientes. Mirar las decisiones de un
+cliente queda en el rastro de auditoría. Los tests necesitan los esquemas de los
+demás servicios migrados: corren contra la base de los tests de Go y Rust
+(`DATABASE_URL=postgres://aibank:aibank_dev@localhost:55434/aibank`).
+
 ## Observabilidad
 
 Una misma traza une app → BFF → core (Rust) → evento del outbox → relay. Dos

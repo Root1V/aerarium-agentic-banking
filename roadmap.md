@@ -30,6 +30,7 @@ Stack por tarea: Rust (core) · Go (adaptadores, BFF) · Python (riesgo) · Flut
 | Tarjetas: autorización, retención, cobro y reversa (14 tests) | Go | feat/cards-sim | ✅ |
 | Conciliación: interna, contra proveedor y limbo (11 tests) | Rust | feat/reconciliation | ✅ |
 | Backoffice v0: cola de conciliación con roles y auditoría (18 tests) | TypeScript | feat/backoffice | ✅ |
+| Backoffice: registro de decisiones automáticas y cola de revisión (F3-07, 13 tests) | TypeScript/Rust | feat/decision-review | ✅ |
 | Observabilidad: trazas E2E entre Rust y Go, incluido el salto asíncrono (17 tests) | Rust/Go | feat/observability | ✅ |
 
 ## Fase 2: crédito (el motor de ingresos del plan)
@@ -171,8 +172,15 @@ retención vence. Propuesto en el canal (AE-09).
   por notificación, solo en el inicio. Detectar gastos recurrentes y avisar a tiempo
   vienen con las notificaciones push.
 - **La aprobación previa de pagos grandes** (AE-12) espera la respuesta de Mercatus.
-- **El registro de decisiones lo ve el titular** (lo último, en el centro de permisos),
-  **pero no el backoffice**: eso es F3-07, con la revisión humana.
+- **La revisión de decisiones deja constancia, pero no revierte**: decir que un
+  bloqueo o un crédito negado «no debió tomarse así» no levanta el bloqueo ni aprueba
+  el crédito; eso es otra acción con su propio permiso (y cuatro ojos), que no
+  existe todavía. El titular tampoco ve que su decisión se revisó, ni puede pedir la
+  revisión desde la app (reclamar un movimiento sigue pendiente). Las altas en
+  revisión manual las resuelve cumplimiento fuera de esta cola. La consola lee las
+  tablas de los demás servicios directamente: en producción, con un rol de base de
+  datos que solo tenga `SELECT` sobre ellas. Y el backoffice todavía no está en el
+  sandbox.
 - **El nombre a medias del directorio usa una heurística** ("Carmen Huaman Díaz" →
   "Carmen H.": con tres palabras o más, la penúltima). Falla con dos nombres y un
   apellido. Lo correcto es guardar nombres y apellidos por separado desde el alta.
@@ -283,8 +291,19 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   integración, 3 claves vigentes por agente y 10 sub-cuentas por agente, `409
   quota_exceeded`; dar de baja o retirar libera el cupo. Rotar otra vez ya no
   alarga la clave que estaba rotando.
-- [ ] **F3-07 Registro de decisiones automáticas** con evidencia y cola de revisión
-  humana en el backoffice. *Media.*
+- [x] **F3-07 Registro de decisiones automáticas y revisión humana** (backoffice
+  `/decisions`, core V013): en un solo registro, lo que el banco decidió solo sobre
+  cada cliente, con su evidencia y dicho en una línea: el crédito (con los motivos
+  del motor), el bloqueo y desbloqueo por mora, el alta (los pasos de KYC, con el
+  documento enmascarado) y la capa de control (confirmaciones exigidas, negativas y
+  todo lo que hizo un agente o una regla). Cada decisión se lee donde la guardó su
+  servicio, sin copiarla; lo nuevo en el core es que **cada bloqueo por mora deja
+  constancia** en la misma transacción (`credit_line_events`: qué estado de cuenta
+  mandaba, el mínimo y lo pagado). La **cola de revisión** trae los créditos negados
+  y las tarjetas bloqueadas: una persona con el rol `decision_reviewer` dice si la
+  decisión se sostiene o no, con una nota obligatoria; una revisión por decisión,
+  de solo agregar, y todo queda en el rastro de auditoría, también mirar las
+  decisiones de un cliente.
 - [ ] **F3-08 Asistente financiero** nivel 1 (solo lectura), luego nivel 2. Falta
   decidir proveedor de modelo y qué datos salen. *Media.*
 - [ ] **F3-10 Finanzas Abiertas Perú**: API de información con consentimiento sobre el

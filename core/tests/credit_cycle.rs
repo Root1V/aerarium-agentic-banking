@@ -228,6 +228,62 @@ async fn sin_el_minimo_se_bloquea_los_intereses_se_cobran_igual_y_al_pagar_se_de
 }
 
 #[tokio::test]
+async fn cada_bloqueo_y_desbloqueo_deja_constancia_de_por_que() {
+    let ctx = setup().await;
+    let c = card(&ctx, 300_000000, 5).await;
+    c.draw(&ctx, 300_000000).await.unwrap();
+    let first = c.credit.close_cycle(c.line, Utc::now()).await.unwrap();
+    c.pay(&ctx, 1_000000).await;
+
+    let due = after_due(first.due_date);
+    c.credit.review(c.line, due).await.unwrap();
+    // Revisar otra vez sin cambios no deja otra constancia.
+    c.credit.review(c.line, due).await.unwrap();
+    c.pay(&ctx, first.minimum_payment_micros).await;
+    c.credit.review(c.line, due).await.unwrap();
+
+    let events: Vec<(String, String, String, Option<Uuid>, Option<i64>, Option<i64>)> =
+        sqlx::query_as(
+            "SELECT from_status::text, to_status::text, reason, statement_id, minimum_micros, paid_micros
+               FROM credit_line_events WHERE line_id = $1 ORDER BY id",
+        )
+        .bind(c.line)
+        .fetch_all(&ctx.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        events,
+        vec![
+            (
+                "ACTIVE".into(),
+                "BLOCKED".into(),
+                "minimum_not_paid".into(),
+                Some(first.id),
+                Some(first.minimum_payment_micros),
+                Some(1_000000),
+            ),
+            (
+                "BLOCKED".into(),
+                "ACTIVE".into(),
+                "caught_up".into(),
+                Some(first.id),
+                Some(first.minimum_payment_micros),
+                Some(1_000000 + first.minimum_payment_micros),
+            ),
+        ]
+    );
+
+    assert!(
+        sqlx::query("DELETE FROM credit_line_events WHERE line_id = $1")
+            .bind(c.line)
+            .execute(&ctx.pool)
+            .await
+            .is_err(),
+        "la constancia no se borra"
+    );
+}
+
+#[tokio::test]
 async fn el_estado_de_cuenta_es_un_documento() {
     let ctx = setup().await;
     let c = card(&ctx, 500_000000, 5).await;
