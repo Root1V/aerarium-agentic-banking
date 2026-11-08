@@ -9,6 +9,7 @@
 import pg from 'pg';
 import { AuditLog } from './audit.ts';
 import { connectCore } from './core-client.ts';
+import { DecisionLog } from './decisions.ts';
 import { createServer } from './server.ts';
 import { SimAuthenticator } from './sim/authenticator.ts';
 
@@ -28,14 +29,18 @@ if (process.env.ALLOW_DEV_AUTH !== 'true') {
 const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 4 });
 const audit = new AuditLog(pool);
 await audit.migrate();
+const decisions = new DecisionLog(pool);
+await decisions.migrate();
 
 const authenticator = new SimAuthenticator();
 const token = authenticator.issue('dev@aibank.local', ['reconciliation_analyst']);
+const reviewerToken = authenticator.issue('revision@aibank.local', ['decision_reviewer']);
 console.warn('AUTENTICACIÓN DE DESARROLLO ACTIVA — no usar fuera de local');
-console.warn(`token: ${token}`);
+console.warn(`token (conciliación): ${token}`);
+console.warn(`token (revisión de decisiones): ${reviewerToken}`);
 
 const core = connectCore(CORE_ADDR);
-const server = createServer({ core, audit, authenticator });
+const server = createServer({ core, audit, decisions, authenticator });
 
 server.listen(PORT, () => console.log(`consola escuchando en :${PORT}`));
 

@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO credit_line_events\n                    (line_id, customer_id, from_status, to_status, reason, statement_id,\n                     due_date, currency, minimum_micros, paid_micros, as_of)\n                SELECT l.id, l.customer_id, $2, $3, $4, $5, $6, a.currency, $7, $8, $9\n                  FROM credit_lines l JOIN accounts a ON a.id = l.account_id\n                 WHERE l.id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Uuid",
+        "Date",
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a5047712c2e50ea84d17481ccf8d3e94edbc416f29e6aa1e3fc161765ec35287"
+}

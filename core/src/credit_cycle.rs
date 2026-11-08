@@ -283,7 +283,8 @@ impl CreditRepository {
     ///
     /// Manda el último estado de cuenta ya vencido: si desde su corte se pagó al
     /// menos su mínimo, la línea está al día; si no, se bloquea. Bloquear o
-    /// desbloquear es lo único que cambia.
+    /// desbloquear es lo único que cambia, y cada cambio deja constancia en
+    /// `credit_line_events` con lo que lo decidió, en la misma transacción.
     pub async fn review(
         &self,
         line_id: Uuid,
@@ -296,23 +297,53 @@ impl CreditRepository {
             .into_iter()
             .find(|s| end_of_day(s.due_date) < as_of);
         let behind = due.as_ref().is_some_and(|s| !s.minimum_covered());
-        let status = if behind {
-            CreditLineStatus::Blocked
+        let (status, reason) = if behind {
+            (CreditLineStatus::Blocked, "minimum_not_paid")
         } else {
-            CreditLineStatus::Active
+            (CreditLineStatus::Active, "caught_up")
         };
 
-        sqlx::query!(
+        let mut tx = self.pool().begin().await.map_err(PostingError::from_db)?;
+        let changed = sqlx::query!(
             r#"
-            UPDATE credit_lines SET status = $2
-             WHERE id = $1 AND status <> 'CLOSED' AND status <> $2
+            WITH old AS (SELECT id, status FROM credit_lines WHERE id = $1 FOR UPDATE)
+            UPDATE credit_lines l SET status = $2
+              FROM old
+             WHERE l.id = old.id AND old.status <> 'CLOSED' AND old.status <> $2
+            RETURNING old.status as "from_status: CreditLineStatus"
             "#,
             line_id,
             status as CreditLineStatus,
         )
-        .execute(self.pool())
+        .fetch_optional(&mut *tx)
         .await
         .map_err(PostingError::from_db)?;
+
+        if let Some(changed) = changed {
+            sqlx::query!(
+                r#"
+                INSERT INTO credit_line_events
+                    (line_id, customer_id, from_status, to_status, reason, statement_id,
+                     due_date, currency, minimum_micros, paid_micros, as_of)
+                SELECT l.id, l.customer_id, $2, $3, $4, $5, $6, a.currency, $7, $8, $9
+                  FROM credit_lines l JOIN accounts a ON a.id = l.account_id
+                 WHERE l.id = $1
+                "#,
+                line_id,
+                changed.from_status as CreditLineStatus,
+                status as CreditLineStatus,
+                reason,
+                due.as_ref().map(|s| s.id),
+                due.as_ref().map(|s| s.due_date),
+                due.as_ref().map(|s| s.minimum_payment_micros),
+                due.as_ref().map(|s| s.paid_since_cut_micros),
+                as_of,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(PostingError::from_db)?;
+        }
+        tx.commit().await.map_err(PostingError::from_db)?;
 
         self.find(line_id)
             .await

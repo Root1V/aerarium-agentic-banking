@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH old AS (SELECT id, status FROM credit_lines WHERE id = $1 FOR UPDATE)\n            UPDATE credit_lines l SET status = $2\n              FROM old\n             WHERE l.id = old.id AND old.status <> 'CLOSED' AND old.status <> $2\n            RETURNING old.status as \"from_status: CreditLineStatus\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "from_status: CreditLineStatus",
+        "type_info": {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "credit_line_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "BLOCKED",
+                "CLOSED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c165012194483eb5ea5625886d7ee05d641d1722f403392ed8aab3f3588ba799"
+}

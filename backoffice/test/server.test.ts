@@ -14,6 +14,7 @@ import type { AddressInfo } from 'node:net';
 import pg from 'pg';
 
 import { AuditLog } from '../src/audit.ts';
+import { DecisionLog } from '../src/decisions.ts';
 import { createServer } from '../src/server.ts';
 import { SimAuthenticator } from '../src/sim/authenticator.ts';
 import { formatMicros, type CoreClient, type Finding } from '../src/core-client.ts';
@@ -91,7 +92,7 @@ before(async () => {
   viewerToken = auth.issue('soporte@aibank.local', ['viewer']);
   auditorToken = auth.issue('auditor@aibank.local', ['auditor']);
 
-  server = createServer({ core, audit, authenticator: auth });
+  server = createServer({ core, audit, decisions: new DecisionLog(pool), authenticator: auth });
   await new Promise<void>((resolve) => server.listen(0, resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });

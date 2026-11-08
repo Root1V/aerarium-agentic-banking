@@ -11,22 +11,29 @@
 export type Permission =
   | 'reconciliation:read'
   | 'reconciliation:resolve'
-  | 'reconciliation:run';
+  | 'reconciliation:run'
+  | 'decisions:read'
+  | 'decisions:review';
 
-export type Role = 'viewer' | 'reconciliation_analyst' | 'auditor';
+export type Role = 'viewer' | 'reconciliation_analyst' | 'auditor' | 'decision_reviewer';
 
 /**
  * Un `viewer` ve pero no decide, y un `auditor` tampoco: quien audita no debe
  * poder alterar lo que audita. Solo el analista de conciliación resuelve.
+ *
+ * Las decisiones automáticas llevan datos de clientes (su crédito, su alta): las
+ * ve quien las revisa y quien audita, no el soporte. Y revisarlas es otro oficio
+ * que conciliar: el analista de conciliación no las toca.
  */
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   viewer: ['reconciliation:read'],
-  auditor: ['reconciliation:read'],
+  auditor: ['reconciliation:read', 'decisions:read'],
   reconciliation_analyst: [
     'reconciliation:read',
     'reconciliation:resolve',
     'reconciliation:run',
   ],
+  decision_reviewer: ['decisions:read', 'decisions:review'],
 };
 
 /** Persona autenticada que opera la consola. */
