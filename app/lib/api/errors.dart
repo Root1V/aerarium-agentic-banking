@@ -60,6 +60,10 @@ enum ApiErrorCode {
   // Cambio de moneda.
   quoteExpired,
   accountExists,
+
+  // Metas y bolsillos.
+  ruleTooBig,
+  pocketConflict,
   unknown,
 }
 
@@ -124,6 +128,8 @@ class ApiError implements Exception {
         'receipt_not_found' => ApiErrorCode.receiptNotFound,
         'quote_expired' => ApiErrorCode.quoteExpired,
         'account_exists' => ApiErrorCode.accountExists,
+        'rule_too_big' => ApiErrorCode.ruleTooBig,
+        'pocket_conflict' => ApiErrorCode.pocketConflict,
         _ => ApiErrorCode.unknown,
       },
       detail,
@@ -190,6 +196,8 @@ class ApiError implements Exception {
         ApiErrorCode.overpayment => 'Ese pago es mayor que lo que debes.',
         ApiErrorCode.quoteExpired => 'La cotización venció. Pide otra: el tipo de cambio pudo moverse.',
         ApiErrorCode.accountExists => 'Ya tienes una cuenta en esa moneda.',
+        ApiErrorCode.ruleTooBig => 'Es más de lo que te falta para la meta. Aparta menos en cada aporte.',
+        ApiErrorCode.pocketConflict => 'Una cuenta tiene hasta 10 bolsillos y metas. Cierra uno para abrir otro.',
         ApiErrorCode.receiptNotFound => 'No existe una constancia con ese código: el comprobante no es de Aerarium.',
         ApiErrorCode.lastWayIn =>
           'Es tu única forma de entrar. Crea una passkey o vincula otro teléfono antes de quitarla.',

@@ -198,6 +198,42 @@ class BffClient {
   /// Cierra el bolsillo; lo que quede vuelve a la cuenta.
   Future<void> closePocket(String pocketId) => _deleteNoContent('/v1/pockets/$pocketId');
 
+  /// Las metas de la cuenta.
+  Future<List<Goal>> goals(String accountId) async {
+    final json = await _get('/v1/accounts/$accountId/goals', const {});
+    return [for (final g in (json['goals'] as List<dynamic>? ?? const [])) Goal.fromJson(g as Map<String, dynamic>)];
+  }
+
+  /// Crea una meta. No mueve dinero: la regla de ahorro se pone aparte.
+  Future<Goal> createGoal(String accountId, String name, int targetMicros, {DateTime? targetDate}) async =>
+      Goal.fromJson(await _post('/v1/accounts/$accountId/goals', headers: const {}, body: {
+        'name': name,
+        'target_micros': targetMicros,
+        if (targetDate != null) 'target_date': _dateOnly(targetDate),
+      }));
+
+  /// La meta con lo que hizo su regla.
+  Future<Goal> goal(String goalId) async => Goal.fromJson(await _get('/v1/goals/$goalId', const {}));
+
+  /// Pone (o cambia) la regla de ahorro. Es darle un permiso: la primera llamada
+  /// pide la cara, la segunda lleva la firma.
+  Future<Goal> setGoalRule(String goalId, int amountMicros, String cadence,
+          {TransferConfirmation? confirmation}) async =>
+      Goal.fromJson(await _put('/v1/goals/$goalId/rule', {
+        'amount_micros': amountMicros,
+        'cadence': cadence,
+        if (confirmation != null) 'confirmation': confirmation.toJson(),
+      }));
+
+  /// Quita la regla. La meta y lo juntado siguen.
+  Future<void> revokeGoalRule(String goalId) => _deleteNoContent('/v1/goals/$goalId/rule');
+
+  /// Cierra la meta: lo juntado vuelve a la cuenta.
+  Future<void> closeGoal(String goalId) => _deleteNoContent('/v1/goals/$goalId');
+
+  static String _dateOnly(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   /// La previsión de saldo de la cuenta hasta el próximo ingreso.
   Future<Forecast> forecast(String accountId) async =>
       Forecast.fromJson(await _get('/v1/accounts/$accountId/forecast', const {}));
@@ -375,6 +411,15 @@ class BffClient {
     return _send(() => _http.post(
           uri,
           headers: {..._headers(), ...headers, 'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        ));
+  }
+
+  Future<Map<String, dynamic>> _put(String path, Map<String, dynamic> body) async {
+    final uri = baseUrl.replace(path: path);
+    return _send(() => _http.put(
+          uri,
+          headers: {..._headers(), 'Content-Type': 'application/json'},
           body: jsonEncode(body),
         ));
   }

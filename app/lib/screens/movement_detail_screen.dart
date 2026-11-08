@@ -227,7 +227,9 @@ class _AuthorizationCard extends StatelessWidget {
     final (title, why) = authorizationText(info);
     final icon = info.actorKind == 'agent'
         ? Icons.smart_toy_outlined
-        : info.outcome == 'confirmed'
+        : info.actorKind == 'rule'
+            ? Icons.autorenew
+            : info.outcome == 'confirmed'
             ? (info.method == 'pin' ? Icons.pin_outlined : Icons.face_outlined)
             : Icons.check_circle_outline;
     return Padding(

@@ -5,6 +5,9 @@ import 'api/models.dart';
 /// Qué pasó, en palabras: el registro de decisiones dice `mandate_payment` /
 /// `deny` / `over_limit`; la persona lee «Pago negado: superaba el tope».
 String activityText(ActivityEntry e) => switch ((e.action, e.outcome)) {
+      ('grant_permission', 'confirm') when e.subject == 'savings_rule' => 'Se pidió confirmar un ahorro automático',
+      ('grant_permission', 'confirmed') when e.subject == 'savings_rule' => 'Programó un ahorro automático',
+      ('grant_permission', 'rejected') when e.subject == 'savings_rule' => 'No se pudo confirmar un ahorro automático',
       ('transfer', 'allow') => 'Envió dinero',
       ('transfer', 'confirm') => 'Un envío pidió confirmación',
       ('transfer', 'confirmed') => 'Confirmó un envío',
@@ -16,6 +19,8 @@ String activityText(ActivityEntry e) => switch ((e.action, e.outcome)) {
           'grant_inactive' => 'Pago negado: el permiso ya no estaba vigente',
           _ => 'Pago negado',
         },
+      ('auto_save', 'allow') => 'Apartó en la meta',
+      ('auto_save', 'deny') => 'No pudo apartar: no tenía permiso',
       ('grant_permission', 'confirm') => 'Se pidió confirmar un permiso de pago',
       ('grant_permission', 'confirmed') => 'Dio un permiso de pago',
       ('grant_permission', 'rejected') => 'No se pudo confirmar un permiso de pago',

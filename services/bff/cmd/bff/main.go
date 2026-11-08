@@ -48,6 +48,7 @@ import (
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/fx"
+	"github.com/aibank/aibank/services/goals"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/pockets"
@@ -185,6 +186,19 @@ func run(log *slog.Logger) error {
 		}
 		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithPockets(pocketSvc) })
 
+		// Metas con ahorro automático: las reglas apartan en los bolsillos, dentro
+		// de un permiso de la capa de control.
+		zone, err := time.LoadLocation(bff.DefaultTimeZone)
+		if err != nil {
+			return err
+		}
+		goalSvc := goals.NewService(db, pocketSvc, ctrl, zone)
+		if err := goalSvc.Migrate(ctx); err != nil {
+			return err
+		}
+		setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithGoals(goalSvc) })
+		go runGoalRules(ctx, goalSvc, time.Duration(envInt("GOALS_RUN_EVERY_SECONDS", 600))*time.Second, log)
+
 		// Tarjeta de crédito: necesita el motor de riesgo, que decide. Sin él no se
 		// origina nada.
 		if riskURL := os.Getenv("RISK_URL"); riskURL != "" {
@@ -202,11 +216,9 @@ func run(log *slog.Logger) error {
 
 			// La previsión de saldo lee del mismo motor el próximo ingreso, con el
 			// mismo criterio de ingreso recurrente que la tarjeta.
-			zone, err := time.LoadLocation(bff.DefaultTimeZone)
-			if err != nil {
-				return err
-			}
 			forecasts := forecast.NewService(core, cards, risk, zone).WithCardReserve(pocketSvc)
+			// Y antes de cada aporte, la regla de ahorro mira la previsión.
+			goalSvc.WithForecast(forecasts)
 			setup = append(setup, func(s *bff.Server) *bff.Server { return s.WithForecast(forecasts) })
 		} else {
 			log.Warn("tarjeta de crédito deshabilitada: falta RISK_URL")
@@ -286,6 +298,26 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// runGoalRules ejecuta, cada `every`, las reglas de ahorro a las que les tocó.
+// Varias réplicas del canal no se pisan: cada regla se bloquea al ejecutarla, y
+// un periodo tiene un solo aporte.
+func runGoalRules(ctx context.Context, svc *goals.Service, every time.Duration, log *slog.Logger) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		if ran, err := svc.RunDue(ctx); err != nil {
+			log.WarnContext(ctx, "reglas de ahorro", "ejecutadas", ran, "error", err)
+		} else if ran > 0 {
+			log.InfoContext(ctx, "reglas de ahorro", "ejecutadas", ran)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func env(name, fallback string) string {

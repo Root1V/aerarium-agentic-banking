@@ -33,8 +33,10 @@ type paymentStatusJSON struct {
 }
 
 type authorizationJSON struct {
-	// ActorKind: `holder` o `agent`.
+	// ActorKind: `holder`, `agent` o `rule` (una regla de ahorro).
 	ActorKind string `json:"actor_kind"`
+	// Goal: la meta de la regla que apartó el dinero.
+	Goal string `json:"goal,omitempty"`
 	// Outcome: `allow` (no pidió confirmación) o `confirmed`.
 	Outcome string `json:"outcome"`
 	// Reason: por qué pidió confirmación (`new_payee`, `amount`, `high_impact`)
@@ -143,6 +145,12 @@ func (s *Server) authorizationJSON(ctx context.Context, customerID string, e *co
 						out.Device = d.Name
 					}
 				}
+			}
+		}
+	case control.ActorRule:
+		if s.goals != nil {
+			if goal, err := s.goals.RuleName(ctx, e.Actor.ID); err == nil {
+				out.Goal = goal
 			}
 		}
 	case control.ActorAgent:

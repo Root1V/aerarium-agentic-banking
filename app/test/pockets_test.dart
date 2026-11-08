@@ -44,7 +44,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Dentro de la tarjeta del saldo, en una fila.
-    expect(find.text('Apartado en bolsillos'), findsOneWidget);
+    expect(find.text('Apartado en bolsillos y metas'), findsOneWidget);
     expect(find.text('90,00 USD'), findsOneWidget);
     expect(find.text('100,00 USD'), findsOneWidget, reason: 'el disponible es el de la cuenta, sin los bolsillos');
 
@@ -62,7 +62,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Aparta dinero para algo'), findsOneWidget);
 
-    await tester.tap(find.text('Nuevo bolsillo'));
+    await tester.tap(find.text('Empezar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Un bolsillo'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Es para pagar la tarjeta'));
     await tester.pumpAndSettle();

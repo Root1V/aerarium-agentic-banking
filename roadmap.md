@@ -160,9 +160,11 @@ retención vence. Propuesto en el canal (AE-09).
   producción vendrá de la SBS o del BCRP; la tarjeta de crédito sigue en dólares y solo
   se ve en la cuenta en dólares; transferir a alguien cuya cuenta es de otra moneda se
   rechaza en vez de ofrecer el cambio.
-- **Los bolsillos son manuales**: apartar y devolver lo hace la persona. Las reglas que
-  apartan solas (redondeo, un porcentaje del sueldo) son F3-03. Pagar la tarjeta desde
-  su bolsillo funciona por la API, pero la pantalla de la tarjeta todavía paga desde la
+- **Las reglas de ahorro son de monto fijo**, cada semana o cada mes. Faltan las que
+  apartan un porcentaje del sueldo el día que llega (el motor ya fecha el ingreso) y el
+  redondeo de cada gasto. Un aporte saltado o reducido se ve en la meta, pero no avisa
+  por notificación: viene con las notificaciones push. Pagar la tarjeta desde su
+  bolsillo funciona por la API, pero la pantalla de la tarjeta todavía paga desde la
   cuenta.
 - **La previsión de saldo es simple a propósito**: el gasto diario es un promedio de 60
   días, sin estacionalidad ni gastos fijos detectados (alquiler, servicios), y no avisa
@@ -259,7 +261,17 @@ resultados financieros, con agentes que actúan dentro de límites que el client
   3.300 por operación) y se abre la de dólares desde el inicio. Cambiar entre las
   propias muestra el tipo de referencia, el aplicado y **cuánto cuesta el cambio en
   dinero**, con la cotización congelada 30 segundos. Los montos en soles, «S/ 1.234,50».
-- [ ] **F3-03 Metas con ahorro automático autorizado** (sobre F3-02 y F3-04). *Media.*
+- [x] **F3-03 Metas con ahorro automático autorizado** (`services/goals`): una meta es
+  un bolsillo con un monto y, si se quiere, una fecha; dice si llega a tiempo y, si no,
+  cuánto apartar por semana o por mes. Su **regla de ahorro es un permiso**: se confirma
+  con la cara (nivel 4, como dar permiso de pago), aparece en «Permisos y privacidad» y
+  se quita con un toque. Cada aporte pasa por la capa de control con la regla como actor
+  (`auto_save`, nivel 3, con el monto como tope) y el movimiento dice «lo apartó tu regla
+  de ahorro». Lo distinto: **antes de apartar mira la previsión de saldo** (F3-01), y si
+  el aporte la dejaría sin colchón (5 días de gasto) antes de cobrar, aparta menos o
+  nada, y lo explica con el punto más bajo previsto y la fecha del ingreso. Al cumplirse
+  la meta, la regla se detiene sola. El primer aporte es al confirmarla; los demás, cada
+  semana o cada mes, en una vuelta del canal cada 10 minutos.
 - [x] **F3-05 Identidad del agente** (`services/agents`, contrato 1.1): cada agente se
   registra con su clave Ed25519 y la rota sin darse de baja; el permiso es de un
   agente y el titular ve su nombre; cada pago lleva `agent_id`, la intención (qué

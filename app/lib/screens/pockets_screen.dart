@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../auth/device_keys.dart';
+import '../goal_text.dart';
 import '../money.dart';
+import 'goal_screen.dart';
 
 /// Los bolsillos de la cuenta: dinero apartado para algo («para la tarjeta»,
 /// «vacaciones»). Lo apartado no se gasta sin querer, y vuelve a la cuenta cuando
@@ -13,13 +16,19 @@ import '../money.dart';
 ///
 /// Mover entre la cuenta y sus bolsillos no pide la cara: el dinero no sale de la
 /// persona. Lo que no se puede es mandarlo a otro desde un bolsillo.
+///
+/// Las metas (F3-03) son bolsillos con un monto y, si se quiere, una fecha y una
+/// regla que aparta sola. Van arriba, con su avance.
 class PocketsScreen extends StatefulWidget {
   const PocketsScreen(
-      {super.key, required this.client, required this.accountId, required this.currency, this.available});
+      {super.key, required this.client, required this.accountId, required this.currency, this.available, this.confirmer});
 
   final BffClient client;
   final String accountId;
   final String currency;
+
+  /// Para confirmar la regla de ahorro de una meta con el teléfono vinculado.
+  final TransferConfirmer? confirmer;
 
   /// Lo disponible en la cuenta, para el resumen. Nulo si no se conoce.
   final Money? available;
@@ -30,6 +39,7 @@ class PocketsScreen extends StatefulWidget {
 
 class _PocketsScreenState extends State<PocketsScreen> {
   List<Pocket>? _pockets;
+  List<Goal> _goals = const [];
   ApiError? _error;
   bool _busy = false;
   final _random = Random.secure();
@@ -45,9 +55,18 @@ class _PocketsScreenState extends State<PocketsScreen> {
   Future<void> _load() async {
     try {
       final pockets = await widget.client.pockets(widget.accountId);
+      // Las metas son aparte: si no responden (o el banco no las tiene), la
+      // pantalla sigue siendo la de bolsillos.
+      List<Goal> goals = const [];
+      try {
+        goals = await widget.client.goals(widget.accountId);
+      } on ApiError {
+        goals = const [];
+      }
       if (mounted) {
         setState(() {
           _pockets = pockets;
+          _goals = goals;
           _error = null;
         });
       }
@@ -66,6 +85,51 @@ class _PocketsScreenState extends State<PocketsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Elegir qué abrir: una meta o un bolsillo.
+  Future<void> _new() async {
+    final what = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('Una meta'),
+              subtitle: const Text('Cuánto y para cuándo. Puede apartar sola, sin dejarte corto.'),
+              onTap: () => Navigator.of(context).pop('goal'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.savings_outlined),
+              title: const Text('Un bolsillo'),
+              subtitle: const Text('Dinero apartado, sin monto ni fecha.'),
+              onTap: () => Navigator.of(context).pop('pocket'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (what == 'goal') await _createGoal();
+    if (what == 'pocket') await _create();
+  }
+
+  Future<void> _createGoal() async {
+    final goal = await Navigator.of(context).push<Goal>(MaterialPageRoute(
+      builder: (_) => NewGoalScreen(client: widget.client, accountId: widget.accountId, currency: widget.currency),
+    ));
+    if (goal == null || !mounted) return;
+    await _openGoal(goal);
+  }
+
+  Future<void> _openGoal(Goal goal) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GoalScreen(client: widget.client, goalId: goal.id, confirmer: widget.confirmer),
+    ));
+    await _load();
   }
 
   Future<void> _create() async {
@@ -180,18 +244,18 @@ class _PocketsScreenState extends State<PocketsScreen> {
   Widget build(BuildContext context) {
     final pockets = _pockets;
     return Scaffold(
-      appBar: AppBar(title: const Text('Bolsillos')),
+      appBar: AppBar(title: const Text('Bolsillos y metas')),
       floatingActionButton: pockets == null || pockets.isEmpty
           ? null
           : FloatingActionButton.extended(
-              onPressed: _busy ? null : _create,
+              onPressed: _busy ? null : _new,
               icon: const Icon(Icons.add),
-              label: const Text('Nuevo bolsillo'),
+              label: const Text('Nuevo'),
             ),
       body: switch ((pockets, _error)) {
         (_, final ApiError error?) => Center(child: Text(error.userMessage)),
         (null, _) => const Center(child: CircularProgressIndicator()),
-        (final List<Pocket> list, _) when list.isEmpty => _Empty(onCreate: _busy ? null : _create),
+        (final List<Pocket> list, _) when list.isEmpty => _Empty(onCreate: _busy ? null : _new),
         (final List<Pocket> list, _) => ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             children: [
@@ -199,18 +263,31 @@ class _PocketsScreenState extends State<PocketsScreen> {
                 set: Money(list.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), widget.currency),
                 available: widget.available,
               ),
-              const SizedBox(height: 16),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    for (final (i, p) in list.indexed) ...[
-                      if (i > 0) const Divider(height: 1, indent: 72),
-                      _PocketRow(pocket: p, onTap: _busy ? null : () => _actions(p)),
+              if (_goals.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Metas', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                for (final g in _goals) _GoalCard(goal: g, onTap: _busy ? null : () => _openGoal(g)),
+              ],
+              // Los bolsillos de las metas ya están arriba, con su avance.
+              if (list.any((p) => !p.isGoal)) ...[
+                const SizedBox(height: 16),
+                if (_goals.isNotEmpty) ...[
+                  Text('Bolsillos', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                ],
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (final (i, p) in list.where((p) => !p.isGoal).indexed) ...[
+                        if (i > 0) const Divider(height: 1, indent: 72),
+                        _PocketRow(pocket: p, onTap: _busy ? null : () => _actions(p)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
       },
@@ -240,6 +317,56 @@ class _Summary extends StatelessWidget {
             Text('Y ${available!.format()} disponibles en tu cuenta', style: theme.textTheme.bodySmall),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _GoalCard extends StatelessWidget {
+  const _GoalCard({required this.goal, this.onTap});
+
+  final Goal goal;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rule = goal.rule;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(goal.reached ? Icons.emoji_events_outlined : Icons.flag_outlined,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(goal.name, style: theme.textTheme.titleMedium)),
+                  Text('${goal.saved.format()} de ${goal.target.format()}', style: theme.textTheme.bodySmall),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(value: goal.progress, minHeight: 6),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                goal.reached
+                    ? 'Cumplida'
+                    : rule == null
+                        ? 'Sin aportes automáticos'
+                        : 'Aparta ${ruleText(rule)}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -288,12 +415,12 @@ class _Empty extends StatelessWidget {
             Text('Aparta dinero para algo', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             const Text(
-              'Para pagar la tarjeta, para unas vacaciones. No lo gastarás sin querer: '
-              'sigue siendo tuyo y vuelve a tu cuenta cuando quieras.',
+              'Para pagar la tarjeta, para un viaje. Con una meta, puede apartar sola cada semana o cada '
+              'mes, sin dejarte corto antes de cobrar. Sigue siendo tuyo y vuelve a tu cuenta cuando quieras.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(onPressed: onCreate, icon: const Icon(Icons.add), label: const Text('Nuevo bolsillo')),
+            FilledButton.icon(onPressed: onCreate, icon: const Icon(Icons.add), label: const Text('Empezar')),
           ],
         ),
       ),

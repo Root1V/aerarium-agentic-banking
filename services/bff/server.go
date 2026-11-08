@@ -27,6 +27,7 @@ import (
 	"github.com/aibank/aibank/services/credit"
 	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/fx"
+	"github.com/aibank/aibank/services/goals"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/pockets"
 	"github.com/aibank/aibank/services/sessions"
@@ -47,6 +48,8 @@ type Server struct {
 	forecast *forecast.Service
 	// pockets habilita los bolsillos: dinero apartado dentro de la cuenta.
 	pockets *pockets.Service
+	// goals habilita las metas con ahorro automático, sobre los bolsillos.
+	goals *goals.Service
 	// receipts habilita las constancias verificables.
 	receipts *receiptConfig
 	// fx habilita cambiar entre cuentas propias, soles y dólares.
@@ -126,6 +129,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.pockets != nil {
 		s.pocketRoutes(mux)
+	}
+	if s.goals != nil {
+		s.goalRoutes(mux)
 	}
 	mux.Handle("POST /v1/transfers", s.requireAuth(s.handleTransfer))
 	mux.Handle("GET /v1/payees/recent", s.requireAuth(s.handleRecentPayees))

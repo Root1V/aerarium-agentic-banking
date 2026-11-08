@@ -28,6 +28,9 @@ var schema string
 const (
 	PurposeCard    = "card"
 	PurposeGeneral = "general"
+	// PurposeGoal: el bolsillo de una meta. Lo abre y lo cierra el servicio de
+	// metas, no la persona desde la lista de bolsillos.
+	PurposeGoal = "goal"
 )
 
 // MaxPockets por cuenta: suficientes para ordenar el dinero, no tantos que la
@@ -63,8 +66,20 @@ func NewService(db *sql.DB, core *coreclient.Client) *Service {
 }
 
 func (s *Service) Migrate(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, schema)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// El esquema cambia una restricción: dos procesos que arrancan a la vez no
+	// deben pisarse.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('pockets.schema'))`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, schema); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // List devuelve los bolsillos abiertos de una cuenta del cliente.
@@ -126,7 +141,7 @@ func (s *Service) Open(ctx context.Context, customerID, accountID, name, purpose
 	if name == "" || len([]rune(name)) > 40 {
 		return nil, ErrBadName
 	}
-	if purpose != PurposeCard && purpose != PurposeGeneral {
+	if purpose != PurposeCard && purpose != PurposeGeneral && purpose != PurposeGoal {
 		return nil, ErrBadPurpose
 	}
 	parent, err := s.core.GetAccountByID(ctx, accountID)
@@ -189,6 +204,18 @@ func (s *Service) Move(ctx context.Context, customerID, pocketID, idempotencyKey
 	// otra operación.
 	return s.core.MovePocket(ctx, "pocket:"+pocketID+":"+idempotencyKey, from, to, amountMicros,
 		pocket.Currency, pocket.Name)
+}
+
+// Balance es el saldo de un bolsillo del cliente.
+func (s *Service) Balance(ctx context.Context, customerID, pocketID string) (int64, error) {
+	if _, err := s.owned(ctx, customerID, pocketID); err != nil {
+		return 0, err
+	}
+	balance, err := s.core.GetBalance(ctx, pocketID)
+	if err != nil {
+		return 0, err
+	}
+	return balance.AmountMicros, nil
 }
 
 // Close devuelve lo que quede a la cuenta y cierra el bolsillo. Cerrar nunca hace

@@ -48,6 +48,13 @@ String receiptText(Movement m) => [
 /// Cómo se autorizó, en una frase y su porqué. Responde «¿esto lo hice yo?».
 (String, String) authorizationText(AuthorizationInfo a) {
   final on = a.device.isEmpty ? '' : ' en ${a.device}';
+  if (a.actorKind == 'rule') {
+    return (
+      a.goal.isEmpty ? 'Lo apartó tu regla de ahorro' : 'Lo apartó tu regla de ahorro de ${a.goal}',
+      'La confirmaste con tu cara al crearla, y antes de apartar miró que no te dejara corto. '
+          'La quitas en Permisos y privacidad.',
+    );
+  }
   if (a.actorKind == 'agent') {
     final who = [a.agent.isEmpty ? 'un agente' : a.agent, if (a.platform.isNotEmpty) 'de ${a.platform}'].join(' ');
     final limit = a.mandateMaxPerOperation == null ? '' : ' de hasta ${a.mandateMaxPerOperation!.format()} por pago';
