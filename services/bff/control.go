@@ -57,7 +57,8 @@ type confirmationRequired struct {
 }
 
 type confirmationSummary struct {
-	// Kind dice qué se confirma: "transfer" o "grant_permission".
+	// Kind dice qué se confirma: "transfer", "grant_permission" o
+	// "savings_rule".
 	Kind         string `json:"kind"`
 	AmountMicros int64  `json:"amount_micros"`
 	Currency     string `json:"currency"`
@@ -69,6 +70,8 @@ type confirmationSummary struct {
 	MaxPerOperation *int64 `json:"max_per_operation,omitempty"`
 	MaxTotal        *int64 `json:"max_total,omitempty"`
 	ExpiresInDays   int    `json:"expires_in_days,omitempty"`
+	// Cadence: cada cuánto aparta una regla de ahorro (`weekly`, `monthly`).
+	Cadence string `json:"cadence,omitempty"`
 }
 
 // holderOperation es una operación del titular por decidir.

@@ -56,6 +56,9 @@ const (
 	ActionMandatePayment Action = "mandate_payment"
 	// ActionGrantPermission: darle a otro actor poder sobre el dinero.
 	ActionGrantPermission Action = "grant_permission"
+	// ActionAutoSave: una regla de ahorro aparta dinero en el bolsillo de una
+	// meta (F3-03). No sale de la persona, pero se mueve sin que ella esté.
+	ActionAutoSave Action = "auto_save"
 )
 
 // catalog es el nivel de cada acción. Lo que no está aquí se niega.
@@ -63,6 +66,7 @@ var catalog = map[Action]Level{
 	ActionTransfer:        LevelMandate,
 	ActionMandatePayment:  LevelMandate,
 	ActionGrantPermission: LevelHuman,
+	ActionAutoSave:        LevelMandate,
 }
 
 // LevelOf devuelve el nivel de una acción, o 0 si no está en el catálogo.

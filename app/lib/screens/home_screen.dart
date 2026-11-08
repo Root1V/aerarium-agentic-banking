@@ -208,7 +208,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (home == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => PocketsScreen(
-          client: widget.client, accountId: widget.accountId, currency: home.balance.currency, available: home.balance),
+          client: widget.client,
+          accountId: widget.accountId,
+          currency: home.balance.currency,
+          available: home.balance,
+          confirmer: widget.confirmer),
     ));
     // Apartar mueve el disponible y la previsión: se recarga todo.
     if (mounted) await _load();
@@ -588,7 +592,7 @@ class _BalanceCard extends StatelessWidget {
             _CardRow(
               key: const Key('pockets'),
               icon: Icons.savings_outlined,
-              label: list.isEmpty ? 'Apartar en un bolsillo' : 'Apartado en bolsillos',
+              label: list.isEmpty ? 'Apartar o crear una meta' : 'Apartado en bolsillos y metas',
               value: list.isEmpty
                   ? null
                   : Money(list.fold<int>(0, (sum, p) => sum + p.balance.amountMicros), home.balance.currency)

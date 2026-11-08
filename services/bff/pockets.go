@@ -74,6 +74,11 @@ func (s *Server) handleOpenPocket(w http.ResponseWriter, r *http.Request, p *Pri
 	if body.Purpose == "" {
 		body.Purpose = pockets.PurposeGeneral
 	}
+	if body.Purpose == pockets.PurposeGoal {
+		// El de una meta nace con la meta: sin ella sería un bolsillo cualquiera.
+		writeError(w, http.StatusBadRequest, "invalid_request", "las metas se crean en /v1/accounts/{id}/goals")
+		return
+	}
 	pocket, err := s.pockets.Open(r.Context(), p.CustomerID, accountID, body.Name, body.Purpose)
 	if err != nil {
 		s.pocketError(w, r, err)
@@ -109,9 +114,16 @@ func (s *Server) handlePocketMove(in bool) func(http.ResponseWriter, *http.Reque
 }
 
 func (s *Server) handleClosePocket(w http.ResponseWriter, r *http.Request, p *Principal) {
-	if err := s.pockets.Close(r.Context(), p.CustomerID, r.PathValue("pocketID")); err != nil {
+	pocketID := r.PathValue("pocketID")
+	if err := s.pockets.Close(r.Context(), p.CustomerID, pocketID); err != nil {
 		s.pocketError(w, r, err)
 		return
+	}
+	if s.goals != nil {
+		// Cerrar el bolsillo de una meta la cierra, y con ella su regla.
+		if err := s.goals.PocketClosed(r.Context(), pocketID); err != nil {
+			s.logger.ErrorContext(r.Context(), "cerrar la meta del bolsillo", "error", err)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

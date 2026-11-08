@@ -4,6 +4,7 @@ import '../access_text.dart';
 import '../api/client.dart';
 import '../api/errors.dart';
 import '../api/models.dart';
+import '../goal_text.dart';
 import '../money.dart';
 import 'mandates_screen.dart';
 
@@ -128,6 +129,28 @@ class _AccessScreenState extends State<AccessScreen> {
                       ),
                   ],
                 ),
+                if (a.savingsRules.isNotEmpty)
+                  _Section(
+                    title: 'Apartan solas en tus metas',
+                    empty: '',
+                    children: [
+                      for (final rule in a.savingsRules)
+                        _Row(
+                          icon: Icons.autorenew,
+                          title: rule.goalName,
+                          subtitle: '${rule.amount.format()} ${cadenceText(rule.cadence)}',
+                          action: 'Quitar',
+                          onAction: _busy
+                              ? null
+                              : () => _revoke(
+                                    title: '¿Quitar la regla de ${rule.goalName}?',
+                                    body: 'Deja de apartar sola. Lo juntado sigue en la meta.',
+                                    action: 'Quitar',
+                                    run: () => widget.client.revokeGoalRule(rule.goalId),
+                                  ),
+                        ),
+                    ],
+                  ),
                 _Section(
                   title: 'Teléfonos vinculados',
                   empty: 'No tienes teléfonos vinculados.',

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aibank/aibank/services/aliases"
@@ -50,10 +51,24 @@ type accessActivityJSON struct {
 	Action    string `json:"action"`
 	Outcome   string `json:"outcome"`
 	Reason    string `json:"reason,omitempty"`
+	// Subject: de qué era un permiso que se dio (`savings_rule`); vacío si de pago.
+	Subject string `json:"subject,omitempty"`
+}
+
+// accessRuleJSON es una regla de ahorro: también mueve dinero sin que la persona
+// esté, así que se ve y se quita aquí como los demás permisos.
+type accessRuleJSON struct {
+	GoalID    string    `json:"goal_id"`
+	GoalName  string    `json:"goal_name"`
+	Amount    moneyJSON `json:"amount"`
+	Cadence   string    `json:"cadence"`
+	Since     time.Time `json:"since"`
+	NextRunOn string    `json:"next_run_on"`
 }
 
 type accessJSON struct {
 	Platforms      []mandateJSON        `json:"platforms"`
+	SavingsRules   []accessRuleJSON     `json:"savings_rules"`
 	Phones         []accessPhoneJSON    `json:"phones"`
 	Passkeys       []accessPasskeyJSON  `json:"passkeys"`
 	PhoneDirectory *string              `json:"phone_directory,omitempty"`
@@ -72,8 +87,8 @@ func (s *Server) accessRoutes(mux *http.ServeMux) {
 
 func (s *Server) handleAccess(w http.ResponseWriter, r *http.Request, p *Principal) {
 	ctx := r.Context()
-	out := accessJSON{Platforms: []mandateJSON{}, Phones: []accessPhoneJSON{}, Passkeys: []accessPasskeyJSON{},
-		Activity: []accessActivityJSON{}}
+	out := accessJSON{Platforms: []mandateJSON{}, SavingsRules: []accessRuleJSON{}, Phones: []accessPhoneJSON{},
+		Passkeys: []accessPasskeyJSON{}, Activity: []accessActivityJSON{}}
 
 	if s.consents != nil {
 		mandates, err := s.core.ListMandates(ctx, p.CustomerID)
@@ -86,6 +101,19 @@ func (s *Server) handleAccess(w http.ResponseWriter, r *http.Request, p *Princip
 			if m.Usable() {
 				out.Platforms = append(out.Platforms, s.toMandateJSON(ctx, m))
 			}
+		}
+	}
+
+	if s.goals != nil {
+		rules, err := s.goals.Rules(ctx, p.CustomerID)
+		if err != nil {
+			s.accessUnavailable(w, r, "reglas de ahorro", err)
+			return
+		}
+		for _, rule := range rules {
+			out.SavingsRules = append(out.SavingsRules, accessRuleJSON{GoalID: rule.GoalID, GoalName: rule.GoalName,
+				Amount:  moneyJSON{AmountMicros: rule.AmountMicros, Currency: rule.Currency},
+				Cadence: string(rule.Cadence), Since: rule.CreatedAt, NextRunOn: rule.NextRunOn.Format(time.DateOnly)})
 		}
 	}
 
@@ -172,9 +200,20 @@ func (s *Server) activityJSON(ctx context.Context, history []control.Entry, phon
 				// Antes de la 1.1 el actor era la plataforma, no el agente.
 				name = s.merchantName(ctx, e.Actor.ID)
 			}
+		case control.ActorRule:
+			name = "Regla de ahorro"
+			if s.goals != nil {
+				if goal, err := s.goals.RuleName(ctx, e.Actor.ID); err == nil {
+					name = "Regla de ahorro de «" + goal + "»"
+				}
+			}
+		}
+		subject := ""
+		if e.Action == control.ActionGrantPermission && strings.Contains(e.Operation, "\nkind=savings_rule") {
+			subject = "savings_rule"
 		}
 		out = append(out, accessActivityJSON{At: e.DecidedAt, ActorKind: string(e.Actor.Kind), ActorName: name,
-			Action: string(e.Action), Outcome: e.Outcome, Reason: string(e.Reason)})
+			Action: string(e.Action), Outcome: e.Outcome, Reason: string(e.Reason), Subject: subject})
 	}
 	return out
 }

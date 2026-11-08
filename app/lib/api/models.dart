@@ -554,8 +554,11 @@ class ConfirmationChallenge {
   /// El agente de esa plataforma que podrá usar el permiso.
   final String agentName;
 
-  /// Qué se confirma: `transfer` o `grant_permission`.
+  /// Qué se confirma: `transfer`, `grant_permission` o `savings_rule`.
   final String kind;
+
+  /// Cada cuánto aparta una regla de ahorro: `weekly` o `monthly`.
+  final String cadence;
 
   /// Los topes y la vigencia del permiso que se da. Nulos: sin tope.
   final int? maxPerOperationMicros;
@@ -569,6 +572,7 @@ class ConfirmationChallenge {
     required this.currency,
     required this.toName,
     this.kind = 'transfer',
+    this.cadence = '',
     this.agentName = '',
     this.maxPerOperationMicros,
     this.maxTotalMicros,
@@ -584,6 +588,7 @@ class ConfirmationChallenge {
       currency: summary['currency'] as String? ?? '',
       toName: summary['to_name'] as String? ?? '',
       kind: summary['kind'] as String? ?? 'transfer',
+      cadence: summary['cadence'] as String? ?? '',
       agentName: summary['agent_name'] as String? ?? '',
       maxPerOperationMicros: (summary['max_per_operation'] as num?)?.toInt(),
       maxTotalMicros: (summary['max_total'] as num?)?.toInt(),
@@ -966,11 +971,12 @@ class Pocket {
   final String id;
   final String name;
 
-  /// `card` (apartado para pagar la tarjeta) o `general`.
+  /// `card` (apartado para pagar la tarjeta), `goal` (el de una meta) o `general`.
   final String purpose;
   final Money balance;
 
   bool get isForCard => purpose == 'card';
+  bool get isGoal => purpose == 'goal';
 
   factory Pocket.fromJson(Map<String, dynamic> json) => Pocket(
         id: json['id'] as String,
@@ -984,6 +990,7 @@ class Pocket {
 class AccessOverview {
   const AccessOverview({
     required this.platforms,
+    this.savingsRules = const [],
     required this.phones,
     required this.passkeys,
     required this.phoneDirectory,
@@ -992,6 +999,9 @@ class AccessOverview {
 
   /// Plataformas con permiso de pago vigente.
   final List<Mandate> platforms;
+
+  /// Reglas de ahorro: también mueven dinero sin que estés.
+  final List<SavingsRuleAccess> savingsRules;
   final List<LinkedPhone> phones;
   final List<PasskeyEntry> passkeys;
 
@@ -1002,6 +1012,10 @@ class AccessOverview {
 
   factory AccessOverview.fromJson(Map<String, dynamic> json) => AccessOverview(
         platforms: [for (final m in (json['platforms'] as List<dynamic>? ?? const [])) Mandate.fromJson(m as Map<String, dynamic>)],
+        savingsRules: [
+          for (final r in (json['savings_rules'] as List<dynamic>? ?? const []))
+            SavingsRuleAccess.fromJson(r as Map<String, dynamic>)
+        ],
         phones: [for (final p in (json['phones'] as List<dynamic>? ?? const [])) LinkedPhone.fromJson(p as Map<String, dynamic>)],
         passkeys: [
           for (final p in (json['passkeys'] as List<dynamic>? ?? const [])) PasskeyEntry.fromJson(p as Map<String, dynamic>)
@@ -1062,9 +1076,13 @@ class ActivityEntry {
     required this.action,
     required this.outcome,
     required this.reason,
+    this.subject = '',
   });
 
   final DateTime at;
+
+  /// De qué era un permiso que se dio: `savings_rule`, o vacío si de pago.
+  final String subject;
 
   /// `holder` (la persona), `agent`, `rule` o `assistant`.
   final String actorKind;
@@ -1084,6 +1102,7 @@ class ActivityEntry {
         action: json['action'] as String? ?? '',
         outcome: json['outcome'] as String? ?? '',
         reason: json['reason'] as String? ?? '',
+        subject: json['subject'] as String? ?? '',
       );
 }
 
@@ -1135,10 +1154,14 @@ class AuthorizationInfo {
     this.signed = false,
     this.mandateMaxPerOperation,
     this.mandateExpiresAt,
+    this.goal = '',
   });
 
-  /// `holder` o `agent`.
+  /// `holder`, `agent` o `rule` (una regla de ahorro).
   final String actorKind;
+
+  /// La meta de la regla que apartó el dinero.
+  final String goal;
 
   /// `allow` (no pidió confirmación) o `confirmed`.
   final String outcome;
@@ -1162,6 +1185,7 @@ class AuthorizationInfo {
         agent: json['agent'] as String? ?? '',
         platform: json['platform'] as String? ?? '',
         signed: json['signed'] as bool? ?? false,
+        goal: json['goal'] as String? ?? '',
         mandateMaxPerOperation: json['mandate_max_per_operation'] == null
             ? null
             : Money.fromJson(json['mandate_max_per_operation'] as Map<String, dynamic>),
@@ -1278,3 +1302,152 @@ class FxQuote {
 
 /// Un tipo de cambio en millonésimas, como se lee: 3363100 → «3,3631».
 String rateText(int rate) => '${rate ~/ 1000000},${((rate % 1000000) ~/ 100).toString().padLeft(4, '0')}';
+
+/// Una regla de ahorro en el centro de permisos.
+class SavingsRuleAccess {
+  const SavingsRuleAccess({required this.goalId, required this.goalName, required this.amount, required this.cadence});
+
+  final String goalId;
+  final String goalName;
+  final Money amount;
+
+  /// `weekly` o `monthly`.
+  final String cadence;
+
+  factory SavingsRuleAccess.fromJson(Map<String, dynamic> json) => SavingsRuleAccess(
+        goalId: json['goal_id'] as String,
+        goalName: json['goal_name'] as String? ?? '',
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        cadence: json['cadence'] as String? ?? 'monthly',
+      );
+}
+
+DateTime? _date(Object? v) => v == null ? null : DateTime.parse(v as String);
+
+/// Una meta (F3-03): un bolsillo con un monto, una fecha si se quiere, y su
+/// regla de ahorro.
+class Goal {
+  const Goal({
+    required this.id,
+    required this.name,
+    required this.pocketId,
+    required this.target,
+    required this.saved,
+    required this.pace,
+    this.targetDate,
+    this.reached = false,
+    this.rule,
+    this.contributions = const [],
+  });
+
+  final String id;
+  final String name;
+  final String pocketId;
+  final Money target;
+  final Money saved;
+  final DateTime? targetDate;
+  final bool reached;
+  final GoalRule? rule;
+  final GoalPace pace;
+
+  /// Lo que hizo la regla, también lo que no. Solo en el detalle.
+  final List<GoalContribution> contributions;
+
+  /// Cuánto lleva, de 0 a 1.
+  double get progress =>
+      target.amountMicros == 0 ? 0 : (saved.amountMicros / target.amountMicros).clamp(0, 1).toDouble();
+
+  factory Goal.fromJson(Map<String, dynamic> json) => Goal(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? '',
+        pocketId: json['pocket_id'] as String? ?? '',
+        target: Money.fromJson(json['target'] as Map<String, dynamic>),
+        saved: Money.fromJson(json['saved'] as Map<String, dynamic>),
+        targetDate: _date(json['target_date']),
+        reached: json['reached'] as bool? ?? false,
+        rule: json['rule'] == null ? null : GoalRule.fromJson(json['rule'] as Map<String, dynamic>),
+        pace: GoalPace.fromJson(json['pace'] as Map<String, dynamic>? ?? const {}),
+        contributions: [
+          for (final c in (json['contributions'] as List<dynamic>? ?? const []))
+            GoalContribution.fromJson(c as Map<String, dynamic>)
+        ],
+      );
+}
+
+class GoalRule {
+  const GoalRule({required this.amount, required this.cadence, required this.nextRunOn});
+
+  final Money amount;
+
+  /// `weekly` o `monthly`.
+  final String cadence;
+  final DateTime nextRunOn;
+
+  factory GoalRule.fromJson(Map<String, dynamic> json) => GoalRule(
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        cadence: json['cadence'] as String? ?? 'monthly',
+        nextRunOn: DateTime.parse(json['next_run_on'] as String),
+      );
+}
+
+/// Si la meta llega a tiempo, y qué haría falta.
+class GoalPace {
+  const GoalPace({this.remaining, this.reachOn, this.onTrack, this.suggested, this.suggestedCadence = 'monthly'});
+
+  final Money? remaining;
+
+  /// Cuándo se completa al ritmo de la regla.
+  final DateTime? reachOn;
+
+  /// Llega antes de la fecha de la meta. Nulo sin fecha o sin regla.
+  final bool? onTrack;
+
+  /// Lo que habría que apartar por aporte para llegar a la fecha.
+  final Money? suggested;
+  final String suggestedCadence;
+
+  factory GoalPace.fromJson(Map<String, dynamic> json) => GoalPace(
+        remaining: json['remaining'] == null ? null : Money.fromJson(json['remaining'] as Map<String, dynamic>),
+        reachOn: _date(json['reach_on']),
+        onTrack: json['on_track'] as bool?,
+        suggested: json['suggested'] == null ? null : Money.fromJson(json['suggested'] as Map<String, dynamic>),
+        suggestedCadence: json['suggested_cadence'] as String? ?? 'monthly',
+      );
+}
+
+/// Lo que hizo la regla un día que le tocaba.
+class GoalContribution {
+  const GoalContribution({
+    required this.runOn,
+    required this.outcome,
+    required this.asked,
+    required this.amount,
+    this.reason = '',
+    this.lowest,
+    this.incomeOn,
+  });
+
+  final DateTime runOn;
+
+  /// `saved`, `reduced`, `skipped` o `reached`.
+  final String outcome;
+  final Money asked;
+  final Money amount;
+
+  /// `keeps_cushion`, `insufficient_funds`, `not_allowed`.
+  final String reason;
+
+  /// Lo más bajo que preveía tu saldo antes del ingreso, al decidir.
+  final Money? lowest;
+  final DateTime? incomeOn;
+
+  factory GoalContribution.fromJson(Map<String, dynamic> json) => GoalContribution(
+        runOn: DateTime.parse(json['run_on'] as String),
+        outcome: json['outcome'] as String? ?? '',
+        asked: Money.fromJson(json['asked'] as Map<String, dynamic>),
+        amount: Money.fromJson(json['amount'] as Map<String, dynamic>),
+        reason: json['reason'] as String? ?? '',
+        lowest: json['lowest'] == null ? null : Money.fromJson(json['lowest'] as Map<String, dynamic>),
+        incomeOn: _date(json['income_on']),
+      );
+}

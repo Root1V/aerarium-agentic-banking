@@ -22,6 +22,7 @@ import (
 	"github.com/aibank/aibank/services/devices"
 	"github.com/aibank/aibank/services/forecast"
 	"github.com/aibank/aibank/services/fx"
+	"github.com/aibank/aibank/services/goals"
 	"github.com/aibank/aibank/services/oauth"
 	"github.com/aibank/aibank/services/onboarding"
 	"github.com/aibank/aibank/services/passkeys"
@@ -46,6 +47,22 @@ type passkeyEnv struct {
 	f   *fixture
 	db  *sql.DB
 	fx  *fx.Service
+	// goals y su previsión, para fijar lo que «prevé» antes de un aporte.
+	goals         *goals.Service
+	goalsForecast *stubForecast
+}
+
+// stubForecast es la previsión real, salvo que la prueba fije una.
+type stubForecast struct {
+	real  *forecast.Service
+	fixed *forecast.Forecast
+}
+
+func (s *stubForecast) Forecast(ctx context.Context, customerID, accountID string) (*forecast.Forecast, error) {
+	if s.fixed != nil {
+		return s.fixed, nil
+	}
+	return s.real.Forecast(ctx, customerID, accountID)
 }
 
 func newPasskeyEnv(t *testing.T) *passkeyEnv {
@@ -162,6 +179,12 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 	if err := agentStore.Migrate(f.ctx); err != nil {
 		t.Fatal(err)
 	}
+	forecasts := forecast.NewService(f.core, cards, assessor, time.UTC).WithCardReserve(pocketSvc)
+	goalsForecast := &stubForecast{real: forecasts}
+	goalSvc := goals.NewService(db, pocketSvc, ctrl, time.UTC).WithForecast(goalsForecast)
+	if err := goalSvc.Migrate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
 	auth := bff.ChainAuthenticator{bff.NewSessionAuthenticator(sess)}
 	server := bff.NewServer(f.core, auth, nil).
 		WithOnboarding(onboardingSvc, onb, product, bff.WithOnboardingLimit(100, 100)).
@@ -172,15 +195,16 @@ func newPasskeyEnv(t *testing.T) *passkeyEnv {
 		WithSandboxFunds(cashPrefix, "RETAIL-").
 		WithAliases(directory, sender, bff.WithLookupLimit(100, 100)).
 		WithCredit(cards).
-		WithForecast(forecast.NewService(f.core, cards, assessor, time.UTC).WithCardReserve(pocketSvc)).
+		WithForecast(forecasts).
 		WithPockets(pocketSvc).
+		WithGoals(goalSvc).
 		WithReceipts(receiptStore).
 		WithFX(fxSvc).
 		WithConsents(consents).
 		WithAgents(agentStore)
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(ts.Close)
-	return &passkeyEnv{srv: ts, f: f, db: db, fx: fxSvc}
+	return &passkeyEnv{srv: ts, f: f, db: db, fx: fxSvc, goals: goalSvc, goalsForecast: goalsForecast}
 }
 
 func (e *passkeyEnv) call(t *testing.T, method, path, token string, body any) (int, map[string]any) {
